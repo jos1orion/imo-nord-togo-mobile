@@ -1,0 +1,82 @@
+{
+  "expo": {
+    "name": "Imo Nord Togo",
+    "slug": "imo-nord-togo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#2563EB"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.imonordtogo.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Autorisez l'accès au micro pour la recherche vocale.",
+        "NSSpeechRecognitionUsageDescription": "Autorisez la reconnaissance vocale pour rechercher des annonces."
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/7faf2828-55ef-491d-be14-b568686f71fc",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#2563EB"
+      },
+      "package": "com.imonordtogo.app",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos."
+        }
+      ],
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2563EB"
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Autorisez l'accès au micro pour la recherche vocale.",
+          "speechRecognitionPermission": "Autorisez la reconnaissance vocale pour rechercher des annonces.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ]
+    ],
+    "extra": {
+      "contactPhone": "22899210881",
+      "contactEmail": "contact@imonordtogo.com",
+      "whatsappPhone": "22899210881",
+      "enableAdminShortcut": false,
+      "apkDownloadUrl": "",
+      "eas": {
+        "projectId": "7faf2828-55ef-491d-be14-b568686f71fc"
+      }
+    },
+    "owner": "josild"
+  }
+}
