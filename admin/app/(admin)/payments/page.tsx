@@ -8,6 +8,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { formatCurrency, formatDate } from '../../../lib/format';
 import type { Contract, Payment, PaymentMethod, PaymentStatus, Tenant } from '../../../lib/types';
+import { logAdminAction } from '../../../lib/adminAudit';
 
 const emptyForm = {
   contract_id: '',
@@ -62,7 +63,7 @@ export default function PaymentsPage() {
     if (!form.contract_id || !form.amount || !form.paid_at) return;
     setSaving(true);
     if (editingId) {
-      await supabase
+      const { error } = await supabase
         .from('payments')
         .update({
           contract_id: form.contract_id,
@@ -72,14 +73,26 @@ export default function PaymentsPage() {
           status: form.status,
         })
         .eq('id', editingId);
+      if (error) {
+        alert(`Erreur paiement: ${error.message}`);
+        setSaving(false);
+        return;
+      }
+      await logAdminAction('update_payment', 'payment', editingId);
     } else {
-      await supabase.from('payments').insert({
+      const { data, error } = await supabase.from('payments').insert({
         contract_id: form.contract_id,
         amount: Number(form.amount),
         paid_at: form.paid_at,
         method: form.method,
         status: form.status,
-      });
+      }).select('id').single();
+      if (error) {
+        alert(`Erreur paiement: ${error.message}`);
+        setSaving(false);
+        return;
+      }
+      await logAdminAction('create_payment', 'payment', data.id);
     }
     setForm(emptyForm);
     setEditingId(null);
@@ -99,7 +112,12 @@ export default function PaymentsPage() {
   };
 
   const handleDelete = async (paymentId: string) => {
-    await supabase.from('payments').delete().eq('id', paymentId);
+    const { error } = await supabase.from('payments').delete().eq('id', paymentId);
+    if (error) {
+      alert(`Erreur suppression: ${error.message}`);
+      return;
+    }
+    await logAdminAction('delete_payment', 'payment', paymentId);
     reload();
   };
 

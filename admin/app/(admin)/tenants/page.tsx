@@ -7,6 +7,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { formatDate } from '../../../lib/format';
 import type { Tenant, TenantDocumentType } from '../../../lib/types';
+import { logAdminAction } from '../../../lib/adminAudit';
 
 const emptyForm = {
   full_name: '',
@@ -27,7 +28,7 @@ export default function TenantsPage() {
     if (!form.full_name || !form.phone) return;
     setSaving(true);
     if (editingId) {
-      await supabase
+      const { error } = await supabase
         .from('tenants')
         .update({
           full_name: form.full_name,
@@ -36,6 +37,12 @@ export default function TenantsPage() {
           notes: form.notes || null,
         })
         .eq('id', editingId);
+      if (error) {
+        alert(`Erreur locataire: ${error.message}`);
+        setSaving(false);
+        return;
+      }
+      await logAdminAction('update_tenant', 'tenant', editingId);
     } else {
       const { data, error } = await supabase
         .from('tenants')
@@ -62,6 +69,12 @@ export default function TenantsPage() {
         });
         await Promise.all(uploads);
       }
+      if (error) {
+        alert(`Erreur locataire: ${error.message}`);
+        setSaving(false);
+        return;
+      }
+      if (data) await logAdminAction('create_tenant', 'tenant', data.id);
     }
 
     setForm(emptyForm);
@@ -82,7 +95,12 @@ export default function TenantsPage() {
   };
 
   const handleDelete = async (tenantId: string) => {
-    await supabase.from('tenants').delete().eq('id', tenantId);
+    const { error } = await supabase.from('tenants').delete().eq('id', tenantId);
+    if (error) {
+      alert(`Erreur suppression: ${error.message}`);
+      return;
+    }
+    await logAdminAction('delete_tenant', 'tenant', tenantId);
     reload();
   };
 

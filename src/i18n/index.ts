@@ -22,7 +22,11 @@ const STRINGS = {
     filter_price_min: 'Prix min',
     filter_price_max: 'Prix max',
     filter_bedrooms_min: 'Chambres min',
-    filter_bathrooms_min: 'SDB min',
+    filter_bathrooms_min: 'Salles de bain min',
+    filter_city: 'Ville',
+    sort_recent: 'Plus récentes',
+    sort_price_asc: 'Prix croissant',
+    sort_price_desc: 'Prix décroissant',
     filter_area_min: 'Surface min (m2)',
     price_label: 'Prix',
     bedrooms_label: 'Chambres',
@@ -80,6 +84,10 @@ const STRINGS = {
     profile_auth_email_exists: "Cet email est déjà utilisé.",
     profile_auth_not_found: "Aucun compte trouvé avec cet email.",
     profile_auth_wrong_password: "Mot de passe incorrect.",
+    profile_auth_wrong_credentials: "Email ou mot de passe incorrect.",
+    profile_auth_email_invalid: "Saisissez une adresse email valide.",
+    profile_auth_password_short: "Le mot de passe doit contenir au moins 6 caractères.",
+    profile_auth_reset_failed: "Impossible d'envoyer le lien. Vérifiez l'email et réessayez.",
     profile_auth_invalid: "Veuillez remplir tous les champs.",
     about: 'A propos',
     about_text:
@@ -282,6 +290,10 @@ const STRINGS = {
     filter_price_max: 'Max price',
     filter_bedrooms_min: 'Min bedrooms',
     filter_bathrooms_min: 'Min baths',
+    filter_city: 'City',
+    sort_recent: 'Most recent',
+    sort_price_asc: 'Lowest price',
+    sort_price_desc: 'Highest price',
     filter_area_min: 'Min area (m2)',
     price_label: 'Price',
     bedrooms_label: 'Bedrooms',
@@ -339,6 +351,10 @@ const STRINGS = {
     profile_auth_email_exists: 'This email is already used.',
     profile_auth_not_found: 'No account found with this email.',
     profile_auth_wrong_password: 'Incorrect password.',
+    profile_auth_wrong_credentials: 'Incorrect email or password.',
+    profile_auth_email_invalid: 'Enter a valid email address.',
+    profile_auth_password_short: 'The password must contain at least 6 characters.',
+    profile_auth_reset_failed: 'Unable to send the link. Check the email and try again.',
     profile_auth_invalid: 'Please fill all fields.',
     about: 'About',
     about_text:
@@ -571,9 +587,6 @@ export const translateStatus = (language: Language, status: PropertyStatus): str
 };
 
 export type { TranslationKey };
-
-
-
 
 
 

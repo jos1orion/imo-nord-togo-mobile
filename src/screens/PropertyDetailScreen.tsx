@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   Pressable,
   TouchableOpacity,
   Image,
@@ -23,6 +24,7 @@ import { formatPrice } from '../data/mock-data';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import { canViewProperty, isPublicProperty } from '../utils/propertyVisibility';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -32,6 +34,7 @@ type DetailRouteProp = RouteProp<RootStackParamList, 'PropertyDetail'>;
 const PropertyDetailScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<DetailRouteProp>();
+  const insets = useSafeAreaInsets();
   const {
     properties,
     clients,
@@ -58,6 +61,7 @@ const PropertyDetailScreen: React.FC = () => {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
   const imageScrollRef = useRef<ScrollView>(null);
+  const viewerScrollRef = useRef<FlatList<string>>(null);
 
   useEffect(() => {
     if (!property) return;
@@ -82,13 +86,22 @@ const PropertyDetailScreen: React.FC = () => {
   }
 
   const agentPhone = useMemo(() => {
-    const fromProperty = property.contactPhone ?? property.client?.phone;
-    const fromClient = clients.find(c => c.id === property.clientId)?.phone;
-    const fromUser = users.find(u => u.id === property.clientId)?.phone;
-    return (fromProperty ?? fromClient ?? fromUser ?? '').trim();
-  }, [property.contactPhone, property.client?.phone, property.clientId, clients, users]);
+    const candidates = [
+      property.contactPhone,
+      property.client?.phone,
+      clients.find(c => c.id === property.clientId)?.phone,
+      users.find(u => u.id === property.clientId)?.phone,
+      users.find(u => u.id === property.ownerId)?.phone,
+    ];
+    return candidates.find(phone => typeof phone === 'string' && phone.trim().length > 0)?.trim() ?? '';
+  }, [property.contactPhone, property.client?.phone, property.clientId, property.ownerId, clients, users]);
 
-  const normalizeDigits = (value: string) => value.replace(/\D/g, '');
+  const normalizeDigits = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    if (digits.startsWith('00')) return digits.slice(2);
+    if (digits.startsWith('228')) return digits;
+    return digits.length === 8 ? `228${digits}` : digits;
+  };
   const buildTelUrl = (value: string) => {
     const digits = normalizeDigits(value);
     return digits ? `tel:+${digits}` : '';
@@ -225,6 +238,13 @@ const PropertyDetailScreen: React.FC = () => {
     setViewerOpen(true);
   };
 
+  useEffect(() => {
+    if (!viewerOpen) return;
+    requestAnimationFrame(() => {
+      viewerScrollRef.current?.scrollToIndex({ index: viewerIndex, animated: false });
+    });
+  }, [viewerOpen, viewerIndex]);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -286,6 +306,9 @@ const PropertyDetailScreen: React.FC = () => {
             ))}
           </View>
         )}
+        <View style={styles.imageCounter}>
+          <Text style={styles.imageCounterText}>{activeImageIndex + 1}/{displayImages.length}</Text>
+        </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -318,9 +341,12 @@ const PropertyDetailScreen: React.FC = () => {
               <View style={styles.locationRow}>
                 <Ionicons name="location" size={14} color="#9CA3AF" />
                 <Text style={styles.location}>
-                  {[property.neighborhood, property.location].filter(Boolean).join(', ')}
+                  {[property.neighborhood, property.location].filter(Boolean).join(', ') || 'Zone non précisée'}
                 </Text>
               </View>
+              <Text style={styles.locationPrivacyNote}>
+                Zone générale — adresse exacte communiquée uniquement par l&apos;agent.
+              </Text>
             </View>
             <Text style={styles.detailPrice}>{formatPrice(property.price)}</Text>
           </View>
@@ -513,28 +539,55 @@ const PropertyDetailScreen: React.FC = () => {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
+      <View style={[styles.bottomActions, { paddingBottom: Math.max(insets.bottom, 12) + 16 }]}>
+        <TouchableOpacity style={styles.contactQuick} onPress={handleContactAgent}>
+          <Ionicons name="call" size={17} color={COLORS.primary} />
+          <Text style={styles.contactQuickText}>Appeler</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.whatsappQuick} onPress={handleWhatsApp}>
+          <Ionicons name="logo-whatsapp" size={17} color="#fff" />
+          <Text style={styles.whatsappQuickText}>WhatsApp</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.shareQuick} onPress={handleShare}>
+          <Ionicons name="share-social" size={17} color={COLORS.primary} />
+          <Text style={styles.shareText}>{t('share')}</Text>
+        </TouchableOpacity>
+      </View>
+
       {viewerOpen && (
         <View style={styles.viewerBackdrop}>
           <TouchableOpacity style={styles.viewerClose} onPress={() => setViewerOpen(false)}>
             <Ionicons name="close" size={22} color="#fff" />
           </TouchableOpacity>
-          <ScrollView
+          <FlatList
+            ref={viewerScrollRef}
+            data={displayImages}
+            keyExtractor={(uri, index) => `viewer-${uri}-${index}`}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
-            contentOffset={{ x: viewerIndex * width, y: 0 }}
-          >
-            {displayImages.map((uri, index) => (
+            initialNumToRender={1}
+            getItemLayout={(_, index) => ({
+              length: width,
+              offset: width * index,
+              index,
+            })}
+            onMomentumScrollEnd={event => {
+              const index = Math.round(event.nativeEvent.contentOffset.x / width);
+              setViewerIndex(index);
+            }}
+            renderItem={({ item: uri }) => (
               <ScrollView
-                key={`viewer-${uri}-${index}`}
                 maximumZoomScale={3}
                 minimumZoomScale={1}
+                directionalLockEnabled
+                nestedScrollEnabled
                 contentContainerStyle={styles.viewerImageWrap}
               >
                 <Image source={{ uri }} style={styles.viewerImage} />
               </ScrollView>
-            ))}
-          </ScrollView>
+            )}
+          />
         </View>
       )}
 
@@ -580,6 +633,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
+  imageCounter: {
+    position: 'absolute',
+    right: 14,
+    bottom: 14,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+  },
+  imageCounterText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   imageDot: {
     width: 8,
     height: 8,
@@ -736,6 +799,13 @@ const styles = StyleSheet.create({
   location: {
     fontSize: 14,
     color: COLORS.textMuted,
+  },
+  locationPrivacyNote: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: COLORS.textMuted,
+    marginTop: -8,
+    marginBottom: 8,
   },
   detailPrice: {
     fontSize: 22,
@@ -1119,6 +1189,29 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.primary,
   },
+  whatsappQuick: {
+    flex: 1,
+    minWidth: 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#16a34a',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 6,
+  },
+  whatsappQuickText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  shareQuick: {
+    flex: 1,
+    minWidth: 90,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 6,
+  },
   backQuick: {
     flex: 1,
     minWidth: 120,
@@ -1258,7 +1351,3 @@ const styles = StyleSheet.create({
 });
 
 export default PropertyDetailScreen;
-
-
-
-

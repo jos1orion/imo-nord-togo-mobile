@@ -1250,6 +1250,46 @@ button {
   flex-wrap: wrap;
 }
 
+.table-muted {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+  max-width: 260px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.modal-card {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 16px;
+}
+
+.modal-card p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.modal-card textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 120px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 12px;
+  font: inherit;
+}
+
 .results-stack {
   display: grid;
   gap: 18px;

@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import DataTable from '../../../components/DataTable';
 import SectionHeader from '../../../components/SectionHeader';
-import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { supabase } from '../../../lib/supabaseClient';
 import type { Profile } from '../../../lib/useSession';
 import { roleLabels, STAFF_ROLES, type AppRole, type Role } from '../../../lib/rbac';
@@ -25,7 +24,8 @@ const emptyForm = {
 };
 
 export default function UsersPage() {
-  const { data: users, loading, reload } = useSupabaseTable<Profile>('profiles', { orderBy: 'created_at' });
+  const [users, setUsers] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +33,51 @@ export default function UsersPage() {
   const [draftUsers, setDraftUsers] = useState<Record<string, DraftUser>>({});
   const [draftPasswords, setDraftPasswords] = useState<Record<string, string>>({});
   const [rowBusy, setRowBusy] = useState<Record<string, boolean>>({});
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+  const [totalUsers, setTotalUsers] = useState(0);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    let { data: sessionData } = await supabase.auth.getSession();
+    let accessToken = sessionData.session?.access_token;
+    if (!accessToken) {
+      const refreshed = await supabase.auth.refreshSession();
+      sessionData = refreshed.data;
+      accessToken = sessionData.session?.access_token;
+    }
+    if (!accessToken) {
+      setError('Session admin introuvable.');
+      setLoading(false);
+      return;
+    }
+    let response = await fetch(`/api/admin/users?page=${page}&pageSize=${pageSize}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    });
+    if (response.status === 401) {
+      const refreshed = await supabase.auth.refreshSession();
+      const refreshedToken = refreshed.data.session?.access_token;
+      if (refreshedToken) {
+        response = await fetch(`/api/admin/users?page=${page}&pageSize=${pageSize}`, {
+          headers: { Authorization: `Bearer ${refreshedToken}` },
+          cache: 'no-store',
+        });
+      }
+    }
+    const result = await response.json();
+    if (!response.ok) {
+      setError(result.error ?? 'Liste des utilisateurs impossible à charger.');
+    } else {
+      setUsers(result.users ?? []);
+      setTotalUsers(result.total ?? 0);
+    }
+    setLoading(false);
+  }, [page]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   useEffect(() => {
     setDraftUsers(prev => {
@@ -183,6 +228,11 @@ export default function UsersPage() {
       },
     },
     {
+      key: 'email',
+      label: 'Email',
+      render: (row: Profile) => row.email ?? '—',
+    },
+    {
       key: 'phone',
       label: 'Téléphone',
       render: (row: Profile) => {
@@ -329,9 +379,18 @@ export default function UsersPage() {
 
       <DataTable
         rows={users}
-        emptyLabel={loading ? 'Chargement...' : 'Aucun utilisateur'}
+        emptyLabel={loading ? 'Chargement...' : error ? 'Liste indisponible.' : 'Aucun utilisateur'}
         columns={columns}
       />
+      <div className="pagination">
+        <button className="ghost-button" onClick={() => setPage(current => Math.max(1, current - 1))} disabled={page <= 1 || loading}>
+          Précédent
+        </button>
+        <div className="pill">Page {page} / {Math.max(1, Math.ceil(totalUsers / pageSize))} · {totalUsers} utilisateurs</div>
+        <button className="ghost-button" onClick={() => setPage(current => current + 1)} disabled={loading || page >= Math.max(1, Math.ceil(totalUsers / pageSize))}>
+          Suivant
+        </button>
+      </div>
     </div>
   );
 }

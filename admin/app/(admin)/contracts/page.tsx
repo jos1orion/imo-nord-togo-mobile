@@ -8,6 +8,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { formatCurrency, formatDate } from '../../../lib/format';
 import type { Contract, ContractStatus, Property, Tenant } from '../../../lib/types';
+import { logAdminAction } from '../../../lib/adminAudit';
 
 const emptyForm = {
   property_id: '',
@@ -64,7 +65,7 @@ export default function ContractsPage() {
     if (!form.property_id || !form.tenant_id || !form.start_date || !form.end_date || !form.rent_amount) return;
     setSaving(true);
     if (editingId) {
-      await supabase
+      const { error } = await supabase
         .from('contracts')
         .update({
           property_id: form.property_id,
@@ -75,15 +76,27 @@ export default function ContractsPage() {
           status: form.status,
         })
         .eq('id', editingId);
+      if (error) {
+        alert(`Erreur contrat: ${error.message}`);
+        setSaving(false);
+        return;
+      }
+      await logAdminAction('update_contract', 'contract', editingId);
     } else {
-      await supabase.from('contracts').insert({
+      const { data, error } = await supabase.from('contracts').insert({
         property_id: form.property_id,
         tenant_id: form.tenant_id,
         start_date: form.start_date,
         end_date: form.end_date,
         rent_amount: Number(form.rent_amount),
         status: form.status,
-      });
+      }).select('id').single();
+      if (error) {
+        alert(`Erreur contrat: ${error.message}`);
+        setSaving(false);
+        return;
+      }
+      await logAdminAction('create_contract', 'contract', data.id);
     }
     setForm(emptyForm);
     setEditingId(null);
@@ -104,7 +117,12 @@ export default function ContractsPage() {
   };
 
   const handleDelete = async (contractId: string) => {
-    await supabase.from('contracts').delete().eq('id', contractId);
+    const { error } = await supabase.from('contracts').delete().eq('id', contractId);
+    if (error) {
+      alert(`Erreur suppression: ${error.message}`);
+      return;
+    }
+    await logAdminAction('delete_contract', 'contract', contractId);
     reload();
   };
 

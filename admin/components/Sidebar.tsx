@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { navGroups } from '../lib/nav';
-import { hasPermission, isStaffRole } from '../lib/rbac';
+import { getStaffRole, hasPermission } from '../lib/rbac';
 import { useSession } from '../lib/useSession';
 
 const isActive = (pathname: string, href: string) => {
@@ -14,6 +14,7 @@ const isActive = (pathname: string, href: string) => {
 export default function Sidebar() {
   const pathname = usePathname();
   const { profile } = useSession();
+  const staffRole = profile ? getStaffRole(profile.role) : null;
 
   return (
     <aside className="sidebar">
@@ -24,8 +25,8 @@ export default function Sidebar() {
 
       {navGroups.map(group => {
         const items =
-          profile && isStaffRole(profile.role)
-            ? group.items.filter(item => hasPermission(profile.role, item.permission))
+          staffRole !== null
+            ? group.items.filter(item => hasPermission(staffRole, item.permission))
             : [];
         if (items.length === 0) return null;
         return (

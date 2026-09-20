@@ -36,6 +36,7 @@ export const navGroups: NavGroup[] = [
     title: 'Administration',
     items: [
       { href: '/admins', label: 'Administrateurs', short: 'AD', icon: '🔐', permission: 'admins.read' },
+      { href: '/agents', label: 'Demandes agents', short: 'AG', icon: '🪪', permission: 'agents.read' },
     ],
   },
   {

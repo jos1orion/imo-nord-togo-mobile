@@ -7,6 +7,14 @@ export function isStaffRole(role: string | null | undefined): role is Role {
   return role === 'ADMIN' || role === 'AGENT' || role === 'ACCOUNTANT';
 }
 
+export function isAdminRole(role: string | null | undefined): role is 'ADMIN' {
+  return role === 'ADMIN';
+}
+
+export function getStaffRole(role: AppRole | string | null | undefined): Role | null {
+  return isStaffRole(role) ? role : null;
+}
+
 export type Permission =
   | 'dashboard.view'
   | 'properties.read'
@@ -20,7 +28,9 @@ export type Permission =
   | 'notifications.read'
   | 'notifications.write'
   | 'admins.read'
-  | 'admins.write';
+  | 'admins.write'
+  | 'agents.read'
+  | 'agents.write';
 
 const rolePermissions: Record<Role, Permission[]> = {
   ADMIN: [
@@ -37,6 +47,8 @@ const rolePermissions: Record<Role, Permission[]> = {
     'notifications.write',
     'admins.read',
     'admins.write',
+    'agents.read',
+    'agents.write',
   ],
   AGENT: [
     'dashboard.view',
@@ -78,6 +90,7 @@ export function getPermissionForPath(pathname: string): Permission | null {
   if (path.startsWith('/settings')) return 'admins.read';
   if (path.startsWith('/users')) return 'admins.read';
   if (path.startsWith('/admins')) return 'admins.read';
+  if (path.startsWith('/agents')) return 'agents.read';
   if (path.startsWith('/notifications')) return 'notifications.read';
   if (path.startsWith('/neighborhoods')) return 'properties.write';
   return null;

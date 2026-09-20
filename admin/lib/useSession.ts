@@ -7,9 +7,11 @@ import type { AppRole } from './rbac';
 
 export type Profile = {
   id: string;
+  email?: string | null;
   full_name: string | null;
   phone: string | null;
   role: AppRole;
+  agent_status: 'none' | 'pending' | 'approved' | 'rejected';
   created_at: string;
 };
 
@@ -45,13 +47,14 @@ export const useSession = (): SessionState => {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
       const sessionUser = data.session?.user ?? null;
       setUser(sessionUser);
       if (sessionUser) {
-        fetchProfile(sessionUser.id);
+        await fetchProfile(sessionUser.id);
       }
+      if (!mounted) return;
       setLoading(false);
     });
 
@@ -59,9 +62,10 @@ export const useSession = (): SessionState => {
       const sessionUser = session?.user ?? null;
       setUser(sessionUser);
       if (sessionUser) {
-        fetchProfile(sessionUser.id);
+        void fetchProfile(sessionUser.id);
       } else {
         setProfile(null);
+        setError(null);
       }
     });
 

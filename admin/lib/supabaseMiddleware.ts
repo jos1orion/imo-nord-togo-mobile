@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { isStaffRole } from './rbac';
+import { isAdminRole } from './rbac';
 
 export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -45,13 +45,20 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user) {
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .maybeSingle();
 
-    if (!isStaffRole(profile?.role)) {
+    if (profileError) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.searchParams.set('error', 'profile');
+      return NextResponse.redirect(url);
+    }
+
+    if (!isAdminRole(profile?.role)) {
       await supabase.auth.signOut();
       const url = request.nextUrl.clone();
       url.pathname = '/login';

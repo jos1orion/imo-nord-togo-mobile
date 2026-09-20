@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   Dimensions,
   StatusBar,
@@ -28,6 +29,7 @@ import COLORS from '../theme/colors';
 import { RootStackParamList } from '../../App';
 import { translate } from '../i18n';
 import { isFeaturedProperty, isPublicProperty } from '../utils/propertyVisibility';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -35,6 +37,7 @@ type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
+  const insets = useSafeAreaInsets();
   const {
     filterType,
     setFilterType,
@@ -80,19 +83,44 @@ const HomeScreen: React.FC = () => {
   }, [properties]);
   const filteredProperties = getFilteredProperties();
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<'recent' | 'priceAsc' | 'priceDesc'>('recent');
   const [neighborhoodOpen, setNeighborhoodOpen] = useState(false);
   const [neighborhoodQuery, setNeighborhoodQuery] = useState('');
   const filteredNeighborhoods = useMemo(() => {
-    const base = neighborhoodQuery.trim()
-      ? neighborhoods.filter(name => name.toLowerCase().includes(neighborhoodQuery.trim().toLowerCase()))
+    const cityNeighborhoods = selectedCity
+      ? Array.from(new Set(
+          properties
+            .filter(isPublicProperty)
+            .filter(property => (property.city || property.location).toLowerCase() === selectedCity.toLowerCase())
+            .map(property => property.neighborhood?.trim())
+            .filter((name): name is string => Boolean(name))
+        ))
       : neighborhoods;
+    const base = neighborhoodQuery.trim()
+      ? cityNeighborhoods.filter(name => name.toLowerCase().includes(neighborhoodQuery.trim().toLowerCase()))
+      : cityNeighborhoods;
     return [...base].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
-  }, [neighborhoodQuery, neighborhoods]);
+  }, [neighborhoodQuery, neighborhoods, properties, selectedCity]);
+  const cities = useMemo(
+    () => Array.from(new Set(properties.filter(isPublicProperty).map(p => (p.city || p.location).trim()).filter(Boolean))).sort(),
+    [properties]
+  );
   const filteredByNeighborhood = selectedNeighborhood
     ? filteredProperties.filter(
         p => (p.neighborhood ?? '').toLowerCase() === selectedNeighborhood.toLowerCase()
       )
     : filteredProperties;
+  const filteredByCity = selectedCity
+    ? filteredByNeighborhood.filter(p => (p.city || p.location).toLowerCase() === selectedCity.toLowerCase())
+    : filteredByNeighborhood;
+  const sortedProperties = useMemo(() => {
+    return [...filteredByCity].sort((a, b) => {
+      if (sortMode === 'priceAsc') return a.price - b.price;
+      if (sortMode === 'priceDesc') return b.price - a.price;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [filteredByCity, sortMode]);
 
   useEffect(() => {
     if (!selectedNeighborhood) return;
@@ -145,8 +173,25 @@ const HomeScreen: React.FC = () => {
     setSearchQuery(query);
     handleSearchSubmit();
   };
+
+  const showAllProperties = () => {
+    resetFilters();
+    setSelectedCity(null);
+    setSelectedNeighborhood(null);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: Math.max(listSectionYRef.current - 12, 0), animated: true });
+    });
+  };
+  const resetAllFilters = () => {
+    resetFilters();
+    setSelectedCity(null);
+    setSelectedNeighborhood(null);
+    setNeighborhoodQuery('');
+    setSortMode('recent');
+  };
   const activeFilterChips = useMemo(() => {
     const chips: string[] = [];
+    if (selectedCity) chips.push(selectedCity);
     if (selectedNeighborhood) chips.push(selectedNeighborhood);
     if (filterType !== 'ALL') chips.push(tType(filterType));
     if (filters.minPrice || filters.maxPrice) {
@@ -156,7 +201,7 @@ const HomeScreen: React.FC = () => {
     if (filters.minBathrooms) chips.push(`${filters.minBathrooms}+ sdb`);
     if (filters.minArea) chips.push(`${filters.minArea} m2+`);
     return chips;
-  }, [filters, filterType, selectedNeighborhood, tType]);
+  }, [filters, filterType, selectedCity, selectedNeighborhood, tType]);
 
 
   useEffect(() => {
@@ -234,8 +279,8 @@ const HomeScreen: React.FC = () => {
   };
 
   const visibleProperties = filterType === 'ALL'
-    ? filteredByNeighborhood.slice(0, 6)
-    : filteredByNeighborhood;
+    ? sortedProperties.slice(0, 6)
+    : sortedProperties;
   const isLoading = !hydrated;
   const showTopQuickActions = Boolean(currentUser);
 
@@ -262,6 +307,7 @@ const HomeScreen: React.FC = () => {
       <ScrollView
         ref={scrollRef}
         style={styles.container}
+        contentContainerStyle={{ paddingTop: insets.top }}
         showsVerticalScrollIndicator={false}
         // Keep the filter bar sticky. Using a constant index avoids UI glitches when
         // conditional blocks above change (user login, sync error).
@@ -306,7 +352,7 @@ const HomeScreen: React.FC = () => {
                     </View>
                   ))}
                 </View>
-                <TouchableOpacity style={styles.activeFiltersReset} onPress={resetFilters}>
+                <TouchableOpacity style={styles.activeFiltersReset} onPress={resetAllFilters}>
                   <Ionicons name="refresh" size={14} color={COLORS.primary} />
                   <Text style={styles.activeFiltersResetText}>{t('home_reset_short')}</Text>
                 </TouchableOpacity>
@@ -416,7 +462,7 @@ const HomeScreen: React.FC = () => {
                 {filtersOpen ? t('filters_hide') : t('filters_show')}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={resetFilters}>
+            <TouchableOpacity onPress={resetAllFilters}>
               <Text style={styles.clearFilter}>{t('filters_reset')}</Text>
             </TouchableOpacity>
           </View>
@@ -424,6 +470,48 @@ const HomeScreen: React.FC = () => {
       </View>
       {filtersOpen && (
         <View style={styles.filtersPanel}>
+          <View style={styles.filterRow}>
+            <View style={styles.filterField}>
+              <Text style={styles.filterLabel}>{t('filter_city')}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChoiceRow}>
+                <TouchableOpacity
+                  style={[styles.filterChoice, !selectedCity && styles.filterChoiceActive]}
+                  onPress={() => setSelectedCity(null)}
+                >
+                  <Text style={[styles.filterChoiceText, !selectedCity && styles.filterChoiceTextActive]}>Toutes</Text>
+                </TouchableOpacity>
+                {cities.map(city => (
+                  <TouchableOpacity
+                    key={city}
+                    style={[styles.filterChoice, selectedCity === city && styles.filterChoiceActive]}
+                    onPress={() => setSelectedCity(city)}
+                  >
+                    <Text style={[styles.filterChoiceText, selectedCity === city && styles.filterChoiceTextActive]}>{city}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+          <View style={styles.filterRow}>
+            <View style={styles.filterField}>
+              <Text style={styles.filterLabel}>{t('sort_recent')}</Text>
+              <View style={styles.sortRow}>
+                {([
+                  ['recent', t('sort_recent')],
+                  ['priceAsc', t('sort_price_asc')],
+                  ['priceDesc', t('sort_price_desc')],
+                ] as const).map(([mode, label]) => (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[styles.filterChoice, sortMode === mode && styles.filterChoiceActive]}
+                    onPress={() => setSortMode(mode)}
+                  >
+                    <Text style={[styles.filterChoiceText, sortMode === mode && styles.filterChoiceTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
           <View style={styles.filterRow}>
             <View style={styles.filterField}>
               <Text style={styles.filterLabel}>{t('filter_label_neighborhood')}</Text>
@@ -602,7 +690,7 @@ const HomeScreen: React.FC = () => {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{t('featured_title')}</Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={showAllProperties}>
             <Text style={styles.seeAll}>{t('see_all')}</Text>
           </TouchableOpacity>
         </View>
@@ -630,7 +718,7 @@ const HomeScreen: React.FC = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('home_recent_title')}</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={showAllProperties}>
               <Text style={styles.seeAll}>{t('see_all')}</Text>
             </TouchableOpacity>
           </View>
@@ -709,28 +797,39 @@ const HomeScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>
             {filterType === 'ALL' ? t('all_properties') : tType(filterType)}
           </Text>
-          <Text style={styles.count}>{filteredByNeighborhood.length} {t('properties_count')}</Text>
+          <Text style={styles.count}>{sortedProperties.length} {t('properties_count')}</Text>
         </View>
-        <View style={styles.propertiesGrid}>
-          {isLoading
-            ? Array.from({ length: 6 }).map((_, idx) => renderSkeletonCard(`grid-skel-${idx}`))
-            : visibleProperties.map(property => (
-                <PropertyCard
-                  key={property.id}
-                  property={property}
-                  onPress={() => handlePropertyPress(property)}
-                />
-              ))}
-          {!isLoading && visibleProperties.length === 0 && (
-            <EmptyState
-              icon="search-outline"
-              title={t('empty_category')}
-              actionLabel={t('home_empty_reset')}
-              onAction={resetFilters}
-              style={styles.emptyStateWrap}
-            />
-          )}
-        </View>
+        {isLoading ? (
+          <View style={styles.propertiesGrid}>
+            {Array.from({ length: 6 }).map((_, idx) => renderSkeletonCard(`grid-skel-${idx}`))}
+          </View>
+        ) : visibleProperties.length === 0 ? (
+          <EmptyState
+            icon="search-outline"
+            title={t('empty_category')}
+            actionLabel={t('home_empty_reset')}
+            onAction={resetAllFilters}
+            style={styles.emptyStateWrap}
+          />
+        ) : (
+          <FlatList
+            data={visibleProperties}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => (
+              <PropertyCard
+                property={item}
+                onPress={() => handlePropertyPress(item)}
+              />
+            )}
+            scrollEnabled={false}
+            removeClippedSubviews
+            initialNumToRender={4}
+            maxToRenderPerBatch={4}
+            updateCellsBatchingPeriod={40}
+            windowSize={5}
+            contentContainerStyle={styles.propertiesList}
+          />
+        )}
       </View>
 
       {/* CTA Banner */}
@@ -1111,6 +1210,35 @@ const styles = StyleSheet.create({
   filterField: {
     flex: 1,
   },
+  filterChoiceRow: {
+    gap: 8,
+    paddingBottom: 2,
+  },
+  sortRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  filterChoice: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F5F7FA',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  filterChoiceActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterChoiceText: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  filterChoiceTextActive: {
+    color: '#fff',
+    fontWeight: '700',
+  },
   filterLabel: {
     fontSize: 11,
     color: '#6B7280',
@@ -1334,6 +1462,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginHorizontal: -8,
   },
+  propertiesList: {
+    paddingBottom: 4,
+  },
   skeletonCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
@@ -1492,14 +1623,5 @@ const styles = StyleSheet.create({
 });
 
 export default HomeScreen;
-
-
-
-
-
-
-
-
-
 
 

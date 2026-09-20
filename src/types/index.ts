@@ -36,6 +36,7 @@ export interface Property {
   featuredStartAt?: string | null;
   featuredEndAt?: string | null;
   republishedAt?: string | null;
+  rejectionReason?: string | null;
   clientId: string;
   client?: Client;
   contactName?: string | null;
@@ -88,7 +89,18 @@ export interface User {
   password?: string;
   verified: boolean;
   isAdmin?: boolean;
+  role?: 'USER' | 'ADMIN' | 'AGENT' | 'ACCOUNTANT';
+  agentStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+  agentRejectionReason?: string | null;
   createdAt?: string;
+}
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  body: string;
+  createdAt: string;
+  read: boolean;
 }
 
 export interface SearchFilters {
@@ -258,4 +270,3 @@ export interface Document {
   uploadedAt: string;
   uploadedBy: string;
 }
-

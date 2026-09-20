@@ -1,57 +1,45 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '../../../../../lib/supabaseAdmin';
-
-const requireAdmin = async (request: Request) => {
-  let supabaseAdmin;
-  try {
-    supabaseAdmin = getSupabaseAdmin();
-  } catch (e) {
-    const message = e instanceof Error ? e.message : 'Configuration serveur incomplète.';
-    return { error: NextResponse.json({ error: message }, { status: 503 }) };
-  }
-
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader) {
-    return { error: NextResponse.json({ error: 'Non autorisé.' }, { status: 401 }) };
-  }
-  const token = authHeader.replace('Bearer ', '');
-  const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
-  if (authError || !authData.user) {
-    return { error: NextResponse.json({ error: 'Session invalide.' }, { status: 401 }) };
-  }
-
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', authData.user.id)
-    .maybeSingle();
-
-  if (!profile || profile.role !== 'ADMIN') {
-    return { error: NextResponse.json({ error: 'Accès refusé.' }, { status: 403 }) };
-  }
-
-  return { supabaseAdmin, authUserId: authData.user.id };
-};
+import { isValidUuid, recordAdminAction, requireAdmin } from '../../../../../lib/adminApiAuth';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string | string[] | undefined }> }) {
   const { id } = await params;
   const userId = Array.isArray(id) ? id[0] : id;
-  if (!userId) {
+  if (!userId || !isValidUuid(userId)) {
     return NextResponse.json({ error: 'ID utilisateur manquant.' }, { status: 400 });
   }
   const guard = await requireAdmin(request);
   if ('error' in guard) return guard.error;
-  const { supabaseAdmin } = guard;
+  const { supabaseAdmin, authUserId } = guard;
 
-  const payload = await request.json();
+  let payload: Record<string, unknown>;
+  try {
+    const parsed = await request.json();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return NextResponse.json({ error: 'Corps de requête invalide.' }, { status: 400 });
+    }
+    payload = parsed as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: 'Corps de requête JSON invalide.' }, { status: 400 });
+  }
+
   const { role, full_name, phone, password } = payload ?? {};
 
-  if (role && !['USER', 'ADMIN', 'AGENT', 'ACCOUNTANT'].includes(role)) {
+  if (role !== undefined && (typeof role !== 'string' || !['USER', 'ADMIN', 'AGENT', 'ACCOUNTANT'].includes(role))) {
     return NextResponse.json({ error: 'Rôle invalide.' }, { status: 400 });
+  }
+  if (full_name !== undefined && (typeof full_name !== 'string' || full_name.length > 200)) {
+    return NextResponse.json({ error: 'Nom invalide.' }, { status: 400 });
+  }
+  if (phone !== undefined && (typeof phone !== 'string' || phone.length > 40)) {
+    return NextResponse.json({ error: 'Téléphone invalide.' }, { status: 400 });
   }
 
   const updates: Record<string, unknown> = {};
-  if (role !== undefined) updates.role = role;
+  if (role !== undefined) {
+    updates.role = role;
+    if (role === 'AGENT') updates.agent_status = 'approved';
+    if (role === 'USER') updates.agent_status = 'none';
+  }
   if (full_name !== undefined) updates.full_name = full_name;
   if (phone !== undefined) updates.phone = phone;
 
@@ -69,24 +57,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (Object.keys(updates).length) {
     const { error } = await supabaseAdmin.from('profiles').update(updates).eq('id', userId);
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ error: 'Profil utilisateur impossible à modifier.' }, { status: 400 });
     }
   }
 
   if (passwordValue !== undefined) {
     const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: passwordValue });
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ error: 'Mot de passe impossible à modifier.' }, { status: 400 });
     }
   }
 
+  await recordAdminAction(supabaseAdmin, authUserId, 'update_user', 'user', userId);
   return NextResponse.json({ success: true });
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string | string[] | undefined }> }) {
   const { id } = await params;
   const userId = Array.isArray(id) ? id[0] : id;
-  if (!userId) {
+  if (!userId || !isValidUuid(userId)) {
     return NextResponse.json({ error: 'ID utilisateur manquant.' }, { status: 400 });
   }
   const guard = await requireAdmin(request);
@@ -99,8 +88,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
   const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: 'Utilisateur impossible à supprimer.' }, { status: 400 });
   }
 
+  await recordAdminAction(supabaseAdmin, authUserId, 'delete_user', 'user', userId);
   return NextResponse.json({ success: true });
 }

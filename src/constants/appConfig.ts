@@ -12,9 +12,9 @@ function getExtra(): Extra {
 
 /** Numéro WhatsApp au format E.164 sans + (ex. 22890123456). Configurable via app.json → extra.whatsappPhone */
 export function getContactPhoneDigits(): string {
-  const raw = getExtra().contactPhone ?? '22899210881';
+  const raw = getExtra().contactPhone ?? '22893576298';
   const digits = String(raw).replace(/\D/g, '');
-  return digits.length > 0 ? digits : '22899210881';
+  return digits.length > 0 ? digits : '22893576298';
 }
 
 export function getContactPhoneUrl(): string {
@@ -31,7 +31,7 @@ export function getContactPhoneDisplay(): string {
 
 export function getContactEmail(): string {
   const email = getExtra().contactEmail?.trim();
-  return email || 'contact@imonordtogo.com';
+  return email || 'kondgbandi@gmail.com';
 }
 
 export function getWhatsAppDigits(): string {

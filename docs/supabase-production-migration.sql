@@ -21,6 +21,11 @@ end $$;
 
 -- Marketplace accounts are USER. Staff roles are ADMIN, AGENT, ACCOUNTANT only.
 alter table public.profiles alter column role set default 'USER';
+alter table public.profiles
+  add column if not exists agent_status text not null default 'none'
+  check (agent_status in ('none', 'pending', 'approved', 'rejected'));
+alter table public.profiles add column if not exists agent_rejection_reason text;
+alter table public.properties add column if not exists rejection_reason text;
 
 -- Every authenticated user receives the least-privileged role. The web API uses
 -- UPSERT, so this trigger cannot conflict with an administrator-created account.
@@ -31,12 +36,17 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, full_name, phone, role)
+  insert into public.profiles (id, full_name, phone, role, agent_status)
   values (
     new.id,
     coalesce(new.raw_user_meta_data ->> 'name', new.email),
     new.raw_user_meta_data ->> 'phone',
-    'USER'
+    'USER'::user_role,
+    case
+      when coalesce(new.raw_user_meta_data ->> 'wants_agent_access', 'false') = 'true'
+        then 'pending'
+      else 'none'
+    end
   )
   on conflict (id) do nothing;
   return new;
@@ -47,6 +57,30 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.create_profile_for_auth_user();
+
+-- Only administrators may change a profile role. Do not reference account_status:
+-- that column is not part of the profiles schema.
+create or replace function public.prevent_privilege_escalation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'UPDATE'
+     and new.role is distinct from old.role
+     and coalesce(auth.role(), '') <> 'service_role'
+     and not public.is_admin() then
+    raise exception 'Seul un administrateur peut modifier le rôle utilisateur';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists prevent_privilege_escalation on public.profiles;
+create trigger prevent_privilege_escalation
+before update on public.profiles
+for each row execute function public.prevent_privilege_escalation();
 
 -- Backfill profiles for accounts already present in the existing project.
 insert into public.profiles (id, full_name, phone, role)
@@ -225,15 +259,71 @@ create table if not exists public.user_push_tokens (
   updated_at timestamptz not null default now()
 );
 
+-- Policies below are only effective when RLS is enabled. Keep this explicit so
+-- a partially initialized production database cannot leave a table exposed.
+alter table public.profiles enable row level security;
+alter table public.properties enable row level security;
+alter table public.property_images enable row level security;
 alter table public.favorites enable row level security;
 alter table public.messages enable row level security;
 alter table public.user_push_tokens enable row level security;
+alter table public.neighborhoods enable row level security;
+alter table public.tenants enable row level security;
+alter table public.tenant_documents enable row level security;
+alter table public.contracts enable row level security;
+alter table public.payments enable row level security;
+alter table public.notifications enable row level security;
+alter table public.activity_logs enable row level security;
+
+-- Keep profile visibility and role management explicit. Remove policies from
+-- earlier migrations so a permissive legacy rule cannot remain active.
+drop policy if exists "profiles_select_own_or_admin" on public.profiles;
+drop policy if exists "profiles_admin_all" on public.profiles;
+drop policy if exists "Profiles read" on public.profiles;
+drop policy if exists "Profiles write" on public.profiles;
+drop policy if exists "profiles_read_own" on public.profiles;
+drop policy if exists "profiles_update_own" on public.profiles;
+drop policy if exists "profiles_insert_own" on public.profiles;
+drop policy if exists "profiles_delete_own" on public.profiles;
+create policy "profiles_select_own_or_admin" on public.profiles
+for select using (id = auth.uid() or public.is_admin());
+create policy "profiles_admin_all" on public.profiles
+for all using (public.is_admin()) with check (public.is_admin());
 
 -- Replace permissive/conflicting policies from the two former SQL files.
+-- Drop policies managed by this migration as well, so the script is safe to
+-- replay after a partial execution.
+drop policy if exists "properties_select_public_or_owner" on public.properties;
+drop policy if exists "properties_insert_own_pending" on public.properties;
+drop policy if exists "properties_update_own_private" on public.properties;
+drop policy if exists "properties_delete_own_private" on public.properties;
+drop policy if exists "properties_admin_all" on public.properties;
+drop policy if exists "property_images_select_visible_property" on public.property_images;
+drop policy if exists "property_images_insert_owner" on public.property_images;
+drop policy if exists "property_images_admin_delete" on public.property_images;
+drop policy if exists "favorites_owner_rw" on public.favorites;
+drop policy if exists "messages_participants_select" on public.messages;
+drop policy if exists "messages_sender_insert" on public.messages;
+drop policy if exists "messages_receiver_mark_read" on public.messages;
+drop policy if exists "push_tokens_owner_all" on public.user_push_tokens;
+drop policy if exists "neighborhoods_public_read" on public.neighborhoods;
+drop policy if exists "neighborhoods_admin_write" on public.neighborhoods;
+drop policy if exists "tenants_admin_all" on public.tenants;
+drop policy if exists "tenant_documents_admin_all" on public.tenant_documents;
+drop policy if exists "contracts_admin_all" on public.contracts;
+drop policy if exists "payments_admin_all" on public.payments;
+drop policy if exists "notifications_admin_all" on public.notifications;
+drop policy if exists "activity_logs_admin_all" on public.activity_logs;
+drop policy if exists "storage_property_images_owner_insert" on storage.objects;
+drop policy if exists "storage_property_images_owner_delete" on storage.objects;
 drop policy if exists "Properties read" on public.properties;
+drop policy if exists "Properties write" on public.properties;
 drop policy if exists "Properties insert own" on public.properties;
 drop policy if exists "Properties update own" on public.properties;
 drop policy if exists "Properties delete own" on public.properties;
+drop policy if exists "properties_insert_owner_or_admin" on public.properties;
+drop policy if exists "properties_update_owner_or_admin" on public.properties;
+drop policy if exists "properties_delete_owner_or_admin" on public.properties;
 drop policy if exists "properties_select_public_approved" on public.properties;
 drop policy if exists "properties_admin_all" on public.properties;
 
@@ -244,7 +334,17 @@ create policy "properties_select_public_or_owner" on public.properties for selec
 );
 
 create policy "properties_insert_own_pending" on public.properties for insert with check (
-  auth.uid() = owner_id and listing_status = 'pending' and coalesce(featured, false) = false
+  auth.uid() = owner_id
+  and exists (
+    select 1 from public.profiles profile
+    where profile.id = auth.uid()
+      and (
+        profile.role = 'ADMIN'
+        or (profile.role = 'AGENT' and profile.agent_status = 'approved')
+      )
+  )
+  and listing_status = 'pending'
+  and coalesce(featured, false) = false
 );
 
 -- An agent can only correct a private pending/rejected listing that they own.
@@ -336,10 +436,29 @@ drop policy if exists "Logs write" on public.activity_logs;
 create policy "activity_logs_admin_all" on public.activity_logs for all
 using (public.is_admin()) with check (public.is_admin());
 
--- Storage write access follows the authenticated owner folder: owner-id/property-id/file.
+-- Storage write access follows the authenticated owner folder:
+-- owner-id/property-id/file. The property must belong to an approved agent,
+-- unless the caller is an administrator.
+drop policy if exists "storage_property_images_owner_insert" on storage.objects;
+drop policy if exists "storage_property_images_owner_delete" on storage.objects;
 drop policy if exists "storage_property_images_admin_all" on storage.objects;
 create policy "storage_property_images_owner_insert" on storage.objects for insert with check (
-  bucket_id = 'property-images' and (storage.foldername(name))[1] = auth.uid()::text
+  bucket_id = 'property-images'
+  and (
+    public.is_admin()
+    or exists (
+      select 1
+      from public.properties p
+      join public.profiles profile on profile.id = p.owner_id
+      where p.owner_id = auth.uid()
+        and p.id::text = (storage.foldername(name))[2]
+        and (
+          profile.role = 'ADMIN'
+          or (profile.role = 'AGENT' and profile.agent_status = 'approved')
+        )
+        and p.listing_status in ('pending', 'rejected')
+    )
+  )
 );
 create policy "storage_property_images_owner_delete" on storage.objects for delete using (
   bucket_id = 'property-images' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin())
@@ -368,5 +487,5 @@ begin
     $c$select public.expire_due_listings();$c$
   );
 exception when others then
-  raise notice 'pg_cron indisponible : activez l''extension puis executez select cron.schedule(''expire-imo-nord-listings'', ''5 0 * * *'', $$select public.expire_due_listings();$$);';
+  raise notice 'pg_cron indisponible : la migration continue sans planification automatique.';
 end $$;

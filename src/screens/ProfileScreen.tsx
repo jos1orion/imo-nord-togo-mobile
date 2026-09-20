@@ -59,6 +59,7 @@ const ProfileScreen: React.FC = () => {
     setTheme,
     t,
     tType,
+    notifications,
   } = useApp();
   const secretTapCount = useRef(0);
   const secretTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,8 +69,17 @@ const ProfileScreen: React.FC = () => {
     .map(id => properties.find(p => p.id === id))
     .filter((item): item is NonNullable<typeof item> => isPublicProperty(item));
   const myListingsCount = myProperties.length;
+  const isAgent = currentUser?.role === 'AGENT' || currentUser?.role === 'ADMIN';
+  const hasAgentRequest = currentUser?.agentStatus === 'pending' || currentUser?.agentStatus === 'rejected';
+  const listingCounts = useMemo(() => ({
+    pending: myProperties.filter(property => property.listingStatus === 'pending').length,
+    approved: myProperties.filter(property => property.listingStatus === 'approved').length,
+    rejected: myProperties.filter(property => property.listingStatus === 'rejected').length,
+    archived: myProperties.filter(property => property.listingStatus === 'archived').length,
+  }), [myProperties]);
   const favoritesCount = favoriteProperties.length;
   const alertsCount = neighborhoodAlerts.length;
+  const unreadNotifications = notifications.filter(item => !item.read).length;
   const neighborhoodsWithListings = useMemo(() => {
     const names = new Set<string>();
     properties.filter(isPublicProperty).forEach(p => {
@@ -82,6 +92,7 @@ const ProfileScreen: React.FC = () => {
   const [authName, setAuthName] = useState('');
   const [authEmail, setAuthEmail] = useState('');
   const [authPhone, setAuthPhone] = useState('');
+  const [wantsAgentAccess, setWantsAgentAccess] = useState(false);
   const [authPassword, setAuthPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
@@ -89,14 +100,13 @@ const ProfileScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [listingActionBusy, setListingActionBusy] = useState<Record<string, boolean>>({});
 
-  const emailValid = useMemo(() => /\S+@\S+\.\S+/.test(authEmail.trim()), [authEmail]);
+  const emailValid = useMemo(
+    () => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(authEmail.trim()),
+    [authEmail]
+  );
   const passwordValid = useMemo(() => authPassword.trim().length >= 6, [authPassword]);
   const nameValid = useMemo(() => authName.trim().length >= 2, [authName]);
   const phoneValid = useMemo(() => authPhone.trim().length >= 6, [authPhone]);
-  const canSubmit = authMode === 'login'
-    ? emailValid && passwordValid
-    : emailValid && passwordValid && nameValid && phoneValid;
-
   const applySavedSearch = (id: string) => {
     const saved = savedSearches.find(s => s.id === id);
     if (!saved) return;
@@ -226,20 +236,28 @@ const ProfileScreen: React.FC = () => {
     if (message.includes('already') || message.includes('exists') || message.includes('registered')) {
       return t('profile_auth_email_exists');
     }
-    if (message.includes('invalid login') || message.includes('credentials')) {
-      return t('profile_auth_wrong_password');
+    if (message.includes('invalid login') || message.includes('credentials') || message.includes('invalid')) {
+      return t('profile_auth_wrong_credentials');
     }
     if (message.includes('not found')) {
       return t('profile_auth_not_found');
     }
-    if (message.includes('password') && message.includes('short')) {
-      return 'Mot de passe trop court.';
+    if (message.includes('password') && (message.includes('short') || message.includes('6'))) {
+      return t('profile_auth_password_short');
     }
     return t('profile_auth_invalid');
   };
 
   const handleAuth = async () => {
-    if (!canSubmit) {
+    if (!emailValid) {
+      setAuthError(t('profile_auth_email_invalid'));
+      return;
+    }
+    if (!passwordValid) {
+      setAuthError(t('profile_auth_password_short'));
+      return;
+    }
+    if (authMode === 'register' && (!nameValid || !phoneValid)) {
       setAuthError(t('profile_auth_invalid'));
       return;
     }
@@ -260,6 +278,7 @@ const ProfileScreen: React.FC = () => {
       email: authEmail,
       phone: authPhone,
       password: authPassword,
+      wantsAgentAccess,
     });
     if (!result.ok) {
       setAuthError(resolveAuthError(result.code));
@@ -270,19 +289,22 @@ const ProfileScreen: React.FC = () => {
     setAuthEmail('');
     setAuthPhone('');
     setAuthPassword('');
+    setWantsAgentAccess(false);
     setAuthLoading(false);
   };
 
   const handleResetPassword = async () => {
     const email = authEmail.trim();
-    if (!/\S+@\S+\.\S+/.test(email)) {
-      setAuthError(t('profile_auth_invalid'));
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      setAuthError(t('profile_auth_email_invalid'));
       return;
     }
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email.toLowerCase(), {
+        redirectTo: 'imonordtogo://reset-password',
+      });
       if (error) {
-        setAuthError(t('profile_auth_invalid'));
+        setAuthError(t('profile_auth_reset_failed'));
         return;
       }
       setAuthError('');
@@ -389,6 +411,24 @@ const ProfileScreen: React.FC = () => {
               />
             </View>
           )}
+          {authMode === 'register' && (
+            <TouchableOpacity
+              style={styles.agentOption}
+              onPress={() => setWantsAgentAccess(prev => !prev)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: wantsAgentAccess }}
+            >
+              <Ionicons
+                name={wantsAgentAccess ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={wantsAgentAccess ? COLORS.primary : '#64748B'}
+              />
+              <Text style={styles.agentOptionText}>
+                Je suis agent immobilier et je souhaite publier des annonces.
+                {'\n'}Mon compte devra être validé par un administrateur avant publication.
+              </Text>
+            </TouchableOpacity>
+          )}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>{t('profile_email')}</Text>
             <TextInput
@@ -458,9 +498,9 @@ const ProfileScreen: React.FC = () => {
           <Text style={styles.authLegal}>{t('profile_legal_consent_short')}</Text>
 
           <TouchableOpacity
-            style={[styles.authButton, (!canSubmit || authLoading) && styles.authButtonDisabled]}
+            style={[styles.authButton, authLoading && styles.authButtonDisabled]}
             onPress={handleAuth}
-            disabled={!canSubmit || authLoading}
+            disabled={authLoading}
           >
             <Text style={styles.authButtonText}>
               {authLoading
@@ -533,6 +573,53 @@ const ProfileScreen: React.FC = () => {
           <Text style={styles.quickMessagesText}>{t('profile_messages_shortcut')}</Text>
         </TouchableOpacity>
 
+        {currentUser.isAdmin && (
+          <TouchableOpacity style={styles.adminCta} onPress={() => navigation.navigate('Admin')}>
+            <Ionicons name="shield-checkmark-outline" size={19} color="#fff" />
+            <Text style={styles.adminCtaText}>Ouvrir l’espace administrateur</Text>
+            <Ionicons name="chevron-forward" size={18} color="#fff" />
+          </TouchableOpacity>
+        )}
+
+        <View style={styles.notificationPanel}>
+          <View style={styles.notificationHeader}>
+            <View style={styles.notificationTitleRow}>
+              <Ionicons name="notifications-outline" size={19} color={COLORS.primary} />
+              <Text style={styles.notificationTitle}>Notifications</Text>
+              {unreadNotifications > 0 ? (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>{unreadNotifications}</Text>
+                </View>
+              ) : null}
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('Notifications')}>
+              <Text style={styles.notificationClear}>Voir tout</Text>
+            </TouchableOpacity>
+          </View>
+          {notifications.length === 0 ? (
+            <Text style={styles.notificationEmpty}>Aucune notification récente.</Text>
+          ) : (
+            notifications.slice(0, 5).map(notification => (
+              <TouchableOpacity
+                key={notification.id}
+                style={[styles.notificationItem, !notification.read && styles.notificationItemUnread]}
+                onPress={() => navigation.navigate('Notifications')}
+              >
+                <View style={styles.notificationDot}>
+                  <Ionicons name={notification.read ? 'checkmark' : 'ellipse'} size={10} color="#fff" />
+                </View>
+                <View style={styles.notificationContent}>
+                  <Text style={styles.notificationItemTitle}>{notification.title}</Text>
+                  <Text style={styles.notificationItemBody}>{notification.body}</Text>
+                  <Text style={styles.notificationDate}>
+                    {new Date(notification.createdAt).toLocaleDateString('fr-FR')}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+
         <TouchableOpacity
           style={styles.publishCta}
           onPress={() => navigation.navigate('Publish')}
@@ -540,6 +627,54 @@ const ProfileScreen: React.FC = () => {
           <Ionicons name="add-circle-outline" size={18} color="#fff" />
           <Text style={styles.publishCtaText}>Publier une annonce</Text>
         </TouchableOpacity>
+
+        {(isAgent || hasAgentRequest) && (
+          <View style={styles.agentDashboard}>
+            <View style={styles.agentDashboardHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Espace agent</Text>
+                <Text style={styles.agentDashboardSubtitle}>
+                  {isAgent
+                    ? 'Suivez vos annonces et leur validation.'
+                    : currentUser.agentStatus === 'pending'
+                    ? 'Votre demande est en cours de validation.'
+                    : `Votre demande agent a été refusée.${currentUser.agentRejectionReason ? ` Motif : ${currentUser.agentRejectionReason}` : ''}`}
+                </Text>
+              </View>
+              <Ionicons name="briefcase-outline" size={24} color={COLORS.primary} />
+            </View>
+            {isAgent && (
+              <View style={styles.agentStatsGrid}>
+                <View style={styles.agentStatCard}>
+                  <Text style={styles.agentStatValue}>{listingCounts.approved}</Text>
+                  <Text style={styles.agentStatLabel}>Publiées</Text>
+                </View>
+                <View style={styles.agentStatCard}>
+                  <Text style={styles.agentStatValue}>{listingCounts.pending}</Text>
+                  <Text style={styles.agentStatLabel}>En attente</Text>
+                </View>
+                <View style={styles.agentStatCard}>
+                  <Text style={styles.agentStatValue}>{listingCounts.rejected}</Text>
+                  <Text style={styles.agentStatLabel}>Refusées</Text>
+                </View>
+                <View style={styles.agentStatCard}>
+                  <Text style={styles.agentStatValue}>{listingCounts.archived}</Text>
+                  <Text style={styles.agentStatLabel}>Archivées</Text>
+                </View>
+              </View>
+            )}
+            <View style={styles.agentStatusLine}>
+              <Ionicons
+                name={isAgent ? 'checkmark-circle' : currentUser.agentStatus === 'pending' ? 'time' : 'close-circle'}
+                size={18}
+                color={isAgent ? '#16a34a' : currentUser.agentStatus === 'pending' ? '#d97706' : '#dc2626'}
+              />
+              <Text style={styles.agentStatusText}>
+                {isAgent ? 'Compte agent approuvé' : currentUser.agentStatus === 'pending' ? 'Demande en attente' : 'Demande refusée'}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Account Status */}
         <View style={styles.section}>
@@ -582,6 +717,34 @@ const ProfileScreen: React.FC = () => {
                       }
                       compact
                     />
+                    <View style={[
+                      styles.listingStatusBadge,
+                      property.listingStatus === 'rejected'
+                        ? styles.listingStatusRejected
+                        : property.listingStatus === 'approved'
+                          ? styles.listingStatusApproved
+                          : styles.listingStatusPending,
+                    ]}>
+                      <Text style={styles.listingStatusText}>
+                        {getListingLabel(property.listingStatus)}
+                      </Text>
+                    </View>
+                    {property.listingStatus === 'rejected' && property.rejectionReason ? (
+                      <View style={styles.rejectionReasonBox}>
+                        <Text style={styles.rejectionReasonTitle}>Motif du refus</Text>
+                        <Text style={styles.rejectionReasonText}>{property.rejectionReason}</Text>
+                        <Text style={styles.rejectionReasonHint}>
+                          Corrigez l’annonce puis contactez l’administration pour la soumettre à nouveau.
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.editRejectedButton}
+                          onPress={() => navigation.navigate('Publish', { propertyId: property.id })}
+                        >
+                          <Ionicons name="create-outline" size={15} color="#fff" />
+                          <Text style={styles.editRejectedButtonText}>Modifier et renvoyer</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
                     <View style={styles.myListingActions}>
                       {isOccupied ? (
                         <TouchableOpacity
@@ -1102,6 +1265,19 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 12,
   },
+  agentOption: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  agentOptionText: {
+    flex: 1,
+    color: COLORS.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
   inputLabel: {
     fontSize: 12,
     color: COLORS.textMuted,
@@ -1213,6 +1389,108 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
+  adminCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 14,
+    marginBottom: 14,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+  },
+  adminCtaText: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  notificationPanel: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    padding: 14,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  notificationTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  notificationTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  notificationBadge: {
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+  },
+  notificationBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  notificationClear: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  notificationEmpty: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    paddingVertical: 8,
+  },
+  notificationItem: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderSoft,
+  },
+  notificationItemUnread: {
+    backgroundColor: '#f8fafc',
+  },
+  notificationDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    marginTop: 2,
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationItemTitle: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  notificationItemBody: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  notificationDate: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    marginTop: 4,
+  },
   quickCard: {
     flex: 1,
     backgroundColor: COLORS.chipBg,
@@ -1234,6 +1512,59 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: 'center',
   },
+  agentDashboard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  agentDashboardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  agentDashboardSubtitle: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  agentStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 14,
+  },
+  agentStatCard: {
+    width: '48%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  agentStatValue: {
+    color: COLORS.primary,
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  agentStatLabel: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  agentStatusLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+  },
+  agentStatusText: {
+    color: '#166534',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   section: {
     marginHorizontal: 16,
     marginTop: 16,
@@ -1253,6 +1584,42 @@ const styles = StyleSheet.create({
   myListingCard: {
     alignSelf: 'flex-start',
   },
+  listingStatusBadge: {
+    alignSelf: 'flex-start',
+    marginHorizontal: 12,
+    marginTop: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  listingStatusPending: { backgroundColor: '#fef3c7' },
+  listingStatusApproved: { backgroundColor: '#dcfce7' },
+  listingStatusRejected: { backgroundColor: '#fee2e2' },
+  listingStatusText: { fontSize: 11, fontWeight: '700', color: COLORS.text },
+  rejectionReasonBox: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  rejectionReasonTitle: { fontSize: 12, fontWeight: '700', color: '#9a3412', marginBottom: 3 },
+  rejectionReasonText: { fontSize: 12, lineHeight: 17, color: '#7c2d12' },
+  rejectionReasonHint: { fontSize: 11, lineHeight: 15, color: '#9a3412', marginTop: 5 },
+  editRejectedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    marginTop: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+  },
+  editRejectedButtonText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   myListingActions: {
     flexDirection: 'row',
     gap: 8,
@@ -1720,24 +2087,6 @@ const styles = StyleSheet.create({
 });
 
 export default ProfileScreen;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

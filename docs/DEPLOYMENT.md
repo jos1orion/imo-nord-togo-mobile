@@ -49,6 +49,16 @@ Variables d’environnement attendues :
 
 Voir `admin/README.md` et `admin/.env.local.example`.
 
+### Réinitialisation du mot de passe mobile
+
+Dans Supabase, ajouter l’URL suivante aux **Redirect URLs** de l’authentification :
+
+```text
+imonordtogo://reset-password
+```
+
+L’application ouvre cette URL depuis l’email de récupération et permet ensuite de définir un nouveau mot de passe.
+
 ### Vercel (Dashboard)
 
 1. Créer un compte et importer le repo sur `https://vercel.com`.

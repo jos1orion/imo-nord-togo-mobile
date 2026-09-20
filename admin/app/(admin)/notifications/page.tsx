@@ -7,6 +7,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { formatDate } from '../../../lib/format';
 import type { Notification } from '../../../lib/types';
+import { logAdminAction } from '../../../lib/adminAudit';
 
 const emptyForm = {
   title: '',
@@ -24,19 +25,30 @@ export default function NotificationsPage() {
   const handleSubmit = async () => {
     if (!form.title || !form.body) return;
     setSaving(true);
-    await supabase.from('notifications').insert({
+    const { data, error } = await supabase.from('notifications').insert({
       title: form.title,
       body: form.body,
       type: form.type,
       read: false,
-    });
+    }).select('id').single();
+    if (error) {
+      alert(`Erreur notification: ${error.message}`);
+      setSaving(false);
+      return;
+    }
+    await logAdminAction('create_notification', 'notification', data.id);
     setForm(emptyForm);
     setSaving(false);
     reload();
   };
 
   const handleToggle = async (notification: Notification) => {
-    await supabase.from('notifications').update({ read: !notification.read }).eq('id', notification.id);
+    const { error } = await supabase.from('notifications').update({ read: !notification.read }).eq('id', notification.id);
+    if (error) {
+      alert(`Erreur notification: ${error.message}`);
+      return;
+    }
+    await logAdminAction('toggle_notification', 'notification', notification.id);
     reload();
   };
 

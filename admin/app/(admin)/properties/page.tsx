@@ -7,6 +7,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { useSession } from '../../../lib/useSession';
 import type { ListingStatus, Neighborhood, Property, PropertyStatus } from '../../../lib/types';
+import { logAdminAction } from '../../../lib/adminAudit';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 type PropertyRow = Property & {
@@ -285,6 +286,7 @@ export default function PropertiesPage() {
       alert(`Erreur mise a jour: ${error.message}`);
       return;
     }
+    await logAdminAction('listing_status', 'property', propertyId);
     reload();
   };
 
@@ -303,6 +305,7 @@ export default function PropertiesPage() {
       alert(`Erreur mise a jour: ${error.message}`);
       return;
     }
+    await logAdminAction('featured_toggle', 'property', propertyId);
     reload();
   };
 
@@ -312,6 +315,7 @@ export default function PropertiesPage() {
       alert(`Erreur suppression: ${error.message}`);
       return;
     }
+    await logAdminAction('delete_property', 'property', propertyId);
     reload();
   };
 
@@ -333,6 +337,7 @@ export default function PropertiesPage() {
         return;
       }
     }
+    await logAdminAction(action === 'delete' ? 'delete_properties' : `bulk_${action}_properties`, 'property');
     clearSelection();
     reload();
   };
@@ -378,6 +383,7 @@ export default function PropertiesPage() {
           setSaving(false);
           return;
         }
+        await logAdminAction('update_property', 'property', editingId);
       } else {
         const ownerId = user?.id;
         if (!ownerId) {
@@ -411,6 +417,9 @@ export default function PropertiesPage() {
           alert(`Erreur insertion: ${error.message}`);
           setSaving(false);
           return;
+        }
+        if (data) {
+          await logAdminAction('create_property', 'property', data.id);
         }
 
         if (!error && data && files?.length) {

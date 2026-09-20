@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import { isStaffRole } from '../../lib/rbac';
+import { isAdminRole } from '../../lib/rbac';
 
 function LoginForm() {
   const router = useRouter();
@@ -15,6 +15,10 @@ function LoginForm() {
 
   const staffError = useMemo(
     () => searchParams.get('error') === 'staff',
+    [searchParams]
+  );
+  const profileError = useMemo(
+    () => searchParams.get('error') === 'profile',
     [searchParams]
   );
 
@@ -35,16 +39,27 @@ function LoginForm() {
       return;
     }
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', data.user.id)
       .maybeSingle();
 
-    if (!isStaffRole(profile?.role)) {
+    if (profileError) {
       await supabase.auth.signOut();
       setLoading(false);
-      setError("Ce compte n'a pas accès au back-office.");
+      setError(`Connexion réussie, mais le profil admin est illisible: ${profileError.message}`);
+      return;
+    }
+
+    if (!isAdminRole(profile?.role)) {
+      await supabase.auth.signOut();
+      setLoading(false);
+      setError(
+        profile
+          ? `Le rôle du compte est « ${profile.role ?? 'non défini'} », mais « ADMIN » est requis.`
+          : "Aucun profil correspondant à ce compte n'a été trouvé."
+      );
       return;
     }
 
@@ -60,7 +75,7 @@ function LoginForm() {
             Connexion Admin
           </div>
           <div style={{ color: 'var(--muted)', marginTop: 6 }}>
-            Accès réservé aux rôles Admin, Agent et Comptable.
+            Accès réservé exclusivement au rôle Admin.
           </div>
         </div>
 
@@ -85,7 +100,12 @@ function LoginForm() {
         </div>
 
         {staffError && !error ? (
-          <div className="alert">Ce compte n'a pas accès au back-office.</div>
+          <div className="alert">Ce compte n&apos;a pas accès au back-office.</div>
+        ) : null}
+        {profileError && !error ? (
+          <div className="alert">
+            Le profil Supabase est inaccessible. Vérifiez les variables Supabase du back-office et les politiques RLS.
+          </div>
         ) : null}
         {error ? <div className="alert">{error}</div> : null}
 

@@ -8,12 +8,14 @@ import { useApp } from '../context/AppContext';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import EmptyState from '../components/ui/EmptyState';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type MessagesScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Messages'>;
 
 const MessagesScreen = () => {
   const { chats, currentUser, users, t, language } = useApp();
   const navigation = useNavigation<MessagesScreenNavigationProp>();
+  const insets = useSafeAreaInsets();
 
   const userChats = chats.filter(chat =>
     currentUser && chat.participants.includes(currentUser.id)
@@ -71,7 +73,7 @@ const MessagesScreen = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 12 }]}>
         <Text style={styles.title}>{t('messages')}</Text>
         {currentUser && (
           <TouchableOpacity
@@ -100,6 +102,7 @@ const MessagesScreen = () => {
           renderItem={renderChatItem}
           keyExtractor={item => item.id}
           style={styles.chatList}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 16 }}
         />
       )}
     </View>
@@ -219,4 +222,3 @@ const styles = StyleSheet.create({
 });
 
 export default MessagesScreen;
-

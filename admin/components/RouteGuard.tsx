@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { getPermissionForPath, hasPermission, isStaffRole } from '../lib/rbac';
+import { getPermissionForPath, hasPermission, isAdminRole } from '../lib/rbac';
 import { useSession } from '../lib/useSession';
 
 export default function RouteGuard({ children }: { children: React.ReactNode }) {
@@ -12,7 +12,8 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     if (loading || !profile) return;
-    if (!isStaffRole(profile.role)) {
+
+    if (!isAdminRole(profile.role)) {
       router.replace('/login?error=staff');
       return;
     }
@@ -22,7 +23,7 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
       router.replace('/');
       return;
     }
-    if (!hasPermission(profile.role, required)) {
+    if (!hasPermission('ADMIN', required)) {
       router.replace('/');
     }
   }, [pathname, profile, loading, router]);

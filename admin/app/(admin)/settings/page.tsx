@@ -5,14 +5,14 @@ export default function SettingsPage() {
     <div className="grid">
       <SectionHeader
         title="Paramètres"
-        subtitle="Rôles staff. Les comptes marketplace (USER) n'ont pas accès à ce back-office."
+        subtitle="Seul le rôle ADMIN a accès à ce back-office."
       />
 
       <div className="grid grid-cols-2">
         <div className="card">
           <div style={{ fontWeight: 600, marginBottom: 12 }}>Rôles</div>
           <div style={{ color: 'var(--muted)', fontSize: 13 }}>
-            USER = application mobile. ADMIN, AGENT et Comptable = staff, attribués depuis Utilisateurs.
+            USER, AGENT et ACCOUNTANT restent des rôles métier de l&apos;application. Seul ADMIN peut ouvrir ce back-office.
           </div>
           <div className="chip-row">
             <div className="chip">USER</div>
@@ -25,7 +25,7 @@ export default function SettingsPage() {
         <div className="card">
           <div style={{ fontWeight: 600, marginBottom: 12 }}>Intégrations</div>
           <div style={{ color: 'var(--muted)', fontSize: 13 }}>
-            Auth, Storage et RLS sont gérés dans Supabase. Ce panneau n'enregistre pas de configuration.
+            Auth, Storage et RLS sont gérés dans Supabase. Ce panneau n&apos;enregistre pas de configuration.
           </div>
           <div className="chip-row">
             <div className="chip">Supabase Auth</div>

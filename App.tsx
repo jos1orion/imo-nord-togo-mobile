@@ -2,14 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer, NavigatorScreenParams } from '@react-navigation/native';
+import { createNavigationContainerRef, NavigationContainer, NavigatorScreenParams } from '@react-navigation/native';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { LogBox, Platform } from 'react-native';
+import { Alert, Linking, LogBox, Platform } from 'react-native';
 import { Provider as PaperProvider, useTheme } from 'react-native-paper';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppProvider, useApp } from './src/context/AppContext';
 import HomeScreen from './src/screens/HomeScreen';
@@ -22,11 +22,14 @@ import ChatScreen from './src/screens/ChatScreen';
 import MortgageCalculatorScreen from './src/screens/MortgageCalculatorScreen';
 import AgentProfileScreen from './src/screens/AgentProfileScreen';
 import ReviewsScreen from './src/screens/ReviewsScreen';
+import NotificationsScreen from './src/screens/NotificationsScreen';
+import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { lightPaperTheme, darkPaperTheme } from './src/theme/paperTheme';
 import COLORS from './src/theme/colors';
 import { typography } from './src/theme/typography';
+import { supabase } from './src/lib/supabase';
 
 const ONBOARDING_KEY = 'imo:onboardingComplete';
 
@@ -41,16 +44,19 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<TabParamList>;
   PropertyDetail: { propertyId: string };
   Admin: undefined;
-  Publish: undefined;
+  Publish: { propertyId?: string } | undefined;
   Messages: undefined;
   Chat: { chatId: string; otherUserId: string };
   AgentProfile: { userId: string };
   MortgageCalculator: undefined;
   Reviews: { propertyId: string };
+  Notifications: undefined;
+  ResetPassword: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 LogBox.ignoreLogs([
   'new NativeEventEmitter() was called with a non-null argument without the required `removeListeners` method.',
@@ -145,6 +151,36 @@ const AppContent = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
+    const handleAuthUrl = async (url: string | null) => {
+      if (!url || !url.includes('reset-password')) return;
+      const fragment = url.split('#')[1] ?? '';
+      const query = url.split('?')[1]?.split('#')[0] ?? '';
+      const params = new URLSearchParams(`${fragment}&${query}`);
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      if (!accessToken || !refreshToken) {
+        Alert.alert('Lien invalide', 'Le lien de réinitialisation est incomplet ou expiré.');
+        return;
+      }
+      const { error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (error) {
+        Alert.alert('Lien invalide', 'Le lien de réinitialisation est expiré. Demandez un nouvel email.');
+        return;
+      }
+      navigationRef.current?.navigate('ResetPassword');
+    };
+
+    void Linking.getInitialURL().then(handleAuthUrl);
+    const subscription = Linking.addEventListener('url', event => {
+      void handleAuthUrl(event.url);
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
@@ -175,7 +211,7 @@ const AppContent = () => {
 
   return (
     <PaperProvider theme={paperTheme}>
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
         <Stack.Navigator
           initialRouteName={showOnboarding ? 'Onboarding' : 'MainTabs'}
@@ -211,6 +247,8 @@ const AppContent = () => {
           <Stack.Screen name="MortgageCalculator" component={MortgageCalculatorScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="AgentProfile" component={AgentProfileScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="Reviews" component={ReviewsScreen} options={{ presentation: 'card' }} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ presentation: 'card' }} />
+          <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ presentation: 'card' }} />
         </Stack.Navigator>
       </NavigationContainer>
     </PaperProvider>
@@ -220,11 +258,13 @@ const AppContent = () => {
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ErrorBoundary>
-        <AppProvider>
-          <AppContent />
-        </AppProvider>
-      </ErrorBoundary>
+      <SafeAreaProvider>
+        <ErrorBoundary>
+          <AppProvider>
+            <AppContent />
+          </AppProvider>
+        </ErrorBoundary>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

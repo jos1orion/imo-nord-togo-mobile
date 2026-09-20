@@ -186,6 +186,7 @@ const AdminScreen: React.FC = () => {
     updateClient,
     updateUser,
     verifyUser,
+    reviewAgentRequest,
     addNeighborhood,
     updateNeighborhood,
     removeNeighborhood,
@@ -934,7 +935,20 @@ const AdminScreen: React.FC = () => {
   };
 
   const handleSetListingStatus = async (property: Property, status: ListingStatus) => {
-    await updateProperty(property.id, { listingStatus: status });
+    let rejectionReason: string | null | undefined;
+    if (status === 'rejected') {
+      rejectionReason = await new Promise<string | null | undefined>(resolve => {
+        Alert.alert('Motif du refus', 'Choisissez la raison visible par l’agent.', [
+          { text: 'Annuler', style: 'cancel', onPress: () => resolve(undefined) },
+          { text: 'Informations incomplètes', onPress: () => resolve('Informations incomplètes.') },
+          { text: 'Photos ou description à corriger', onPress: () => resolve('Photos ou description à corriger.') },
+        ]);
+      });
+      if (rejectionReason === undefined) return;
+    } else if (status === 'approved' || status === 'pending') {
+      rejectionReason = null;
+    }
+    await updateProperty(property.id, { listingStatus: status, rejectionReason });
     logAdminAction('listing_status', 'property', property.id, { status });
   };
 
@@ -952,6 +966,39 @@ const AdminScreen: React.FC = () => {
   const handleVerifyUser = async (user: User, value: boolean) => {
     await verifyUser(user.id, value);
     logAdminAction('verify_user', 'user', user.id, { verified: value });
+  };
+
+  const handleReviewAgent = async (user: User, approved: boolean) => {
+    try {
+      let reason: string | undefined;
+      if (!approved) {
+        reason = await new Promise<string | undefined>(resolve => {
+          if (Platform.OS === 'android') {
+            Alert.alert('Motif du refus', 'Choisissez la raison visible par le demandeur.', [
+              { text: 'Annuler', style: 'cancel', onPress: () => resolve(undefined) },
+              { text: 'Informations incomplètes', onPress: () => resolve('Informations incomplètes.') },
+              { text: 'Documents requis', onPress: () => resolve('Documents requis pour valider votre demande.') },
+            ]);
+            return;
+          }
+          Alert.prompt(
+            'Motif du refus',
+            'Indiquez la raison qui sera visible par le demandeur.',
+            [
+              { text: 'Annuler', style: 'cancel', onPress: () => resolve(undefined) },
+              { text: 'Refuser', style: 'destructive', onPress: (value?: string) => resolve(value?.trim() || 'Votre demande doit être complétée.') },
+            ],
+            'plain-text'
+          );
+        });
+        if (reason === undefined) return;
+      }
+      await reviewAgentRequest(user.id, approved, reason);
+      logAdminAction(approved ? 'approve_agent' : 'reject_agent', 'user', user.id);
+      Alert.alert('Demande agent', approved ? 'Agent approuvé.' : 'Demande agent refusée.');
+    } catch (error) {
+      Alert.alert('Erreur', error instanceof Error ? error.message : 'Impossible de traiter la demande.');
+    }
   };
 
   const confirmSold = (property: Property) => {
@@ -1912,8 +1959,27 @@ const AdminScreen: React.FC = () => {
               <Text style={styles.accountName}>{user.name}</Text>
               <Text style={styles.accountMeta}>{user.email}</Text>
               <Text style={styles.accountMeta}>{user.phone}</Text>
+              {user.agentStatus === 'pending' ? (
+                <Text style={styles.accountMeta}>Demande agent en attente</Text>
+              ) : null}
             </View>
             <View style={styles.accountActions}>
+              {user.agentStatus === 'pending' ? (
+                <>
+                  <TouchableOpacity
+                    style={[styles.accountVerifyButton, styles.accountVerifyOn]}
+                    onPress={() => void handleReviewAgent(user, true)}
+                  >
+                    <Text style={styles.accountVerifyText}>Approuver</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.accountVerifyButton, styles.accountVerifyOff]}
+                    onPress={() => void handleReviewAgent(user, false)}
+                  >
+                    <Text style={[styles.accountVerifyText, { color: theme.textMuted }]}>Refuser</Text>
+                  </TouchableOpacity>
+                </>
+              ) : null}
               <TouchableOpacity
                 style={[
                   styles.accountVerifyButton,
@@ -5012,11 +5078,6 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
 });
 
 export default AdminScreen;
-
-
-
-
-
 
 
 

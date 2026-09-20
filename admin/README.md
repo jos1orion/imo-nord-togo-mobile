@@ -9,8 +9,8 @@ Application Next.js pour la gestion (biens, locataires, contrats, etc.), connect
 
 ## Configuration
 
-1. Copier `admin/.env.local.example` vers `admin/.env.local`.
-2. Renseigner `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` (cette dernière sert uniquement à l’API `POST /api/admin/create-user`).
+1. Copier `admin/.env.example` vers `admin/.env.local`.
+2. Renseigner `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` (cette dernière sert uniquement aux routes serveur de création, modification et suppression des utilisateurs).
 
 ### Sécurité
 
@@ -26,11 +26,26 @@ npm install
 npm run dev
 ```
 
-Ouvrir [http://localhost:3000](http://localhost:3000), se connecter avec un compte ayant une ligne dans `profiles` et un rôle staff `ADMIN`, `AGENT` ou `ACCOUNTANT`. Les comptes marketplace (`USER`) sont refusés.
+Depuis la racine du dépôt, la commande équivalente est :
+
+```bash
+npm run admin:dev
+```
+
+Ouvrir [http://localhost:3000](http://localhost:3000), se connecter avec un compte ayant une ligne dans `profiles` et le rôle `ADMIN`. Les comptes `USER`, `AGENT` et `ACCOUNTANT` sont refusés.
 
 ## Rôles et menu
 
-Le menu et l’accès aux URLs sont filtrés selon le rôle (voir `lib/rbac.ts` et `lib/nav.ts`).
+Le back-office est réservé au rôle `ADMIN`. Les rôles `USER`, `AGENT` et `ACCOUNTANT` n’y ont pas accès (voir `lib/rbac.ts` et `lib/supabaseMiddleware.ts`).
+
+## Base Supabase et production
+
+Avant toute mise en production, exécuter dans l’éditeur SQL de Supabase dans l’ordre suivant :
+
+1. `docs/supabase-user-role.sql`
+2. `docs/supabase-production-migration.sql`
+
+Ne pas exécuter `docs/supabase-bootstrap-production.sql` sur un projet existant. La migration produit le rôle `USER` par défaut, le trigger de création de profil, les politiques RLS restrictives et la planification d’expiration des annonces.
 
 ## Build production
 

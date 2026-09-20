@@ -1,6 +1,7 @@
 ﻿import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { Alert, Image } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as SecureStore from 'expo-secure-store';
 import { supabase, supabaseAnonKey, supabaseUrl } from '../lib/supabase';
 import { safeRegisterExpoPushToken, safeScheduleLocalNotification } from '../lib/expoNotificationsSafe';
@@ -29,6 +30,7 @@ import {
   Payment,
   TenantDocument,
   MortgageCalculator,
+  AppNotification,
 } from '../types';
 import { Language, TranslationKey, translate, translateStatus, translateType } from '../i18n';
 import { isExpiredProperty, isPublicProperty } from '../utils/propertyVisibility';
@@ -88,10 +90,11 @@ interface AppContextType {
   clearSearchHistory: () => void;
   toggleNeighborhoodAlert: (name: string) => void;
   setPrivacySetting: (key: 'hideContact' | 'hideListings', value: boolean) => void;
-  registerUser: (data: { name: string; email: string; phone: string; password: string }) => Promise<{ ok: true } | { ok: false; code: string }>;
+  registerUser: (data: { name: string; email: string; phone: string; password: string; wantsAgentAccess: boolean }) => Promise<{ ok: true } | { ok: false; code: string }>;
   loginUser: (email: string, password: string) => Promise<{ ok: true } | { ok: false; code: string }>;
   logoutUser: () => Promise<void>;
   verifyUser: (id: string, value: boolean) => Promise<void>;
+  reviewAgentRequest: (id: string, approved: boolean, reason?: string) => Promise<void>;
   updateUser: (id: string, updates: Partial<Pick<User, 'name' | 'email' | 'phone'>>) => void;
   addReport: (data: { propertyId: string; reason: ReportReason; message: string }) => void;
   resolveReport: (id: string) => void;
@@ -114,6 +117,9 @@ interface AppContextType {
   contracts: Contract[];
   payments: Payment[];
   tenantDocuments: TenantDocument[];
+  notifications: AppNotification[];
+  markNotificationRead: (id: string) => void;
+  clearNotifications: () => void;
   addTenantDocumentRecord: (doc: TenantDocument) => void;
   addContract: (data: Omit<Contract, 'id' | 'createdAt'>) => Promise<Contract>;
   updateContract: (id: string, updates: Partial<Omit<Contract, 'id' | 'createdAt'>>) => Promise<void>;
@@ -186,6 +192,7 @@ const STORAGE_KEYS = {
   contracts: 'imo:contracts',
   payments: 'imo:payments',
   tenantDocuments: 'imo:tenantDocuments',
+  notifications: 'imo:notifications',
 };
 
 const DEFAULT_FILTERS: SearchFilters = {
@@ -238,6 +245,7 @@ const extractMissingPropertiesColumn = (message?: string): string | null => {
     images,
     status: row.status ?? 'available',
     listingStatus: row.listing_status ?? 'pending',
+    rejectionReason: row.rejection_reason ?? null,
     amenities: Array.isArray(row.amenities) ? row.amenities : [],
     bedrooms: row.bedrooms ?? undefined,
     bathrooms: row.bathrooms ?? undefined,
@@ -382,6 +390,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [tenantDocuments, setTenantDocuments] = useState<TenantDocument[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [filters, setFiltersState] = useState<SearchFilters>(DEFAULT_FILTERS);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [filterType, setFilterType] = useState<PropertyType | 'ALL'>('ALL');
@@ -390,6 +399,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [syncError, setSyncError] = useState<string | null>(null);
   const visitRecorded = useRef(false);
   const listingStatusRef = useRef<Record<string, ListingStatus | undefined>>({});
+  const remoteNotificationIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const loadPersisted = async () => {
@@ -413,6 +423,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setNeighborhoodAlerts(parse<string[]>(STORAGE_KEYS.neighborhoodAlerts, []));
         setNeighborhoods(parse<string[]>(STORAGE_KEYS.neighborhoods, []));
         setUsers(parse<User[]>(STORAGE_KEYS.users, []));
+        setNotifications(parse<AppNotification[]>(STORAGE_KEYS.notifications, []));
         setReports(parse<Report[]>(STORAGE_KEYS.reports, []));
         const rawStats = parse<Record<string, PropertyStats>>(STORAGE_KEYS.propertyStats, {});
         const normalizedStats: Record<string, PropertyStats> = Object.fromEntries(
@@ -608,7 +619,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [hydrated]);
 
   // The database role is the source of truth. Never grant admin access from an email hard-coded in the APK.
-  const mapAuthUser = useCallback((user: any, isAdmin = false): User => {
+  const mapAuthUser = useCallback((user: any, role: User['role'] = 'USER', agentStatus: User['agentStatus'] = 'none', agentRejectionReason?: string | null): User => {
     const email = String(user.email || '').trim();
     return ({
       id: user.id,
@@ -616,7 +627,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       email,
       phone: user.user_metadata?.phone || '',
       verified: user.email_confirmed_at ? true : false,
-      isAdmin,
+      isAdmin: role === 'ADMIN',
+      role,
+      agentStatus,
+      agentRejectionReason: agentRejectionReason ?? null,
     });
   }, []);
 
@@ -627,16 +641,74 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     const { data, error } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, agent_status, agent_rejection_reason')
       .eq('id', authUser.id)
       .maybeSingle();
     // Failing closed prevents a temporary profile/RLS error from granting admin access.
-    setCurrentUser(mapAuthUser(authUser, !error && data?.role === 'ADMIN'));
+    setCurrentUser(mapAuthUser(authUser, error ? 'USER' : data?.role ?? 'USER', error ? 'none' : data?.agent_status ?? 'none', error ? null : data?.agent_rejection_reason));
   }, [mapAuthUser]);
 
   const notifyLocal = useCallback(async (title: string, body: string) => {
+    const notification: AppNotification = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      title,
+      body,
+      createdAt: new Date().toISOString(),
+      read: false,
+    };
+    setNotifications(prev => [notification, ...prev].slice(0, 50));
     await safeScheduleLocalNotification(title, body);
   }, []);
+
+  const loadNotificationsFromSupabase = useCallback(async (userId: string) => {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('id,title,body,read,created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    // Notifications are optional for older installations. Keep the local
+    // inbox intact when the table or its user-scoped policies are unavailable.
+    if (error || !data) {
+      if (error) console.warn('Notifications fetch error:', error.message);
+      return;
+    }
+
+    const remoteNotifications: AppNotification[] = data.map(row => ({
+      id: row.id,
+      title: row.title,
+      body: row.body,
+      createdAt: row.created_at ?? new Date().toISOString(),
+      read: Boolean(row.read),
+    }));
+    remoteNotificationIdsRef.current = new Set(remoteNotifications.map(item => item.id));
+    setNotifications(previous => [
+      ...remoteNotifications,
+      ...previous.filter(item => !remoteNotificationIdsRef.current.has(item.id)),
+    ].slice(0, 50));
+  }, []);
+
+  useEffect(() => {
+    if (hydrated) void storage.setItem(STORAGE_KEYS.notifications, JSON.stringify(notifications));
+  }, [notifications, hydrated]);
+
+  const markNotificationRead = useCallback((id: string) => {
+    setNotifications(prev => prev.map(item => item.id === id ? { ...item, read: true } : item));
+    if (remoteNotificationIdsRef.current.has(id)) {
+      void supabase.from('notifications').update({ read: true }).eq('id', id).then(({ error }) => {
+        if (error) console.warn('Notification read update error:', error.message);
+      });
+    }
+  }, []);
+
+  const clearNotifications = useCallback(() => {
+    setNotifications([]);
+    if (currentUser?.id) {
+      void supabase.from('notifications').delete().eq('user_id', currentUser.id).then(({ error }) => {
+        if (error) console.warn('Notifications delete error:', error.message);
+      });
+    }
+  }, [currentUser]);
 
   const registerPushToken = useCallback(async () => {
     if (!currentUser) return;
@@ -779,9 +851,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
         }
         await reloadProperties();
+        if (currentUser?.isAdmin) {
+          const { data: profileRows, error: profileError } = await supabase
+            .from('profiles')
+            .select('id,full_name,phone,role,agent_status,agent_rejection_reason,created_at')
+            .order('created_at', { ascending: false });
+          if (profileError) {
+            console.warn('Profiles fetch error', profileError.message);
+          } else if (profileRows) {
+            setUsers(profileRows.map(profile => ({
+              id: profile.id,
+              name: profile.full_name ?? '',
+              email: '',
+              phone: profile.phone ?? '',
+              verified: (profile.role === 'AGENT' && profile.agent_status === 'approved') || profile.role === 'ADMIN',
+              isAdmin: profile.role === 'ADMIN',
+              role: profile.role,
+              agentStatus: profile.agent_status ?? 'none',
+              agentRejectionReason: profile.agent_rejection_reason ?? null,
+              createdAt: profile.created_at,
+            })));
+          }
+        }
         if (currentUser) {
           await loadFavoritesFromSupabase();
           await loadMessagesFromSupabase();
+          await loadNotificationsFromSupabase(currentUser.id);
         }
         if (baseNeighborhoods && baseNeighborhoods.length > 0) {
           setNeighborhoods(prev => {
@@ -853,7 +948,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         console.error('Failed to fetch from Supabase', e);
         setSyncError('Une erreur est survenue. Veuillez réessayer.');
       }
-    }, [hydrated, reloadProperties, currentUser, loadFavoritesFromSupabase, loadMessagesFromSupabase]);
+    }, [
+      hydrated,
+      reloadProperties,
+      currentUser,
+      loadFavoritesFromSupabase,
+      loadMessagesFromSupabase,
+      loadNotificationsFromSupabase,
+    ]);
 
     const retrySync = useCallback(() => {
       fetchData();
@@ -906,6 +1008,89 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         supabase.removeChannel(channel);
       };
     }, [hydrated, currentUser, loadMessagesFromSupabase, notifyLocal]);
+
+    // Keep the signed-in user's server notifications current without
+    // exposing notifications addressed to another account.
+    useEffect(() => {
+      if (!hydrated || !currentUser) return;
+      const channel = supabase
+        .channel(`notifications-realtime-${currentUser.id}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser.id}` },
+          payload => {
+            if (payload.eventType === 'DELETE') {
+              const deletedId = (payload.old as { id?: string } | null)?.id;
+              if (deletedId) {
+                remoteNotificationIdsRef.current.delete(deletedId);
+                setNotifications(previous => previous.filter(item => item.id !== deletedId));
+              }
+              return;
+            }
+
+            const row = payload.new as {
+              id?: string;
+              title?: string;
+              body?: string;
+              read?: boolean;
+              created_at?: string;
+              user_id?: string;
+            } | null;
+            if (!row?.id || row.user_id !== currentUser.id || !row.title || !row.body) return;
+            const notification: AppNotification = {
+              id: row.id,
+              title: row.title,
+              body: row.body,
+              createdAt: row.created_at ?? new Date().toISOString(),
+              read: Boolean(row.read),
+            };
+            remoteNotificationIdsRef.current.add(notification.id);
+            setNotifications(previous => [
+              notification,
+              ...previous.filter(item => item.id !== notification.id),
+            ].slice(0, 50));
+          }
+        )
+        .subscribe();
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }, [hydrated, currentUser]);
+
+    // Notify the current account when an administrator changes its role or
+    // agent approval status.
+    useEffect(() => {
+      if (!hydrated || !currentUser) return;
+      const channel = supabase
+        .channel(`profile-status-${currentUser.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${currentUser.id}` },
+          payload => {
+            const next = payload.new as { role?: User['role']; agent_status?: User['agentStatus']; agent_rejection_reason?: string | null } | null;
+            const previous = payload.old as { role?: User['role']; agent_status?: User['agentStatus'] } | null;
+            if (!next) return;
+
+            setCurrentUser(prev => prev ? {
+              ...prev,
+              role: next.role ?? prev.role,
+              isAdmin: next.role === 'ADMIN',
+              agentStatus: next.agent_status ?? prev.agentStatus,
+              agentRejectionReason: next.agent_rejection_reason ?? prev.agentRejectionReason,
+            } : prev);
+
+            if (next.agent_status === 'approved' && previous?.agent_status !== 'approved') {
+              void notifyLocal('Demande agent approuvée', 'Votre compte agent est maintenant actif.');
+            } else if (next.agent_status === 'rejected' && previous?.agent_status !== 'rejected') {
+              void notifyLocal('Demande agent refusée', 'Votre demande agent a été refusée.');
+            }
+          }
+        )
+        .subscribe();
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }, [hydrated, currentUser, notifyLocal]);
 
   const setFilters = (updates: Partial<SearchFilters>) => {
     setFiltersState(prev => ({ ...prev, ...updates }));
@@ -964,6 +1149,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (updates.description !== undefined) payload.description = updates.description ?? null;
     if (updates.status !== undefined) payload.status = updates.status;
     if (updates.listingStatus !== undefined) payload.listing_status = updates.listingStatus ?? null;
+    if (updates.rejectionReason !== undefined) payload.rejection_reason = updates.rejectionReason ?? null;
     if (updates.area !== undefined) payload.area = updates.area ?? null;
     if (updates.bedrooms !== undefined) payload.bedrooms = updates.bedrooms ?? null;
     if (updates.bathrooms !== undefined) payload.bathrooms = updates.bathrooms ?? null;
@@ -979,6 +1165,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const uploadPropertyImages = useCallback(
     async (propertyId: string, uris: string[], ownerId?: string): Promise<string[]> => {
+      const maxImageBytes = 10 * 1024 * 1024;
       const resolvedOwnerId = ownerId ?? (await resolveAuthUserId());
       if (!resolvedOwnerId) {
         throw new Error('User not logged in');
@@ -1012,23 +1199,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             console.warn('Upload skipped, file not found', { uri, propertyId });
             continue;
           }
+          const dimensions = await new Promise<{ width: number; height: number } | null>(resolve => {
+            Image.getSize(uri, (width, height) => resolve({ width, height }), () => resolve(null));
+          });
+          const resizeAction =
+            dimensions && Math.max(dimensions.width, dimensions.height) > 2048
+              ? [{
+                  resize: dimensions.width >= dimensions.height
+                    ? { width: 2048 }
+                    : { height: 2048 },
+                }]
+              : [];
+          const optimized = await ImageManipulator.manipulateAsync(uri, resizeAction, {
+            compress: 0.75,
+            format: ImageManipulator.SaveFormat.JPEG,
+          });
+          const uploadUri = optimized.uri;
+          const optimizedInfo = await FileSystem.getInfoAsync(uploadUri);
+          if ('size' in optimizedInfo && typeof optimizedInfo.size === 'number' && optimizedInfo.size > maxImageBytes) {
+            await FileSystem.deleteAsync(uploadUri, { idempotent: true });
+            throw new Error('Chaque image doit faire 10 Mo maximum après compression.');
+          }
 
-          const extMatch = uri.split('.').pop();
-          const ext = extMatch && extMatch.length <= 5 ? extMatch.toLowerCase() : 'jpg';
+          const ext = 'jpg';
           const path = `${resolvedOwnerId}/${propertyId}/${Date.now()}-${Math.random()
             .toString(36)
             .slice(2)}.${ext}`;
 
-          const contentType =
-            ext === 'png'
-              ? 'image/png'
-              : ext === 'webp'
-              ? 'image/webp'
-              : ext === 'heic'
-              ? 'image/heic'
-              : ext === 'heif'
-              ? 'image/heif'
-              : 'image/jpeg';
+          const contentType = 'image/jpeg';
 
           // Signed upload to avoid Blob/ArrayBuffer limitations in Expo Go
           const { data: signed, error: signedError } = await supabase
@@ -1042,13 +1240,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               path,
               propertyId,
             });
+            await FileSystem.deleteAsync(uploadUri, { idempotent: true });
             continue;
           }
 
           let uploadOk = false;
           for (let attempt = 1; attempt <= 2; attempt += 1) {
             try {
-              const uploadResult = await FileSystem.uploadAsync(signed.signedUrl, uri, {
+              const uploadResult = await FileSystem.uploadAsync(signed.signedUrl, uploadUri, {
                 httpMethod: 'PUT',
                 uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
                 headers: {
@@ -1078,6 +1277,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             await new Promise(resolve => setTimeout(resolve, 800 * attempt));
           }
 
+          await FileSystem.deleteAsync(uploadUri, { idempotent: true });
           if (!uploadOk) {
             continue;
           }
@@ -1543,14 +1743,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setPrivacySettings(prev => ({ ...prev, [key]: value }));
   };
 
-  const registerUser = useCallback(async (data: { name: string; email: string; phone: string; password: string }) => {
+  const registerUser = useCallback(async (data: { name: string; email: string; phone: string; password: string; wantsAgentAccess: boolean }) => {
+    const email = data.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      return { ok: false, code: 'invalid email' } as { ok: false; code: string };
+    }
     const { data: authData, error } = await supabase.auth.signUp({
-      email: data.email,
+      email,
       password: data.password,
       options: {
         data: {
           name: data.name,
           phone: data.phone,
+          wants_agent_access: data.wantsAgentAccess,
         }
       }
     });
@@ -1561,8 +1766,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const loginUser = useCallback(async (email: string, password: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalizedEmail)) {
+      return { ok: false, code: 'invalid email' } as { ok: false; code: string };
+    }
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: normalizedEmail,
       password,
     });
     if (error) {
@@ -1578,6 +1787,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const verifyUser = async (id: string, value: boolean) => {
     setUsers(prev => prev.map(u => (u.id === id ? { ...u, verified: value } : u)));
+  };
+
+  const reviewAgentRequest = async (id: string, approved: boolean, reason?: string) => {
+    if (!currentUser?.isAdmin) throw new Error('Accès administrateur requis.');
+    const updates = approved
+      ? { role: 'AGENT' as const, agent_status: 'approved' as const, agent_rejection_reason: null }
+      : { role: 'USER' as const, agent_status: 'rejected' as const, agent_rejection_reason: reason?.trim() || 'Votre demande doit être complétée.' };
+    const { error } = await supabase.from('profiles').update(updates).eq('id', id);
+    if (error) throw error;
+    setUsers(prev => prev.map(user => (
+      user.id === id
+        ? { ...user, role: updates.role, agentStatus: updates.agent_status, agentRejectionReason: updates.agent_rejection_reason, verified: approved }
+        : user
+    )));
   };
 
   const updateUser = (id: string, updates: Partial<Pick<User, 'name' | 'email' | 'phone'>>) => {
@@ -2114,6 +2337,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         loginUser,
         logoutUser,
         verifyUser,
+        reviewAgentRequest,
         updateUser,
         addReport,
         resolveReport,
@@ -2136,6 +2360,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         contracts,
         payments,
         tenantDocuments,
+        notifications,
+        markNotificationRead,
+        clearNotifications,
         addContract,
         updateContract,
         updateContractStatus,

@@ -6,6 +6,7 @@ import SectionHeader from '../../../components/SectionHeader';
 import { supabase } from '../../../lib/supabaseClient';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import type { Neighborhood } from '../../../lib/types';
+import { logAdminAction } from '../../../lib/adminAudit';
 
 const emptyForm = { name: '' };
 type PropertyNeighborhoodRow = { id: string; neighborhood: string | null };
@@ -44,9 +45,21 @@ export default function NeighborhoodsPage() {
     }
     setSaving(true);
     if (editingId) {
-      await supabase.from('neighborhoods').update({ name: cleaned }).eq('id', editingId);
+      const { error } = await supabase.from('neighborhoods').update({ name: cleaned }).eq('id', editingId);
+      if (error) {
+        alert(`Erreur quartier: ${error.message}`);
+        setSaving(false);
+        return;
+      }
+      await logAdminAction('update_neighborhood', 'neighborhood', editingId);
     } else {
-      await supabase.from('neighborhoods').insert({ name: cleaned });
+      const { data, error } = await supabase.from('neighborhoods').insert({ name: cleaned }).select('id').single();
+      if (error) {
+        alert(`Erreur quartier: ${error.message}`);
+        setSaving(false);
+        return;
+      }
+      await logAdminAction('create_neighborhood', 'neighborhood', data.id);
     }
     setForm(emptyForm);
     setEditingId(null);
@@ -65,8 +78,13 @@ export default function NeighborhoodsPage() {
       alert(`Ce quartier est utilise par ${count} bien(s). Deplacez-les avant suppression.`);
       return;
     }
-    await supabase.from('neighborhoods').delete().eq('id', row.id);
+    const { error } = await supabase.from('neighborhoods').delete().eq('id', row.id);
+    if (error) {
+      alert(`Erreur suppression: ${error.message}`);
+      return;
+    }
     await supabase.from('properties').update({ neighborhood: null }).eq('neighborhood', row.name);
+    await logAdminAction('delete_neighborhood', 'neighborhood', row.id);
     reload();
   };
 

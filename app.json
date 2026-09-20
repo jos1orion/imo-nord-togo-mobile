@@ -2,12 +2,13 @@
   "expo": {
     "name": "Imo Nord Togo",
     "slug": "imo-nord-togo",
+    "scheme": "imonordtogo",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/kara-immo-icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/kara-immo-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#2563EB"
     },
@@ -29,7 +30,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/kara-immo-icon.png",
         "backgroundColor": "#2563EB"
       },
       "package": "com.imonordtogo.app",
@@ -68,9 +69,9 @@
       ]
     ],
     "extra": {
-      "contactPhone": "22899210881",
-      "contactEmail": "contact@imonordtogo.com",
-      "whatsappPhone": "22899210881",
+      "contactPhone": "22893576298",
+      "contactEmail": "kondgbandi@gmail.com",
+      "whatsappPhone": "22893576298",
       "enableAdminShortcut": false,
       "apkDownloadUrl": "",
       "eas": {
