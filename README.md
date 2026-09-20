@@ -1,19 +1,23 @@
-# 🏠 Imo Nord Togo - Application Mobile Immobilière
+# 🏠 Imo Nord Togo - Application mobile immobilière
 
 Application mobile pour la gestion immobilière à Kara, Togo.
 
 ## 📱 Fonctionnalités
 
 ### Pour les utilisateurs
-- 🗺️ **Carte interactive** - Localisez les biens sur la carte de Kara
-- 🏠 **Catalogue de biens** - Maisons, appartements et terrains (Kara et environs)
-- 🔍 **Recherche avancée** - Filtrez par type, prix, localisation
-- 📞 **Contact direct** - Appelez ou envoyez un email aux propriétaires
+- 🏠 **Catalogue de biens** - Maisons, appartements, terrains et boutiques à Kara et environs
+- 🔍 **Recherche avancée** - Filtrez par type, prix, ville et quartier
+- 🖼️ **Galerie photo** - Consultez et faites défiler les photos d'une annonce
+- 📞 **Contact direct** - Appelez ou contactez l'agent par WhatsApp
+- 🔐 **Authentification** - Inscription avec validation d'email et récupération du mot de passe
+- 🔔 **Notifications** - Suivez les mises à jour de vos annonces et demandes
 
 ### Pour les administrateurs
-- 📊 **Dashboard** - Statistiques en temps réel
-- ✅ **Validation** - Approuvez ou rejetez les annonces
-- 👥 **Gestion clients** - Suivez vos clients
+- 📊 **Tableau de bord** - Suivez les données de l'activité
+- ✅ **Validation des agents** - Vérifiez, approuvez ou refusez les demandes
+- ⚡ **Validation groupée** - Approuvez plusieurs agents en une seule action
+- 👥 **Gestion des utilisateurs** - Modifiez les rôles et les profils
+- 🏘️ **Gestion des annonces** - Contrôlez les annonces et leur statut de publication
 
 ## 🚀 Installation
 
@@ -47,10 +51,7 @@ npm install -g eas-cli
 # Connecter votre compte Expo
 eas login
 
-# Construire l'APK
-eas build -p android --profile apk
-
-# Alternative equivalente
+# Construire l'APK de test
 eas build -p android --profile preview
 ```
 
@@ -69,9 +70,9 @@ cd android
 
 ### Attention
 
-- `eas build -p android --profile development` genere un dev client.
-- Pour une APK qui demarre sans Expo Go, utilisez `apk` ou `preview`.
-- Le build Android local doit utiliser JDK 17. Avec Java 25, Gradle echoue.
+- `eas build -p android --profile development` génère un dev client.
+- Pour une APK qui démarre sans Expo Go, utilisez le profil `preview`.
+- Le build Android local doit utiliser JDK 17. Avec Java 25, Gradle peut échouer.
 
 ## 📋 Checklist Google Play Store
 
@@ -105,18 +106,15 @@ imo-nord-togo-mobile/
 
 | Permission | Justification |
 |------------|---------------|
-| `ACCESS_FINE_LOCATION` | Localiser les biens sur la carte |
-| `ACCESS_COARSE_LOCATION` | Localisation approximative |
 | `CAMERA` | Prendre des photos de propriétés |
-| `READ_EXTERNAL_STORAGE` | Accéder aux photos |
-| `WRITE_EXTERNAL_STORAGE` | Sauvegarder les images |
+| `RECORD_AUDIO` | Utiliser la recherche vocale |
 
 ## 📞 Contact
 
-- **Email** : contact@imonordtogo.com
-- **Téléphone** : +228 90 00 00 00
+- **Email** : [kondgbandi@gmail.com](mailto:kondgbandi@gmail.com)
+- **Téléphone** : +228 93 57 62 98
 - **Adresse** : Avenue de la Libération, Kara, Togo
 
 ## 📄 Licence
 
-© 2024 Imo Nord Togo - Tous droits réservés
+© 2026 Imo Nord Togo - Tous droits réservés
