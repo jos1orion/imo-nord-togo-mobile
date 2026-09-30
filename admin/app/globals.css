@@ -58,6 +58,130 @@ a {
   text-decoration: none;
 }
 
+.public-legal {
+  min-height: 100vh;
+  padding: 48px 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.public-legal-card {
+  width: min(100%, 880px);
+  padding: clamp(24px, 5vw, 56px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: rgba(17, 24, 39, 0.92);
+  box-shadow: var(--shadow);
+}
+
+.public-legal-brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: #fff;
+  font-family: var(--font-display), "Segoe UI", sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.public-legal-brand span {
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+}
+
+.public-legal-eyebrow {
+  margin-top: 42px;
+  color: var(--accent-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.public-legal h1 {
+  margin-top: 10px;
+  font-family: var(--font-display), "Segoe UI", sans-serif;
+  font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.12;
+}
+
+.public-legal-intro {
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.public-legal-date {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.public-legal-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 28px 0 36px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.public-legal-nav a {
+  padding: 9px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: #dbeafe;
+  font-size: 13px;
+}
+
+.public-legal-nav a:hover,
+.public-legal-footer a:hover {
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.public-legal-sections {
+  display: grid;
+  gap: 28px;
+}
+
+.public-legal-sections h2 {
+  margin-bottom: 9px;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.public-legal-sections p {
+  color: #cbd5e1;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.public-legal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 600px) {
+  .public-legal {
+    padding: 16px 12px;
+  }
+
+  .public-legal-card {
+    padding: 24px 20px;
+    border-radius: 18px;
+  }
+}
+
 button {
   font-family: inherit;
 }

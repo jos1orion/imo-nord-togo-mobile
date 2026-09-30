@@ -1,73 +1,50 @@
-# Conditions d'Utilisation - Imo Nord Togo
+# Conditions d’utilisation - Imo Nord Togo
 
-**Dernière mise à jour : Février 2024**
+**Dernière mise à jour : 30 septembre 2026**
 
 ## 1. Acceptation des conditions
 
-En téléchargeant et utilisant l'application **Imo Nord Togo**, vous acceptez d'être lié par ces conditions d'utilisation.
+En créant un compte ou en utilisant Imo Nord Togo, vous acceptez les présentes conditions.
 
 ## 2. Description du service
 
-Imo Nord Togo est une plateforme de mise en relation pour :
-- La vente de biens immobiliers
-- La location de propriétés
-- La publication d'annonces immobilières
+Imo Nord Togo met en relation des personnes intéressées par des biens immobiliers et permet la consultation, la publication et la gestion d’annonces de vente ou de location.
 
 ## 3. Inscription et compte
 
-- Vous devez fournir des informations exactes
-- Vous êtes responsable de la sécurité de votre compte
-- Vous devez avoir au moins 18 ans pour utiliser le service
+- Vous devez fournir des informations exactes et protéger vos identifiants.
+- Vous devez nous signaler toute utilisation non autorisée de votre compte.
+- Le service est destiné aux personnes âgées d’au moins 18 ans.
 
 ## 4. Utilisation acceptable
 
 Vous vous engagez à :
-- Publier des annonces véridiques
-- Ne pas publier de contenu inapproprié ou illégal
-- Respecter les droits des autres utilisateurs
-- Utiliser l'application conformément aux lois togolaises
+
+- Publier des annonces exactes et véridiques.
+- Ne pas publier de contenu illégal, frauduleux, trompeur ou inapproprié.
+- Respecter les droits des autres utilisateurs.
+- Utiliser l’application conformément aux lois applicables.
 
 ## 5. Propriété intellectuelle
 
-- Le contenu de l'application appartient à Imo Nord Togo
-- Les photos publiées restent la propriété de leurs auteurs
-- L'utilisation commerciale sans autorisation est interdite
+Le contenu de la plateforme appartient à Imo Nord Togo ou à ses concédants. Les photos restent la propriété de leurs auteurs. Toute utilisation commerciale non autorisée est interdite.
 
-## 6. Responsabilités
+## 6. Transactions et responsabilités
 
-- Imo Nord Togo n'est pas responsable des transactions entre utilisateurs
-- Nous ne garantissons pas l'exactitude des annonces
-- Nous nous réservons le droit de supprimer tout contenu inapproprié
+Imo Nord Togo fournit un service de mise en relation et n’est pas partie aux transactions conclues entre utilisateurs. Vérifiez les informations, l’identité de votre interlocuteur et le bien avant tout paiement ou engagement. Nous ne garantissons ni l’exactitude de tous les contenus publiés ni l’absence d’interruption du service.
 
-## 7. Limitation de responsabilité
+## 7. Suspension et résiliation
 
-Imo Nord Togo ne peut être tenu responsable des :
-- Dommages directs ou indirects
-- Pertes financières liées aux transactions
-- Contenus publiés par les utilisateurs
+Nous pouvons suspendre ou fermer un compte en cas de violation des présentes conditions ou pour protéger les utilisateurs et le service.
 
-## 8. Résiliation
+## 8. Modifications et loi applicable
 
-Nous nous réservons le droit de :
-- Suspendre ou supprimer votre compte
-- Refuser l'accès à l'application
-- Supprimer tout contenu non conforme
+Les conditions peuvent être mises à jour. Elles sont régies par les lois de la République Togolaise, sous réserve des règles impératives applicables.
 
-## 9. Modifications
+## 9. Contact
 
-Ces conditions peuvent être modifiées à tout moment. L'utilisation continue de l'application vaut acceptation des modifications.
+- **E-mail** : contact@imonordtogo.com
+- **Téléphone** : +228 99 21 08 81
+- **Adresse** : Kara, Togo
 
-## 10. Loi applicable
-
-Ces conditions sont régies par les lois de la République Togolaise.
-
-## 11. Contact
-
-Pour toute question :
-- **Email** : contact@imonordtogo.com
-- **Téléphone** : +228 90 00 00 00
-- **Adresse** : Avenue de la Libération, Kara, Togo
-
----
-
-**Imo Nord Togo** - Votre partenaire immobilier à Kara
+**Imo Nord Togo** - Votre partenaire immobilier à Kara.

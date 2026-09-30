@@ -54,62 +54,49 @@ const LegalScreen: React.FC<LegalScreenProps> = ({ type, onClose }) => {
 };
 
 const privacyContentFr = `
-POLITIQUE DE CONFIDENTIALITE - IMO NORD TOGO
+POLITIQUE DE CONFIDENTIALITÉ - IMO NORD TOGO
 
-Derniere mise a jour : fevrier 2024
+Dernière mise à jour : 30 septembre 2026
 
 1. INTRODUCTION
 
-Bienvenue dans l'application Imo Nord Togo. Cette politique de confidentialite explique comment nous collectons, utilisons et protegeons vos informations personnelles lorsque vous utilisez notre application.
+Cette politique décrit les informations traitées lorsque vous utilisez l'application mobile Imo Nord Togo et les services associés.
 
-2. INFORMATIONS COLLECTEES
+2. INFORMATIONS TRAITÉES
 
-Informations fournies par l'utilisateur :
-- Nom complet - pour identifier les proprietaires
-- Adresse e-mail - pour la communication
-- Numero de telephone - pour faciliter les contacts
-- Photos de biens - pour afficher les annonces
-
-Informations collectees automatiquement :
-- Donnees d'utilisation - pour ameliorer l'experience
+Selon les fonctions utilisées, nous traitons les informations de compte que vous fournissez (nom, adresse e-mail et téléphone), les annonces que vous créez (description, prix, ville, quartier, caractéristiques et photos), ainsi que les messages, avis, favoris, recherches et alertes que vous choisissez d’utiliser. Des données techniques nécessaires à l’authentification, à la sécurité et au fonctionnement du service peuvent également être générées.
 
 3. UTILISATION DES INFORMATIONS
 
-Vos informations sont utilisees pour :
-- Faciliter la vente et la location de biens
-- Permettre la communication entre utilisateurs
-- Ameliorer nos services
+Les informations servent à créer et sécuriser votre compte, publier et gérer les annonces, permettre les contacts entre utilisateurs, fournir les fonctions de favoris et d’alertes, répondre aux demandes d’assistance et maintenir le service.
 
 4. PARTAGE DES INFORMATIONS
 
-Nous partageons uniquement :
-- Les coordonnees avec les parties interessees par un bien
-- Les photos et descriptions des annonces
+Les annonces publiées et les coordonnées que vous choisissez d’y inclure peuvent être visibles par les utilisateurs de l’application. Nous utilisons des prestataires techniques, notamment Supabase pour l’authentification, la base de données et le stockage, ainsi que Vercel pour héberger le site web. Lorsque vous choisissez WhatsApp, l’appel ou l’e-mail, vous êtes redirigé vers le service correspondant, qui applique ses propres règles de confidentialité.
 
-5. PERMISSIONS REQUISES
+5. PHOTOS ET LOCALISATION
 
-L'application peut demander :
-- Camera - prendre des photos de biens
-- Stockage - enregistrer des images
+L’application accède à la caméra ou à la photothèque uniquement lorsque vous choisissez d’ajouter des photos et après autorisation de votre appareil. La ville et le quartier saisis dans une annonce servent à décrire le bien. L’application ne demande pas l’accès à la position GPS de votre appareil.
 
-6. SECURITE DES DONNEES
+6. CONSERVATION ET SÉCURITÉ
 
-Nous mettons en oeuvre des mesures de securite adaptees pour proteger vos informations.
+Les données sont conservées aussi longtemps que nécessaire au fonctionnement du compte et du service, puis supprimées ou conservées uniquement lorsque cela est nécessaire pour des obligations légales, la sécurité ou le règlement de litiges. Nous mettons en œuvre des mesures raisonnables pour protéger les données, sans pouvoir garantir une sécurité absolue.
 
-7. VOS DROITS
+7. VOS CHOIX ET SUPPRESSION DU COMPTE
 
-Vous pouvez :
-- Acceder a vos donnees personnelles
-- Demander leur modification ou suppression
-- Demander la suppression de votre compte
+Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte en écrivant à ${getContactEmail()} depuis l’adresse associée au compte. Indiquez « Suppression de compte Imo Nord Togo » dans l’objet. Nous pouvons demander des éléments raisonnables pour vérifier votre identité. La suppression entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité.
 
 8. CONTACT
 
 E-mail : ${getContactEmail()}
-Telephone : +${getContactPhoneDigits()}
-Adresse : Avenue de la Liberation, Kara, Togo
+Téléphone : +${getContactPhoneDigits()}
+Adresse : Kara, Togo
 
-Imo Nord Togo - votre partenaire immobilier a Kara.
+9. MINEURS ET MODIFICATIONS
+
+Le service n’est pas destiné aux personnes de moins de 18 ans. Nous pouvons mettre à jour cette politique ; la date de mise à jour sera alors modifiée sur cette page.
+
+Imo Nord Togo - votre partenaire immobilier à Kara.
 `;
 
 const termsContentFr = `
@@ -181,58 +168,45 @@ Imo Nord Togo - votre partenaire immobilier a Kara.
 const privacyContentEn = `
 PRIVACY POLICY - IMO NORD TOGO
 
-Last update: February 2024
+Last updated: September 30, 2026
 
 1. INTRODUCTION
 
-This policy explains how we collect, use, and protect your personal data when you use Imo Nord Togo.
+This policy explains how information is handled when you use the Imo Nord Togo mobile app and related services.
 
-2. INFORMATION COLLECTED
+2. INFORMATION WE HANDLE
 
-Information you provide:
-- Full name - to identify property owners
-- Email address - for communication
-- Phone number - for contact between users
-- Property photos - to display listings
-
-Collected automatically:
-- Usage data - to improve the app
+Depending on the features you use, we handle account details you provide (name, email address and phone number), listings you create (description, price, city, neighborhood, features and photos), and messages, reviews, favorites, searches and alerts you choose to use. Technical data needed for authentication, security and service operation may also be generated.
 
 3. USE OF INFORMATION
 
-We use your data to:
-- Facilitate sales and rentals
-- Enable communication between users
-- Improve our services
+Information is used to create and secure accounts, publish and manage listings, enable contact between users, provide favorites and alerts, respond to support requests and operate the service.
 
 4. DATA SHARING
 
-We only share:
-- Contact details with parties interested in a listing
-- Listing photos and descriptions as shown in the app
+Published listings and contact details you choose to include may be visible to app users. We use technical providers, including Supabase for authentication, database and storage, and Vercel to host the website. If you choose WhatsApp, phone or email contact, you are redirected to that service, which applies its own privacy terms.
 
-5. PERMISSIONS
+5. PHOTOS AND LOCATION
 
-The app may request:
-- Camera
-- Storage (photos)
+The app accesses your camera or photo library only when you choose to add photos and grant device permission. The city and neighborhood entered in a listing describe the property. The app does not request access to your device’s GPS location.
 
-6. DATA SECURITY
+6. RETENTION AND SECURITY
 
-We apply reasonable technical and organizational measures to protect your information.
+Data is kept for as long as needed to operate the account and service, then deleted or retained only where needed for legal obligations, security or dispute resolution. We use reasonable safeguards, but cannot guarantee absolute security.
 
-7. YOUR RIGHTS
+7. YOUR CHOICES AND ACCOUNT DELETION
 
-You may:
-- Access your personal data
-- Request correction or deletion
-- Request account deletion
+You may request access, correction or deletion of your data and account by emailing ${getContactEmail()} from the address linked to the account. Use “Imo Nord Togo account deletion” as the subject. We may ask for reasonable information to verify your identity. Account deletion removes or de-links personal data, except information that must be retained for legal or security reasons.
 
 8. CONTACT
 
 Email: ${getContactEmail()}
 Phone: +${getContactPhoneDigits()}
-Address: Avenue de la Liberation, Kara, Togo
+Address: Kara, Togo
+
+9. CHILDREN AND CHANGES
+
+The service is not intended for anyone under 18. We may update this policy and will change the update date on this page.
 `;
 
 const termsContentEn = `
