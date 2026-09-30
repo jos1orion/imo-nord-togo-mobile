@@ -41,3 +41,12 @@ npm start
 ```
 
 Sans variables d’environnement valides, le build Next peut réussir ; l’API admin renverra une erreur 503 tant que `SUPABASE_SERVICE_ROLE_KEY` n’est pas définie sur l’environnement d’exécution.
+
+## Pages publiques pour Google Play
+
+Le site expose les pages l?gales sans connexion, m?me si le reste du back-office est prot?g? :
+
+- Politique de confidentialit? : `/privacy`
+- Conditions d?utilisation : `/terms`
+
+Apr?s le d?ploiement Vercel, utiliser l?URL publique compl?te de `/privacy` dans la fiche Google Play et dans la section S?curit? des donn?es. Tout changement doit ?tre pouss? sur Git pour d?clencher le d?ploiement Vercel connect? au d?p?t.

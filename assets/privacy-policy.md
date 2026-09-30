@@ -1,66 +1,41 @@
-# Politique de Confidentialité - Imo Nord Togo
+# Politique de confidentialité - Imo Nord Togo
 
-**Dernière mise à jour : Février 2024**
+**Dernière mise à jour : 30 septembre 2026**
 
 ## 1. Introduction
 
-Bienvenue dans l'application **Imo Nord Togo**. Cette politique de confidentialité explique comment nous collectons, utilisons et protégeons vos informations personnelles lorsque vous utilisez notre application.
+Cette politique décrit les informations traitées lorsque vous utilisez l’application mobile Imo Nord Togo et les services associés.
 
-## 2. Informations que nous collectons
+## 2. Informations traitées
 
-### Informations fournies par l'utilisateur :
-- **Nom complet** - Pour identifier les propriétaires de biens
-- **Adresse email** - Pour la communication
-- **Numéro de téléphone** - Pour faciliter les contacts entre acheteurs et vendeurs
-- **Photos de propriétés** - Pour afficher les biens immobiliers
+Selon les fonctions utilisées, nous traitons les informations de compte que vous fournissez (nom, adresse e-mail et téléphone), les annonces que vous créez (description, prix, ville, quartier, caractéristiques et photos), ainsi que les messages, avis, favoris, recherches et alertes que vous choisissez d’utiliser. Des données techniques nécessaires à l’authentification, à la sécurité et au fonctionnement du service peuvent également être générées.
 
-### Informations collectées automatiquement :
-- **Position GPS** - Pour localiser les biens immobiliers sur la carte
-- **Données d'utilisation** - Pour améliorer l'expérience utilisateur
+L’application accède à la caméra ou à la photothèque uniquement lorsque vous choisissez d’ajouter des photos et après autorisation de votre appareil. La ville et le quartier saisis dans une annonce servent à décrire le bien. L’application ne demande pas l’accès à la position GPS de votre appareil.
 
 ## 3. Utilisation des informations
 
-Vos informations sont utilisées pour :
-- Faciliter la vente et la location de biens immobiliers
-- Afficher les propriétés sur la carte interactive
-- Permettre la communication entre acheteurs et vendeurs
-- Améliorer nos services
+Les informations servent à créer et sécuriser votre compte, publier et gérer les annonces, permettre les contacts entre utilisateurs, fournir les fonctions de favoris et d’alertes, répondre aux demandes d’assistance et maintenir le service.
 
-## 4. Partage des informations
+## 4. Partage et prestataires
 
-Nous partageons uniquement :
-- Les informations de contact avec les parties intéressées par un bien
-- Les photos et descriptions des propriétés avec les utilisateurs de l'application
+Les annonces publiées et les coordonnées que vous choisissez d’y inclure peuvent être visibles par les utilisateurs de l’application. Nous utilisons des prestataires techniques, notamment Supabase pour l’authentification, la base de données et le stockage, ainsi que Vercel pour héberger le site web. Lorsque vous choisissez WhatsApp, l’appel ou l’e-mail, vous êtes redirigé vers le service correspondant, qui applique ses propres règles de confidentialité.
 
-## 5. Permissions requises
+## 5. Conservation et sécurité
 
-L'application nécessite les permissions suivantes :
-- **Localisation (GPS)** : Pour afficher les biens sur la carte
-- **Caméra** : Pour prendre des photos de propriétés
-- **Stockage** : Pour sauvegarder les images
+Les données sont conservées aussi longtemps que nécessaire au fonctionnement du compte et du service, puis supprimées ou conservées uniquement lorsque cela est nécessaire pour des obligations légales, la sécurité ou le règlement de litiges. Nous mettons en œuvre des mesures raisonnables pour protéger les données, sans pouvoir garantir une sécurité absolue.
 
-## 6. Sécurité des données
+## 6. Vos choix et suppression du compte
 
-Nous mettons en œuvre des mesures de sécurité appropriées pour protéger vos informations contre tout accès non autorisé.
+Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte en écrivant à **contact@imonordtogo.com** depuis l’adresse associée au compte. Indiquez **« Suppression de compte Imo Nord Togo »** dans l’objet. Nous pouvons demander des éléments raisonnables pour vérifier votre identité. La suppression entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité.
 
-## 7. Vos droits
+## 7. Mineurs et modifications
 
-Vous avez le droit de :
-- Accéder à vos données personnelles
-- Modifier ou supprimer vos informations
-- Demander la suppression de votre compte
+Le service n’est pas destiné aux personnes de moins de 18 ans. Nous pouvons mettre à jour cette politique ; la date de mise à jour sera alors modifiée sur cette page.
 
 ## 8. Contact
 
-Pour toute question concernant cette politique :
-- **Email** : contact@imonordtogo.com
-- **Téléphone** : +228 90 00 00 00
-- **Adresse** : Avenue de la Libération, Kara, Togo
+- **E-mail** : contact@imonordtogo.com
+- **Téléphone** : +228 99 21 08 81
+- **Adresse** : Kara, Togo
 
-## 9. Modifications
-
-Nous nous réservons le droit de modifier cette politique. Les utilisateurs seront informés de tout changement majeur.
-
----
-
-**Imo Nord Togo** - Votre partenaire immobilier à Kara
+**Imo Nord Togo** - Votre partenaire immobilier à Kara.
