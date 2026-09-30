@@ -7,7 +7,7 @@ type LegalSection = {
   body: string;
 };
 
-const contactEmail = 'contact@imonordtogo.com';
+const contactEmail = 'kondgbandi@gmail.com';
 const contactPhone = '+228 99 21 08 81';
 
 const documents: Record<LegalDocument, { title: string; intro: string; sections: LegalSection[] }> = {

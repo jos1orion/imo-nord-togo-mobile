@@ -26,7 +26,7 @@ Les données sont conservées aussi longtemps que nécessaire au fonctionnement 
 
 ## 6. Vos choix et suppression du compte
 
-Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte en écrivant à **contact@imonordtogo.com** depuis l’adresse associée au compte. Indiquez **« Suppression de compte Imo Nord Togo »** dans l’objet. Nous pouvons demander des éléments raisonnables pour vérifier votre identité. La suppression entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité.
+Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte en écrivant à **kondgbandi@gmail.com** depuis l’adresse associée au compte. Indiquez **« Suppression de compte Imo Nord Togo »** dans l’objet. Nous pouvons demander des éléments raisonnables pour vérifier votre identité. La suppression entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité.
 
 ## 7. Mineurs et modifications
 
@@ -34,7 +34,7 @@ Le service n’est pas destiné aux personnes de moins de 18 ans. Nous pouvons m
 
 ## 8. Contact
 
-- **E-mail** : contact@imonordtogo.com
+- **E-mail** : kondgbandi@gmail.com
 - **Téléphone** : +228 99 21 08 81
 - **Adresse** : Kara, Togo
 

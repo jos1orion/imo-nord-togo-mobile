@@ -43,7 +43,7 @@ Les conditions peuvent être mises à jour. Elles sont régies par les lois de l
 
 ## 9. Contact
 
-- **E-mail** : contact@imonordtogo.com
+- **E-mail** : kondgbandi@gmail.com
 - **Téléphone** : +228 99 21 08 81
 - **Adresse** : Kara, Togo
 
