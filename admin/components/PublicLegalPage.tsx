@@ -105,9 +105,9 @@ export default function PublicLegalPage({ document }: { document: LegalDocument 
   return (
     <main className="public-legal">
       <article className="public-legal-card">
-        <Link className="public-legal-brand" href="/" aria-label="Imo Nord Togo">
+        <div className="public-legal-brand" aria-label="Imo Nord Togo">
           IMO <span>NORD TOGO</span>
-        </Link>
+        </div>
         <p className="public-legal-eyebrow">Imo Nord Togo</p>
         <h1>{content.title}</h1>
         <p className="public-legal-intro">{content.intro}</p>

@@ -16,9 +16,9 @@ export default function DeleteAccountPage() {
   return (
     <main className="public-legal">
       <article className="public-legal-card">
-        <Link className="public-legal-brand" href="/">
+        <div className="public-legal-brand" aria-label="Imo Nord Togo">
           IMO <span>NORD TOGO</span>
-        </Link>
+        </div>
         <p className="public-legal-eyebrow">Vos données</p>
         <h1>Demande de suppression de compte</h1>
         <p className="public-legal-intro">
