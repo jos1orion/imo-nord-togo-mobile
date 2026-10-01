@@ -33,7 +33,7 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isLogin = path === '/login';
   const isPublicApi = path.startsWith('/api/health');
-  const isLegalPage = path === '/privacy' || path === '/terms';
+  const isLegalPage = path === '/privacy' || path === '/terms' || path === '/delete-account';
 
   if (isPublicApi || isLegalPage) {
     return supabaseResponse;
