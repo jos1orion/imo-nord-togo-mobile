@@ -3,6 +3,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { isAdminRole } from './rbac';
 
 export async function updateSession(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+  const isPublicPage = path === '/privacy' || path === '/terms' || path === '/delete-account';
+  if (isPublicPage) {
+    return NextResponse.next({ request });
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -30,12 +36,10 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const path = request.nextUrl.pathname;
   const isLogin = path === '/login';
   const isPublicApi = path.startsWith('/api/health');
-  const isLegalPage = path === '/privacy' || path === '/terms' || path === '/delete-account';
 
-  if (isPublicApi || isLegalPage) {
+  if (isPublicApi) {
     return supabaseResponse;
   }
 
