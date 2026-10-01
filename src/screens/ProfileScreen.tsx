@@ -189,6 +189,18 @@ const ProfileScreen: React.FC = () => {
     Linking.openURL(`mailto:${getContactEmail()}`);
   };
 
+  const handleAccountDeletionRequest = async () => {
+    const subject = encodeURIComponent('Suppression de compte Imo Nord Togo');
+    const body = encodeURIComponent(
+      `Bonjour,\n\nJe demande la suppression de mon compte Imo Nord Togo et des données personnelles associées.\n\nAdresse e-mail associée au compte : ${currentUser?.email ?? ''}\n\n`
+    );
+    try {
+      await Linking.openURL(`mailto:${getContactEmail()}?subject=${subject}&body=${body}`);
+    } catch {
+      Alert.alert(t('error'), t('profile_delete_account_email_failed'));
+    }
+  };
+
   const handleWhatsApp = () => {
     Linking.openURL(getWhatsAppUrl());
   };
@@ -546,6 +558,15 @@ const ProfileScreen: React.FC = () => {
             {logoutLoading && <ActivityIndicator size="small" color={COLORS.primary} />}
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={handleAccountDeletionRequest}
+          accessibilityRole="button"
+        >
+          <Ionicons name="trash-outline" size={17} color={COLORS.error} />
+          <Text style={styles.deleteAccountText}>{t('profile_delete_account')}</Text>
+        </TouchableOpacity>
 
         <View style={styles.quickRow}>
           <View style={styles.quickCard}>
@@ -1326,6 +1347,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 18,
     elevation: 4,
+  },
+  deleteAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+  },
+  deleteAccountText: {
+    color: COLORS.error,
+    fontSize: 13,
+    fontWeight: '700',
   },
   accountName: {
     fontSize: 16,
