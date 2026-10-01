@@ -70,6 +70,10 @@ L’application ouvre cette URL depuis l’email de récupération et permet ens
    - `SUPABASE_SERVICE_ROLE_KEY` (serveur uniquement)
 5. Déployer : chaque push crée une Preview, et la branche de prod (souvent `main`) crée la Production.
 
+Après déploiement, la ressource Web publique de demande de suppression pour Google
+Play est `https://imo-nord-togo-mobile.vercel.app/delete-account`. Vérifier qu’elle
+s’ouvre sans connexion avant de l’ajouter à la fiche Play Console.
+
 ### Vercel (CLI)
 
 Installation :
