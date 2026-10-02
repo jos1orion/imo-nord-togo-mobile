@@ -72,7 +72,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#2563EB"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "extra": {
       "contactPhone": "22893576298",

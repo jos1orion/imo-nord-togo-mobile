@@ -345,11 +345,11 @@ const PropertyDetailScreen: React.FC = () => {
               <View style={styles.locationRow}>
                 <Ionicons name="location" size={14} color="#9CA3AF" />
                 <Text style={styles.location}>
-                  {[property.neighborhood, property.location].filter(Boolean).join(', ') || 'Zone non précisée'}
+                  {[property.neighborhood, property.location].filter(Boolean).join(', ') || t('property_location_unknown')}
                 </Text>
               </View>
               <Text style={styles.locationPrivacyNote}>
-                Zone générale — adresse exacte communiquée uniquement par l&apos;agent.
+                {t('property_location_privacy')}
               </Text>
             </View>
             <Text style={styles.detailPrice}>{formatPrice(property.price)}</Text>
@@ -546,7 +546,7 @@ const PropertyDetailScreen: React.FC = () => {
       <View style={[styles.bottomActions, { paddingBottom: Math.max(insets.bottom, 12) + 16 }]}>
         <TouchableOpacity style={styles.contactQuick} onPress={handleContactAgent}>
           <Ionicons name="call" size={17} color={COLORS.primary} />
-          <Text style={styles.contactQuickText}>Appeler</Text>
+          <Text style={styles.contactQuickText}>{t('call')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.whatsappQuick} onPress={handleWhatsApp}>
           <Ionicons name="logo-whatsapp" size={17} color="#fff" />

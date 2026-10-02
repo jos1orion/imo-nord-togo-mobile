@@ -2,32 +2,39 @@ import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
+import { useApp } from '../context/AppContext';
 import COLORS from '../theme/colors';
 
 export default function ResetPasswordScreen({ navigation }: { navigation: any }) {
+  const { t } = useApp();
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
     if (password.length < 6) {
-      Alert.alert('Mot de passe invalide', 'Le mot de passe doit contenir au moins 6 caractères.');
+      Alert.alert(t('reset_password_invalid_title'), t('profile_auth_password_short'));
       return;
     }
     if (password !== confirmation) {
-      Alert.alert('Confirmation incorrecte', 'Les deux mots de passe doivent être identiques.');
+      Alert.alert(t('reset_password_mismatch_title'), t('reset_password_mismatch_message'));
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-    if (error) {
-      Alert.alert('Réinitialisation impossible', 'Le lien est peut-être expiré. Demandez un nouvel email.');
-      return;
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) {
+        Alert.alert(t('reset_password_failed_title'), t('reset_password_failed_message'));
+        return;
+      }
+      Alert.alert(t('reset_password_success_title'), t('reset_password_success_message'), [
+        { text: t('reset_password_sign_in'), onPress: () => navigation.navigate('MainTabs') },
+      ]);
+    } catch {
+      Alert.alert(t('reset_password_failed_title'), t('reset_password_failed_message'));
+    } finally {
+      setLoading(false);
     }
-    Alert.alert('Mot de passe modifié', 'Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.', [
-      { text: 'Se connecter', onPress: () => navigation.navigate('MainTabs') },
-    ]);
   };
 
   return (
@@ -37,12 +44,12 @@ export default function ResetPasswordScreen({ navigation }: { navigation: any })
       </TouchableOpacity>
       <View style={styles.card}>
         <Ionicons name="lock-closed-outline" size={42} color={COLORS.primary} />
-        <Text style={styles.title}>Nouveau mot de passe</Text>
-        <Text style={styles.subtitle}>Choisissez un nouveau mot de passe pour sécuriser votre compte.</Text>
-        <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="Nouveau mot de passe" secureTextEntry />
-        <TextInput style={styles.input} value={confirmation} onChangeText={setConfirmation} placeholder="Confirmer le mot de passe" secureTextEntry />
+        <Text style={styles.title}>{t('reset_password_title')}</Text>
+        <Text style={styles.subtitle}>{t('reset_password_subtitle')}</Text>
+        <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder={t('reset_password_placeholder')} secureTextEntry />
+        <TextInput style={styles.input} value={confirmation} onChangeText={setConfirmation} placeholder={t('reset_password_confirmation')} secureTextEntry />
         <TouchableOpacity style={styles.button} onPress={() => void submit()} disabled={loading}>
-          <Text style={styles.buttonText}>{loading ? 'Enregistrement...' : 'Réinitialiser le mot de passe'}</Text>
+          <Text style={styles.buttonText}>{loading ? t('reset_password_saving') : t('reset_password_action')}</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>

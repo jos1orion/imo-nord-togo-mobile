@@ -49,9 +49,23 @@ Variables d’environnement attendues :
 
 Voir `admin/README.md` et `admin/.env.local.example`.
 
-### Réinitialisation du mot de passe mobile
+### Authentification mobile (Google et mot de passe)
 
-Dans Supabase, ajouter l’URL suivante aux **Redirect URLs** de l’authentification :
+Pour la connexion Google, activer le fournisseur Google dans **Authentication → Sign In / Providers** de Supabase. Dans Google Cloud Console, déclarer l’URL de callback Supabase :
+
+```text
+https://<project-ref>.supabase.co/auth/v1/callback
+```
+
+Dans **Authentication → URL Configuration → Redirect URLs** de Supabase, autoriser le callback de l’application :
+
+```text
+imonordtogo://auth/callback
+```
+
+L’application utilise ce callback pour terminer la connexion Google sur Android et iOS. Le fournisseur Google doit aussi être activé dans le projet Supabase utilisé par les environnements mobile.
+
+Pour la réinitialisation du mot de passe mobile, ajouter également cette URL aux **Redirect URLs** :
 
 ```text
 imonordtogo://reset-password

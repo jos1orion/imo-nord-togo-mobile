@@ -12,9 +12,11 @@ import {
   ActivityIndicator,
   InteractionManager,
   Linking,
+  Platform,
 } from 'react-native';
 
 import Constants from 'expo-constants';
+import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -233,18 +235,46 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
-    const handleAccountDeletionRequest = async () => {
-      const subject = encodeURIComponent('Suppression de compte Imo Nord Togo');
-      const body = encodeURIComponent(
-        `Bonjour,\n\nJe demande la suppression de mon compte Imo Nord Togo et des données personnelles associées.\n\nAdresse e-mail associée au compte : ${currentUser?.email ?? ''}\n\n`
-      );
+  const handleGoogleAuth = async () => {
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      const redirectTo = 'imonordtogo://auth/callback';
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: Platform.OS !== 'web',
+        },
+      });
+      if (error) throw error;
+      if (Platform.OS === 'web') return;
+      if (!data.url) throw new Error('Missing Google OAuth URL.');
 
-      try {
-        await Linking.openURL(`mailto:${getContactEmail()}?subject=${subject}&body=${body}`);
-      } catch {
-        Alert.alert(t('error'), t('profile_delete_account_email_failed'));
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type === 'success') {
+        const { error: sessionError } = await supabase.auth.exchangeCodeForSession(result.url);
+        if (sessionError) throw sessionError;
       }
-    };
+    } catch {
+      setAuthError(t('profile_auth_google_failed'));
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleAccountDeletionRequest = async () => {
+    const subject = encodeURIComponent('Suppression de compte Imo Nord Togo');
+    const body = encodeURIComponent(
+      `Bonjour,\n\nJe demande la suppression de mon compte Imo Nord Togo et des données personnelles associées.\n\nAdresse e-mail associée au compte : ${currentUser?.email ?? ''}\n\n`
+    );
+
+    try {
+      await Linking.openURL(`mailto:${getContactEmail()}?subject=${subject}&body=${body}`);
+    } catch {
+      Alert.alert(t('error'), t('profile_delete_account_email_failed'));
+    }
+  };
 
     const handleLogoutPress = async () => {
     if (logoutLoading) return;
@@ -393,8 +423,8 @@ const ProfileScreen: React.FC = () => {
                 color={wantsAgentAccess ? COLORS.primary : '#64748B'}
               />
               <Text style={styles.agentOptionText}>
-                Je suis agent immobilier et je souhaite publier des annonces.
-                {'\n'}Mon compte devra être validé par un administrateur avant publication.
+                {t('profile_agent_signup')}
+                {'\n'}{t('profile_agent_signup_note')}
               </Text>
             </TouchableOpacity>
           )}
@@ -482,6 +512,23 @@ const ProfileScreen: React.FC = () => {
             </Text>
           </TouchableOpacity>
 
+          <View style={styles.authDivider}>
+            <View style={styles.authDividerLine} />
+            <Text style={styles.authDividerText}>{t('profile_auth_or')}</Text>
+            <View style={styles.authDividerLine} />
+          </View>
+          <TouchableOpacity
+            style={[styles.googleButton, authLoading && styles.authButtonDisabled]}
+            onPress={() => void handleGoogleAuth()}
+            disabled={authLoading}
+            accessibilityRole="button"
+          >
+            <Ionicons name="logo-google" size={18} color="#4285F4" />
+            <Text style={styles.googleButtonText}>
+              {authLoading ? t('profile_please_wait') : t('profile_auth_google')}
+            </Text>
+          </TouchableOpacity>
+
           {authMode === 'register' && (
             <Text style={styles.authLegal}>{t('profile_legal_consent_short')}</Text>
           )}
@@ -541,15 +588,6 @@ const ProfileScreen: React.FC = () => {
             color={accountVerified ? '#16a34a' : theme === 'dark' ? '#94A3B8' : COLORS.textMuted}
           />
         </View>
-
-        <TouchableOpacity
-          style={styles.deleteAccountButton}
-          onPress={handleAccountDeletionRequest}
-          accessibilityRole="button"
-        >
-          <Ionicons name="trash-outline" size={17} color={COLORS.error} />
-          <Text style={styles.deleteAccountText}>{t('profile_delete_account')}</Text>
-        </TouchableOpacity>
 
         {/* Account Status */}
         <View style={[styles.section, theme === 'dark' && styles.sectionDark]}>
@@ -788,6 +826,15 @@ const ProfileScreen: React.FC = () => {
             {logoutLoading ? t('profile_logging_out') : t('profile_logout')}
           </Text>
           {logoutLoading && <ActivityIndicator size="small" color={COLORS.error} />}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.deleteAccountButton, styles.deleteAccountButtonBottom]}
+          onPress={handleAccountDeletionRequest}
+          accessibilityRole="button"
+        >
+          <Ionicons name="trash-outline" size={17} color={COLORS.error} />
+          <Text style={styles.deleteAccountText}>{t('profile_delete_account')}</Text>
         </TouchableOpacity>
 
         {/* Footer */}
@@ -1043,6 +1090,38 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
+  authDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 18,
+    marginBottom: 14,
+  },
+  authDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  authDividerText: {
+    color: '#64748B',
+    fontSize: 12,
+  },
+  googleButton: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#fff',
+  },
+  googleButtonText: {
+    color: '#334155',
+    fontSize: 14,
+    fontWeight: '700',
+  },
   authError: {
     fontSize: 12,
     color: COLORS.error,
@@ -1111,6 +1190,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FECACA',
     backgroundColor: '#FEF2F2',
+  },
+  deleteAccountButtonBottom: {
+    marginTop: 8,
   },
   deleteAccountText: {
     color: COLORS.error,
@@ -1615,7 +1697,6 @@ const styles = StyleSheet.create({
 });
 
 export default ProfileScreen;
-
 
 
 

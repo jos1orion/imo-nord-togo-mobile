@@ -167,7 +167,7 @@ const TabNavigator = () => {
 };
 
 const AppContent = () => {
-  const { theme } = useApp();
+  const { theme, t } = useApp();
   const paperTheme = theme === 'light' ? lightPaperTheme : darkPaperTheme;
   const [navReady, setNavReady] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -181,7 +181,7 @@ const AppContent = () => {
       const accessToken = params.get('access_token');
       const refreshToken = params.get('refresh_token');
       if (!accessToken || !refreshToken) {
-        Alert.alert('Lien invalide', 'Le lien de réinitialisation est incomplet ou expiré.');
+        Alert.alert(t('reset_link_invalid_title'), t('reset_link_invalid_message'));
         return;
       }
       const { error } = await supabase.auth.setSession({
@@ -189,7 +189,7 @@ const AppContent = () => {
         refresh_token: refreshToken,
       });
       if (error) {
-        Alert.alert('Lien invalide', 'Le lien de réinitialisation est expiré. Demandez un nouvel email.');
+        Alert.alert(t('reset_link_invalid_title'), t('reset_link_expired_message'));
         return;
       }
       navigationRef.current?.navigate('ResetPassword');
@@ -200,7 +200,7 @@ const AppContent = () => {
       void handleAuthUrl(event.url);
     });
     return () => subscription.remove();
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     let cancelled = false;

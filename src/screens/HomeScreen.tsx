@@ -503,7 +503,7 @@ const HomeScreen: React.FC = () => {
                   style={[styles.filterChoice, !selectedCity && styles.filterChoiceActive]}
                   onPress={() => setSelectedCity(null)}
                 >
-                  <Text style={[styles.filterChoiceText, !selectedCity && styles.filterChoiceTextActive]}>Toutes</Text>
+                  <Text style={[styles.filterChoiceText, !selectedCity && styles.filterChoiceTextActive]}>{t('all_cities')}</Text>
                 </TouchableOpacity>
                 {cities.map(city => (
                   <TouchableOpacity

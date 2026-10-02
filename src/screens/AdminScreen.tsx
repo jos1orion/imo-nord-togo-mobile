@@ -1960,7 +1960,7 @@ const AdminScreen: React.FC = () => {
               <Text style={styles.accountMeta}>{user.email}</Text>
               <Text style={styles.accountMeta}>{user.phone}</Text>
               {user.agentStatus === 'pending' ? (
-                <Text style={styles.accountMeta}>Demande agent en attente</Text>
+                <Text style={styles.accountMeta}>{tAdmin("Demande agent en attente")}</Text>
               ) : null}
             </View>
             <View style={styles.accountActions}>
@@ -1970,13 +1970,13 @@ const AdminScreen: React.FC = () => {
                     style={[styles.accountVerifyButton, styles.accountVerifyOn]}
                     onPress={() => void handleReviewAgent(user, true)}
                   >
-                    <Text style={styles.accountVerifyText}>Approuver</Text>
+                    <Text style={styles.accountVerifyText}>{tAdmin("Approuver")}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.accountVerifyButton, styles.accountVerifyOff]}
                     onPress={() => void handleReviewAgent(user, false)}
                   >
-                    <Text style={[styles.accountVerifyText, { color: theme.textMuted }]}>Refuser</Text>
+                    <Text style={[styles.accountVerifyText, { color: theme.textMuted }]}>{tAdmin("Refuser")}</Text>
                   </TouchableOpacity>
                 </>
               ) : null}
@@ -5098,7 +5098,6 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
 });
 
 export default AdminScreen;
-
 
 
 

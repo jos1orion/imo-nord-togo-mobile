@@ -516,7 +516,7 @@ const PublishScreen: React.FC = () => {
                       <TouchableOpacity
                         style={styles.photoOrderButton}
                         onPress={() => moveImage(uri, 'right')}
-                        accessibilityLabel="Déplacer la photo vers la droite"
+                        accessibilityLabel={t('publish_move_photo_right')}
                       >
                         <Ionicons name="chevron-forward" size={13} color="#fff" />
                       </TouchableOpacity>
@@ -533,7 +533,7 @@ const PublishScreen: React.FC = () => {
             )}
             {draftImages.length > 0 && (
               <Text style={styles.photoMainHint}>
-                La première photo est utilisée comme photo principale de l&apos;annonce.
+                {t('publish_main_photo_hint')}
               </Text>
             )}
           </>

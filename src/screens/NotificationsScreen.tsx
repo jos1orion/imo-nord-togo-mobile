@@ -7,12 +7,12 @@ import COLORS from '../theme/colors';
 
 const NotificationsScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { notifications, markNotificationRead, clearNotifications } = useApp();
+  const { notifications, markNotificationRead, clearNotifications, language, t } = useApp();
 
   const handleClear = () => {
-    Alert.alert('Effacer les notifications ?', 'L’historique local sera supprimé de cet appareil.', [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Effacer', style: 'destructive', onPress: clearNotifications },
+    Alert.alert(t('notifications_clear_title'), t('notifications_clear_message'), [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('profile_clear_history'), style: 'destructive', onPress: clearNotifications },
     ]);
   };
 
@@ -22,10 +22,10 @@ const NotificationsScreen: React.FC = () => {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Notifications</Text>
+        <Text style={styles.title}>{t('notifications_title')}</Text>
         {notifications.length > 0 ? (
           <TouchableOpacity onPress={handleClear} hitSlop={10}>
-            <Text style={styles.clearText}>Effacer</Text>
+            <Text style={styles.clearText}>{t('profile_clear_history')}</Text>
           </TouchableOpacity>
         ) : <View style={styles.headerSpacer} />}
       </View>
@@ -36,8 +36,8 @@ const NotificationsScreen: React.FC = () => {
             <View style={styles.emptyIcon}>
               <Ionicons name="notifications-off-outline" size={30} color={COLORS.primary} />
             </View>
-            <Text style={styles.emptyTitle}>Aucune notification</Text>
-            <Text style={styles.emptyText}>Les mises à jour de votre compte et de vos annonces apparaîtront ici.</Text>
+            <Text style={styles.emptyTitle}>{t('notifications_empty_title')}</Text>
+            <Text style={styles.emptyText}>{t('notifications_empty_message')}</Text>
           </View>
         ) : (
           notifications.map(notification => (
@@ -58,7 +58,7 @@ const NotificationsScreen: React.FC = () => {
                 <Text style={styles.itemTitle}>{notification.title}</Text>
                 <Text style={styles.itemBody}>{notification.body}</Text>
                 <Text style={styles.date}>
-                  {new Date(notification.createdAt).toLocaleString('fr-FR', {
+                  {new Date(notification.createdAt).toLocaleString(language === 'fr' ? 'fr-FR' : 'en-US', {
                     day: '2-digit',
                     month: 'short',
                     year: 'numeric',
