@@ -23,9 +23,10 @@ export default function Sidebar() {
       </div>
 
       {navGroups.map(group => {
+        const role = profile?.role;
         const items =
-          profile && isStaffRole(profile.role)
-            ? group.items.filter(item => hasPermission(profile.role, item.permission))
+          role && isStaffRole(role)
+            ? group.items.filter(item => hasPermission(role, item.permission))
             : [];
         if (items.length === 0) return null;
         return (

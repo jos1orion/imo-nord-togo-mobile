@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import COLORS from '../theme/colors';
+import { getCurrentLanguage, translate } from '../i18n';
 
 type Props = { children: ReactNode };
 
@@ -60,12 +61,13 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const t = (key: Parameters<typeof translate>[1]) => translate(getCurrentLanguage(), key);
       const details = [this.state.stack, this.state.componentStack].filter(Boolean).join('\n\n');
       return (
         <View style={styles.container}>
-          <Text style={styles.title}>Un problème est survenu</Text>
+          <Text style={styles.title}>{t('app_error_title')}</Text>
           <Text style={styles.body}>
-            {this.state.message ? `${this.state.message}` : "L'application a rencontré une erreur inattendue."}
+            {this.state.message ? `${this.state.message}` : t('app_error_unexpected')}
           </Text>
 
           {details ? (
@@ -75,7 +77,7 @@ export class ErrorBoundary extends Component<Props, State> {
               accessibilityRole="button"
             >
               <Text style={[styles.buttonText, styles.secondaryButtonText]}>
-                {this.state.showDetails ? 'Masquer les détails' : 'Afficher les détails'}
+                {this.state.showDetails ? t('app_error_hide_details') : t('app_error_show_details')}
               </Text>
             </TouchableOpacity>
           ) : null}
@@ -89,7 +91,7 @@ export class ErrorBoundary extends Component<Props, State> {
           ) : null}
 
           <TouchableOpacity style={styles.button} onPress={this.handleReset} accessibilityRole="button">
-            <Text style={styles.buttonText}>Réessayer</Text>
+            <Text style={styles.buttonText}>{t('app_error_retry')}</Text>
           </TouchableOpacity>
         </View>
       );

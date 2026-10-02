@@ -16,6 +16,7 @@ import type {
   ExpoSpeechRecognitionResultEvent,
 } from 'expo-speech-recognition';
 import COLORS from '../theme/colors';
+import { useApp } from '../context/AppContext';
 
 const noopEmitter = {
   addListener: () => ({ remove: () => {} }),
@@ -41,9 +42,10 @@ interface SearchBarProps {
 const SearchBar: React.FC<SearchBarProps> = ({
   value,
   onChangeText,
-  placeholder = 'Rechercher un bien...',
+  placeholder,
   onSearch,
 }) => {
+  const { language, t } = useApp();
   const speechModule = useMemo(loadSpeechRecognitionModule, []);
   const speechEventEmitter = (speechModule ?? noopEmitter) as unknown as Parameters<
     typeof useEventListener
@@ -108,8 +110,8 @@ const SearchBar: React.FC<SearchBarProps> = ({
     'error' as never,
     (event: ExpoSpeechRecognitionErrorEvent) => {
       setIsListening(false);
-      const message = event?.message || 'Impossible de lancer la reconnaissance vocale.';
-      Alert.alert('Recherche vocale', message);
+      const message = event?.message || t('voice_search_start_error');
+      Alert.alert(t('voice_search_title'), message);
     }
   );
   useEventListener(
@@ -175,13 +177,13 @@ const SearchBar: React.FC<SearchBarProps> = ({
     if (Platform.OS === 'web') return;
     if (!speechModule) {
       Alert.alert(
-        'Recherche vocale',
-        "Module natif manquant. Utilise une development build (EAS / Dev Client) pour activer la recherche vocale."
+        t('voice_search_title'),
+        t('voice_search_dev_build')
       );
       return;
     }
     if (!voiceAvailable) {
-      Alert.alert('Recherche vocale', "La recherche vocale n'est pas disponible sur cet appareil.");
+      Alert.alert(t('voice_search_title'), t('voice_search_unavailable'));
       return;
     }
 
@@ -194,19 +196,19 @@ const SearchBar: React.FC<SearchBarProps> = ({
 
       const allowed = await ensureVoicePermission();
       if (!allowed) {
-        Alert.alert('Recherche vocale', 'Autorisation micro refusée.');
+        Alert.alert(t('voice_search_title'), t('voice_microphone_denied'));
         return;
       }
 
       setIsListening(true);
       speechModule.start({
-        lang: 'fr-FR',
+        lang: language === 'fr' ? 'fr-FR' : 'en-US',
         interimResults: true,
         continuous: false,
       });
     } catch {
       setIsListening(false);
-      Alert.alert('Recherche vocale', "Impossible de démarrer la recherche vocale.");
+      Alert.alert(t('voice_search_title'), t('voice_search_start_error'));
     }
   };
 
@@ -238,7 +240,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
               onLayout={event => setTextWidth(event.nativeEvent.layout.width)}
               numberOfLines={1}
             >
-              {placeholder}
+              {placeholder ?? t('search_bar_placeholder')}
             </Text>
           </Animated.View>
         )}
@@ -264,7 +266,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
       {isListening && (
         <View style={styles.voiceIndicator}>
           <Ionicons name="mic" size={12} color={COLORS.primary} />
-          <Text style={styles.voiceIndicatorText}>Écoute...</Text>
+          <Text style={styles.voiceIndicatorText}>{t('voice_search_listening')}</Text>
         </View>
       )}
     </View>

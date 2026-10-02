@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useApp } from '../context/AppContext';
 import { PROPERTY_TYPE_COLORS } from '../types';
@@ -31,6 +32,7 @@ type DetailRouteProp = RouteProp<RootStackParamList, 'PropertyDetail'>;
 
 const PropertyDetailScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
+  const insets = useSafeAreaInsets();
   const route = useRoute<DetailRouteProp>();
   const {
     properties,
@@ -108,20 +110,20 @@ const PropertyDetailScreen: React.FC = () => {
           return;
         }
       }
-      Alert.alert('Action impossible', errorText || "Impossible d'ouvrir le lien.");
+      Alert.alert(t('error'), errorText || t('property_link_unavailable'));
     } catch {
-      Alert.alert('Action impossible', errorText || "Impossible d'ouvrir le lien.");
+      Alert.alert(t('error'), errorText || t('property_link_unavailable'));
     }
   };
 
   const handleContactAgent = () => {
     if (!agentPhone) {
-      Alert.alert('Contact', "Numéro de l'agent indisponible.");
+      Alert.alert(t('contact'), t('property_phone_unavailable'));
       return;
     }
     const telUrl = buildTelUrl(agentPhone);
     if (!telUrl) {
-      Alert.alert('Contact', "Numéro de l'agent indisponible.");
+      Alert.alert(t('contact'), t('property_phone_unavailable'));
       return;
     }
     openExternal(telUrl);
@@ -130,18 +132,18 @@ const PropertyDetailScreen: React.FC = () => {
 
   const handleWhatsApp = () => {
     if (!agentPhone) {
-      Alert.alert('WhatsApp', "Numéro de l'agent indisponible.");
+      Alert.alert('WhatsApp', t('property_phone_unavailable'));
       return;
     }
     const phone = normalizeDigits(agentPhone);
     if (!phone) {
-      Alert.alert('WhatsApp', "Numéro de l'agent indisponible.");
+      Alert.alert('WhatsApp', t('property_phone_unavailable'));
       return;
     }
     openExternal(
       `whatsapp://send?phone=${phone}`,
       `https://wa.me/${phone}`,
-      "WhatsApp n'est pas installe sur ce telephone."
+      t('property_whatsapp_unavailable')
     );
     trackContact(property.id);
   };
@@ -180,22 +182,26 @@ const PropertyDetailScreen: React.FC = () => {
   const isVerified = (property.listingStatus ?? 'approved') === 'approved';
   const isOwner = Boolean(currentUser?.id && property.ownerId === currentUser.id);
 
-  const handleMarkOccupied = (label: 'vendu' | 'occupé') => {
+  const handleMarkOccupied = (status: 'sold' | 'occupied') => {
+    const statusLabel = status === 'sold' ? t('status_sold') : t('status_occupied');
     Alert.alert(
-      'Confirmation',
-      `Marquer ce bien comme ${label} ? Il restera visible 48h puis disparaîtra de l'app.`,
+      t('property_confirmation'),
+      t('property_mark_status_confirm').replace('{{status}}', statusLabel),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Confirmer',
+          text: t('confirm'),
           style: 'destructive',
           onPress: async () => {
             try {
               await updatePropertyStatus(property.id, 'occupied');
-              Alert.alert('Statut mis à jour', `Le bien est marqué comme ${label}.`);
+              Alert.alert(
+                t('property_status_updated'),
+                t('property_marked_status').replace('{{status}}', statusLabel)
+              );
             } catch (e) {
-              const message = e instanceof Error ? e.message : 'Erreur inconnue';
-              Alert.alert('Erreur', message);
+              const message = e instanceof Error ? e.message : t('publish_unknown_error');
+              Alert.alert(t('error'), message);
             }
           },
         },
@@ -204,17 +210,17 @@ const PropertyDetailScreen: React.FC = () => {
   };
 
   const handleMarkAvailable = () => {
-    Alert.alert('Confirmation', 'Remettre ce bien comme disponible ?', [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(t('property_confirmation'), t('property_restore_confirm'), [
+      { text: t('cancel'), style: 'cancel' },
       {
-        text: 'Confirmer',
+        text: t('confirm'),
         onPress: async () => {
           try {
             await updatePropertyStatus(property.id, 'available');
-            Alert.alert('Statut mis à jour', 'Le bien est de nouveau disponible.');
+            Alert.alert(t('property_status_updated'), t('property_restored'));
           } catch (e) {
-            const message = e instanceof Error ? e.message : 'Erreur inconnue';
-            Alert.alert('Erreur', message);
+            const message = e instanceof Error ? e.message : t('publish_unknown_error');
+            Alert.alert(t('error'), message);
           }
         },
       },
@@ -329,19 +335,19 @@ const PropertyDetailScreen: React.FC = () => {
             {property.featured && (
               <View style={[styles.tagBadge, styles.tagFeatured]}>
                 <Ionicons name="star" size={12} color="#F59E0B" />
-                <Text style={styles.tagText}>Top</Text>
+                <Text style={styles.tagText}>{t('card_badge_top')}</Text>
               </View>
             )}
             {isVerified && (
               <View style={[styles.tagBadge, styles.tagVerified]}>
                 <Ionicons name="checkmark-circle" size={12} color={COLORS.primary} />
-                <Text style={styles.tagText}>Vérifié</Text>
+                <Text style={styles.tagText}>{t('card_badge_verified')}</Text>
               </View>
             )}
             {isNew && (
               <View style={[styles.tagBadge, styles.tagNew]}>
                 <Ionicons name="sparkles" size={12} color="#F59E0B" />
-                <Text style={styles.tagText}>Nouveau</Text>
+                <Text style={styles.tagText}>{t('card_badge_new')}</Text>
               </View>
             )}
             <View style={[
@@ -356,13 +362,13 @@ const PropertyDetailScreen: React.FC = () => {
             {property.bedrooms !== undefined && (
               <View style={styles.detailStat}>
                 <Ionicons name="bed" size={16} color={COLORS.primary} />
-                <Text style={styles.detailStatText}>{property.bedrooms} chambres</Text>
+                <Text style={styles.detailStatText}>{property.bedrooms} {t('property_bedrooms')}</Text>
               </View>
             )}
             {property.bathrooms !== undefined && (
               <View style={styles.detailStat}>
                 <Ionicons name="water" size={16} color={COLORS.primary} />
-                <Text style={styles.detailStatText}>{property.bathrooms} sdb</Text>
+                <Text style={styles.detailStatText}>{property.bathrooms} {t('property_bathrooms')}</Text>
               </View>
             )}
             {property.area !== undefined && (
@@ -375,30 +381,30 @@ const PropertyDetailScreen: React.FC = () => {
 
           <View style={styles.detailActions}>
             <TouchableOpacity style={styles.primaryCta} onPress={handleContactAgent}>
-              <Text style={styles.primaryCtaText}>Vérifier disponibilité</Text>
+              <Text style={styles.primaryCtaText}>{t('property_check_availability')}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {isOwner && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Gestion de votre annonce</Text>
+            <Text style={styles.sectionTitle}>{t('property_manage_listing')}</Text>
             <Text style={styles.ownerHint}>
-              Si le bien est déjà vendu ou occupé, vous pouvez le signaler. Il disparaîtra de l'app après 48h.
+              {t('property_owner_hint')}
             </Text>
             <View style={styles.ownerActions}>
-              <TouchableOpacity style={styles.ownerActionPrimary} onPress={() => handleMarkOccupied('vendu')}>
+              <TouchableOpacity style={styles.ownerActionPrimary} onPress={() => handleMarkOccupied('sold')}>
                 <Ionicons name="cash" size={16} color="#fff" />
-                <Text style={styles.ownerActionTextPrimary}>Déjà vendu</Text>
+                <Text style={styles.ownerActionTextPrimary}>{t('property_mark_sold')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.ownerActionPrimary} onPress={() => handleMarkOccupied('occupé')}>
+              <TouchableOpacity style={styles.ownerActionPrimary} onPress={() => handleMarkOccupied('occupied')}>
                 <Ionicons name="home" size={16} color="#fff" />
-                <Text style={styles.ownerActionTextPrimary}>Déjà occupé</Text>
+                <Text style={styles.ownerActionTextPrimary}>{t('property_mark_occupied')}</Text>
               </TouchableOpacity>
               {property.status === 'occupied' && (
                 <TouchableOpacity style={styles.ownerActionGhost} onPress={handleMarkAvailable}>
                   <Ionicons name="refresh" size={16} color={COLORS.primary} />
-                  <Text style={styles.ownerActionTextGhost}>Remettre disponible</Text>
+                  <Text style={styles.ownerActionTextGhost}>{t('property_restore_available')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -449,7 +455,7 @@ const PropertyDetailScreen: React.FC = () => {
         {/* Contact Agency */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('contact')}</Text>
-          <Text style={styles.contactNote}>Contactez l'agent en un clic.</Text>
+          <Text style={styles.contactNote}>{t('property_contact_hint')}</Text>
           <View style={styles.contactButtons}>
             <TouchableOpacity
               style={[styles.contactButton, styles.contactButtonPrimary]}
@@ -510,7 +516,7 @@ const PropertyDetailScreen: React.FC = () => {
           </View>
         )}
 
-        <View style={styles.bottomPadding} />
+        <View style={[styles.bottomPadding, { height: 80 + insets.bottom }]} />
       </ScrollView>
 
       {viewerOpen && (
@@ -1258,7 +1264,4 @@ const styles = StyleSheet.create({
 });
 
 export default PropertyDetailScreen;
-
-
-
 

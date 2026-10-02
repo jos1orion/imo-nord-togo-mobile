@@ -6,11 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#2563EB"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.imonordtogo.app",
@@ -63,7 +58,18 @@
         {
           "microphonePermission": "Autorisez l'accès au micro pour la recherche vocale.",
           "speechRecognitionPermission": "Autorisez la reconnaissance vocale pour rechercher des annonces.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ],
+      "expo-sharing",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#2563EB"
         }
       ]
     ],

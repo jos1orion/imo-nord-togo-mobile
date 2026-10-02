@@ -23,8 +23,19 @@ create table if not exists profiles (
   full_name text,
   phone text,
   role user_role not null default 'USER',
+  account_status text not null default 'active',
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  add column if not exists account_status text not null default 'active';
+
+do $$ begin
+  alter table public.profiles
+    add constraint profiles_account_status_check
+    check (account_status in ('active', 'suspended', 'pending'));
+exception when duplicate_object then null;
+end $$;
 
 create table if not exists properties (
   id uuid primary key default gen_random_uuid(),
@@ -233,6 +244,10 @@ as $$
     select 1 from profiles
     where profiles.id = auth.uid()
       and profiles.role = required_role
+      and (
+        required_role not in ('ADMIN', 'AGENT', 'ACCOUNTANT')
+        or coalesce(profiles.account_status, 'active') <> 'suspended'
+      )
   );
 $$;
 
@@ -246,6 +261,7 @@ as $$
     select 1 from profiles
     where profiles.id = auth.uid()
       and profiles.role = 'ADMIN'
+      and coalesce(profiles.account_status, 'active') <> 'suspended'
   );
 $$;
 
@@ -289,7 +305,7 @@ create policy "Profiles write admin" on profiles for all
   with check (is_admin());
 
 create policy "Properties read" on properties for select
-  using (true);
+  using ((listing_status = 'approved' and status = 'available') or auth.uid() = owner_id or is_admin());
 create policy "Properties insert own" on properties for insert
   with check (
     (
@@ -300,13 +316,19 @@ create policy "Properties insert own" on properties for insert
     or is_admin()
   );
 create policy "Properties update own" on properties for update
-  using (auth.uid() = owner_id or is_admin() or has_role('AGENT'))
-  with check (auth.uid() = owner_id or is_admin() or has_role('AGENT'));
+  using (auth.uid() = owner_id or is_admin())
+  with check (auth.uid() = owner_id or is_admin());
 create policy "Properties delete own" on properties for delete
-  using (auth.uid() = owner_id or is_admin() or has_role('AGENT'));
+  using (auth.uid() = owner_id or is_admin());
 
 create policy "Property images read" on property_images for select
-  using (true);
+  using (
+    exists (
+      select 1 from properties p
+      where p.id = property_images.property_id
+        and ((p.listing_status = 'approved' and p.status = 'available') or p.owner_id = auth.uid() or is_admin())
+    )
+  );
 create policy "Property images insert own" on property_images for insert
   with check (
     (
@@ -327,7 +349,6 @@ create policy "Property images update own" on property_images for update
         and p.owner_id = auth.uid()
     )
     or is_admin()
-    or has_role('AGENT')
   )
   with check (
     exists (
@@ -336,7 +357,6 @@ create policy "Property images update own" on property_images for update
         and p.owner_id = auth.uid()
     )
     or is_admin()
-    or has_role('AGENT')
   );
 create policy "Property images delete own" on property_images for delete
   using (
@@ -346,35 +366,34 @@ create policy "Property images delete own" on property_images for delete
         and p.owner_id = auth.uid()
     )
     or is_admin()
-    or has_role('AGENT')
   );
 
 create policy "Neighborhoods read" on neighborhoods for select
   using (auth.role() = 'authenticated');
 create policy "Neighborhoods write" on neighborhoods for all
-  using (is_admin() or has_role('AGENT'))
-  with check (is_admin() or has_role('AGENT'));
+  using (is_admin())
+  with check (is_admin());
 
 create policy "Tenants read" on tenants for select
-  using (auth.role() = 'authenticated');
+  using (is_admin() or has_role('ACCOUNTANT'));
 create policy "Tenants write" on tenants for all
-  using (is_admin() or has_role('AGENT'))
-  with check (is_admin() or has_role('AGENT'));
+  using (is_admin())
+  with check (is_admin());
 
 create policy "Tenant docs read" on tenant_documents for select
-  using (auth.role() = 'authenticated');
+  using (is_admin());
 create policy "Tenant docs write" on tenant_documents for all
-  using (is_admin() or has_role('AGENT'))
-  with check (is_admin() or has_role('AGENT'));
+  using (is_admin())
+  with check (is_admin());
 
 create policy "Contracts read" on contracts for select
-  using (auth.role() = 'authenticated');
+  using (is_admin() or has_role('ACCOUNTANT'));
 create policy "Contracts write" on contracts for all
-  using (is_admin() or has_role('AGENT'))
-  with check (is_admin() or has_role('AGENT'));
+  using (is_admin())
+  with check (is_admin());
 
 create policy "Payments read" on payments for select
-  using (auth.role() = 'authenticated');
+  using (is_admin() or has_role('ACCOUNTANT'));
 create policy "Payments write" on payments for all
   using (is_admin() or has_role('ACCOUNTANT'))
   with check (is_admin() or has_role('ACCOUNTANT'));
@@ -400,16 +419,17 @@ create policy "Push tokens write" on user_push_tokens for all
   with check (auth.uid() = user_id);
 
 create policy "Notifications read" on notifications for select
-  using (auth.role() = 'authenticated');
+  using (is_admin());
 create policy "Notifications write" on notifications for all
   using (is_admin())
   with check (is_admin());
 
 create policy "Logs read" on activity_logs for select
-  using (auth.role() = 'authenticated');
-create policy "Logs write" on activity_logs for all
-  using (is_admin())
-  with check (is_admin());
+  using (is_admin());
+drop policy if exists "Logs write" on activity_logs;
+drop policy if exists "Logs insert" on activity_logs;
+create policy "Logs insert" on activity_logs for insert
+  with check (is_admin() and actor_id = auth.uid());
 
 -- ====== STORAGE POLICIES (property-images) ======
 drop policy if exists "Property images read public" on storage.objects;

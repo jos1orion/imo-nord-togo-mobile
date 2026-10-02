@@ -1,5 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 export const supabaseUrl =
   process.env.EXPO_PUBLIC_SUPABASE_URL ??
@@ -122,13 +124,17 @@ const ExpoSecureStore = {
   removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
 
+// expo-secure-store is native-only. Its Web shim can load but does not expose
+// the storage methods used by Supabase, which prevents every data request.
+const supabaseStorage = Platform.OS === 'web' ? AsyncStorage : ExpoSecureStore;
+
 export const supabase: SupabaseClient = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: false,
-        storage: ExpoSecureStore,
+        storage: supabaseStorage,
       },
     })
   : createNoopSupabase();

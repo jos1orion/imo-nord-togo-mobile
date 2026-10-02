@@ -46,3 +46,6 @@ yarn-error.*
 # Next.js admin
 admin/.next/
 admin/node_modules/
+/imo-nord-togo/
+/expo-config.json
+/expo-config.json

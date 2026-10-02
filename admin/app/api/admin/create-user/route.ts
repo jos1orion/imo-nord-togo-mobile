@@ -1,44 +1,40 @@
-﻿import { NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '../../../../lib/supabaseAdmin';
+import { NextResponse } from 'next/server';
+import { requireAdminApi } from '../../../../lib/requireAdminApi';
 
 export async function POST(request: Request) {
-  let supabaseAdmin;
+  const guard = await requireAdminApi(request);
+  if ('response' in guard) return guard.response;
+  const { supabaseAdmin } = guard;
+
+  let payload: unknown;
   try {
-    supabaseAdmin = getSupabaseAdmin();
-  } catch (e) {
-    const message = e instanceof Error ? e.message : 'Configuration serveur incomplète.';
-    return NextResponse.json({ error: message }, { status: 503 });
+    payload = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Corps JSON invalide.' }, { status: 400 });
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return NextResponse.json({ error: 'Corps JSON invalide.' }, { status: 400 });
   }
 
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader) {
-    return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
-  }
-  const token = authHeader.replace('Bearer ', '');
-  const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
-  if (authError || !authData.user) {
-    return NextResponse.json({ error: 'Session invalide.' }, { status: 401 });
-  }
+  const body = payload as Record<string, unknown>;
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const password = body.password;
+  const full_name = body.full_name;
+  const role = body.role;
+  const phone = body.phone;
 
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', authData.user.id)
-    .maybeSingle();
-
-  if (!profile || profile.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
-  }
-
-  const payload = await request.json();
-  const { email, password, full_name, role, phone } = payload ?? {};
-
-  if (!email || !password || !role) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof password !== 'string' || password.length < 6 || password.length > 256) {
     return NextResponse.json({ error: 'Champs requis manquants.' }, { status: 400 });
   }
 
-  if (!['ADMIN', 'AGENT', 'ACCOUNTANT'].includes(role)) {
+  if (typeof role !== 'string' || !['ADMIN', 'AGENT', 'ACCOUNTANT'].includes(role)) {
     return NextResponse.json({ error: 'Rôle invalide.' }, { status: 400 });
+  }
+  if (full_name !== undefined && full_name !== null && (typeof full_name !== 'string' || full_name.length > 120)) {
+    return NextResponse.json({ error: 'Nom invalide.' }, { status: 400 });
+  }
+  if (phone !== undefined && phone !== null && (typeof phone !== 'string' || phone.length > 40)) {
+    return NextResponse.json({ error: 'Téléphone invalide.' }, { status: 400 });
   }
 
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -55,13 +51,27 @@ export async function POST(request: Request) {
   // Upsert keeps account creation idempotent and applies the role selected by the admin.
   const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
     id: data.user.id,
-    full_name: full_name ?? null,
-    phone: phone ?? null,
+    full_name: typeof full_name === 'string' ? full_name.trim() || null : null,
+    phone: typeof phone === 'string' ? phone.trim() || null : null,
     role,
   }, { onConflict: 'id' });
 
   if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 400 });
+    let cleanupError: string | null = null;
+    try {
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(data.user.id);
+      cleanupError = error?.message ?? null;
+    } catch (error) {
+      cleanupError = error instanceof Error ? error.message : 'Erreur inconnue';
+    }
+    if (cleanupError) {
+      console.error('Failed to clean up the auth user after profile creation failed.', cleanupError);
+    }
+    return NextResponse.json({
+      error: cleanupError
+        ? `Profil non créé (${profileError.message}); suppression du compte auth impossible (${cleanupError}).`
+        : `Profil non créé (${profileError.message}); compte auth annulé.`,
+    }, { status: 500 });
   }
 
   return NextResponse.json({ success: true, userId: data.user.id });

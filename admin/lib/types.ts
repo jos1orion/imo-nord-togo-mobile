@@ -11,6 +11,7 @@ export type PaymentStatus = 'paid' | 'late' | 'pending';
 
 export type Property = {
   id: string;
+  owner_id?: string | null;
   title: string;
   type: PropertyType;
   price: number;
@@ -20,6 +21,36 @@ export type Property = {
   status: PropertyStatus;
   listing_status: ListingStatus;
   featured?: boolean;
+  created_at: string;
+  submitted_at?: string | null;
+  approved_at?: string | null;
+  published_at?: string | null;
+  expires_at?: string | null;
+  sold_at?: string | null;
+  rented_at?: string | null;
+  featured_start_at?: string | null;
+  featured_end_at?: string | null;
+  current_publication_id?: string | null;
+};
+
+export type Publication = {
+  id: string;
+  property_id: string;
+  status: ListingStatus;
+  submitted_at: string;
+  approved_at: string | null;
+  published_at: string | null;
+  expires_at: string | null;
+  featured: boolean;
+  payment_status: 'not_required' | 'pending' | 'paid' | 'failed';
+  created_at: string;
+};
+
+export type ListingEvent = {
+  id: string;
+  property_id: string;
+  publication_id: string | null;
+  event: string;
   created_at: string;
 };
 

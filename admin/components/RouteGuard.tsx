@@ -12,8 +12,8 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     if (loading || !profile) return;
-    if (!isStaffRole(profile.role)) {
-      router.replace('/login?error=staff');
+    if (!isStaffRole(profile.role) || profile.account_status === 'suspended') {
+      router.replace(profile.account_status === 'suspended' ? '/login?error=suspended' : '/login?error=staff');
       return;
     }
 

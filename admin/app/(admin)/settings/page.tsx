@@ -25,7 +25,7 @@ export default function SettingsPage() {
         <div className="card">
           <div style={{ fontWeight: 600, marginBottom: 12 }}>Intégrations</div>
           <div style={{ color: 'var(--muted)', fontSize: 13 }}>
-            Auth, Storage et RLS sont gérés dans Supabase. Ce panneau n'enregistre pas de configuration.
+            Auth, Storage et RLS sont gérés dans Supabase. Ce panneau n&apos;enregistre pas de configuration.
           </div>
           <div className="chip-row">
             <div className="chip">Supabase Auth</div>

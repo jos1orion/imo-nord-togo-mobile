@@ -1,47 +1,50 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import ActivityFeed from '../../components/ActivityFeed';
+import { useRouter } from 'next/navigation';
 import SectionHeader from '../../components/SectionHeader';
 import StatCard from '../../components/StatCard';
+import ActivityFeed from '../../components/ActivityFeed';
 import { supabase } from '../../lib/supabaseClient';
-import { formatCurrency, formatDate } from '../../lib/format';
-import { useRouter } from 'next/navigation';
+import { formatDate } from '../../lib/format';
+import { useSession } from '../../lib/useSession';
 
-type PropertyRow = { id: string; status: 'available' | 'occupied'; listing_status: 'pending' | 'approved' | 'rejected' | 'archived' };
-type PaymentRow = { id: string; amount: number; paid_at: string; status: 'paid' | 'late' | 'pending' };
-type LogRow = { id: string; action: string; entity: string; created_at: string; actor_name: string | null };
-
-type DashboardStats = {
-  totalProperties: number;
-  pendingApproval: number;
-  occupancyRate: number;
-  monthRevenue: number;
+type PropertyRow = {
+  id: string;
+  owner_id?: string | null;
+  status: 'available' | 'occupied';
+  listing_status: 'pending' | 'approved' | 'rejected' | 'archived';
+  featured?: boolean;
+  expires_at?: string | null;
+  sold_at?: string | null;
+  rented_at?: string | null;
 };
+type LogRow = { id: string; action: string; entity: string; created_at: string; actor_name: string | null };
+type ProfileRow = { id: string; role: string; account_status?: string | null };
 
-const getMonthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { profile } = useSession();
   const [properties, setProperties] = useState<PropertyRow[]>([]);
-  const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [reportsOpen, setReportsOpen] = useState(0);
+  const [pendingAgents, setPendingAgents] = useState(0);
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
-    const [propRes, payRes, logRes] = await Promise.all([
-      supabase.from('properties').select('id,status,listing_status'),
-      supabase.from('payments').select('id,amount,paid_at,status'),
-      supabase
-        .from('activity_logs')
-        .select('id,action,entity,created_at,actor_name')
-        .order('created_at', { ascending: false })
-        .limit(6),
+    const [propRes, reportRes, profileRes, logRes] = await Promise.all([
+      supabase.from('properties').select('id,owner_id,status,listing_status,featured,expires_at,sold_at,rented_at'),
+      supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'OPEN'),
+      supabase.from('profiles').select('id,role,account_status'),
+      supabase.from('activity_logs').select('id,action,entity,created_at,actor_name').order('created_at', { ascending: false }).limit(8),
     ]);
-
     setProperties((propRes.data as PropertyRow[]) ?? []);
-    setPayments((payRes.data as PaymentRow[]) ?? []);
+    setReportsOpen(reportRes.count ?? 0);
+    const agents = ((profileRes.data as ProfileRow[]) ?? []).filter(row => row.role === 'AGENT');
+    setPendingAgents(agents.filter(row => row.account_status === 'pending').length);
     setLogs((logRes.data as LogRow[]) ?? []);
     setLoading(false);
   }, []);
@@ -51,128 +54,118 @@ export default function DashboardPage() {
     const channel = supabase
       .channel('dashboard-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'properties' }, loadDashboard)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, loadDashboard)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, loadDashboard)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, loadDashboard)
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
   }, [loadDashboard]);
 
-  const stats = useMemo<DashboardStats>(() => {
-    const now = new Date();
-    const monthKey = getMonthKey(now);
-    const monthPayments = payments.filter(
-      payment => payment.status === 'paid' && getMonthKey(new Date(payment.paid_at)) === monthKey
-    );
-    const monthRevenue = monthPayments.reduce((acc, p) => acc + p.amount, 0);
-
+  const stats = useMemo(() => {
+    const now = Date.now();
+    const expiringSoon = properties.filter(p => {
+      if (p.listing_status !== 'approved' || !p.expires_at) return false;
+      const ms = new Date(p.expires_at).getTime() - now;
+      return ms >= 0 && ms <= THREE_DAYS;
+    }).length;
     return {
-      totalProperties: properties.length,
-      pendingApproval: properties.filter(p => p.listing_status === 'pending').length,
-      occupancyRate: properties.length
-        ? Math.round((properties.filter(p => p.status === 'occupied').length / properties.length) * 100)
-        : 0,
-      monthRevenue,
+      active: properties.filter(p => p.listing_status === 'approved' && p.status === 'available').length,
+      pending: properties.filter(p => p.listing_status === 'pending').length,
+      approved: properties.filter(p => p.listing_status === 'approved').length,
+      rejected: properties.filter(p => p.listing_status === 'rejected').length,
+      featured: properties.filter(p => p.featured).length,
+      expiringSoon,
+      expired: properties.filter(p => p.listing_status === 'archived').length,
+      sold: properties.filter(p => Boolean(p.sold_at)).length,
+      rented: properties.filter(p => Boolean(p.rented_at) && !p.sold_at).length,
+      occupied: properties.filter(p => p.status === 'occupied').length,
     };
-  }, [properties, payments]);
+  }, [properties]);
 
-  const revenueSeries = useMemo(() => {
-    const months = Array.from({ length: 6 }, (_, index) => {
-      const date = new Date();
-      date.setMonth(date.getMonth() - (5 - index));
-      return date;
-    });
-
-    return months.map(date => {
-      const key = getMonthKey(date);
-      const total = payments
-        .filter(payment => payment.status === 'paid' && getMonthKey(new Date(payment.paid_at)) === key)
-        .reduce((acc, payment) => acc + payment.amount, 0);
-      return {
-        label: date.toLocaleDateString('fr-FR', { month: 'short' }),
-        value: total,
-      };
-    });
-  }, [payments]);
-
-  const maxRevenue = Math.max(1, ...revenueSeries.map(item => item.value));
+  const actions = [
+    { count: stats.pending, label: 'annonces attendent votre validation', href: '/properties?tab=pending' },
+    { count: reportsOpen, label: 'signalements nécessitent une intervention', href: '/reports' },
+    { count: stats.expiringSoon, label: 'publications expirent dans 3 jours', href: '/publications?filter=expiring' },
+    { count: pendingAgents, label: 'agents attendent une validation', href: '/agents' },
+  ].filter(item => profile?.role === 'AGENT' ? item.href.startsWith('/properties') || item.href.startsWith('/publications') : true);
 
   return (
     <div className="grid">
       <SectionHeader
         title="Tableau de bord"
-        subtitle="Vue temps reel : biens, loyers, impayes et activites."
+        subtitle={profile?.role === 'AGENT' ? 'Vos annonces et publications.' : "Aujourd'hui : activité, validations et alertes."}
         actions={
           <>
-            <button className="ghost-button" onClick={loadDashboard}>
-              Rafraichir
-            </button>
-            <button className="primary-button" onClick={() => router.push('/properties')}>
-              Nouveau bien
-            </button>
+            <button className="ghost-button" onClick={loadDashboard}>Rafraîchir</button>
+            {profile?.role !== 'ACCOUNTANT' ? (
+              <button className="primary-button" onClick={() => router.push('/properties')}>Biens</button>
+            ) : null}
           </>
         }
       />
 
-      {loading ? <div className="card">Chargement des donnees...</div> : null}
+      {loading ? <div className="card">Chargement des données...</div> : null}
 
+      <h3 className="section-kicker">Aujourd&apos;hui</h3>
       <div className="grid grid-cols-4">
-        <StatCard label="Total biens" value={`${stats.totalProperties}`} delta="Inventaire global" />
-        <StatCard label="En attente" value={`${stats.pendingApproval}`} delta="Validation requise" />
-        <StatCard label="Revenus mensuels" value={formatCurrency(stats.monthRevenue)} delta="Ce mois-ci" />
-        <StatCard label="Taux d'occupation" value={`${stats.occupancyRate}%`} delta="Performance" />
+        <StatCard label="Biens actifs" value={`${stats.active}`} delta="Approuvés et disponibles" />
+        <StatCard label="En attente" value={`${stats.pending}`} delta="Validation requise" />
+        <StatCard label="Approuvés" value={`${stats.approved}`} delta={`${stats.rejected} rejetés`} />
+        <StatCard label="Featured" value={`${stats.featured}`} delta={`${stats.expiringSoon} expirent sous 3 jours`} />
+      </div>
+      <div className="grid grid-cols-3">
+        <StatCard label="Expirations proches" value={`${stats.expiringSoon}`} delta="Moins de 3 jours" />
+        <StatCard label="Signalements ouverts" value={`${reportsOpen}`} delta="Modération" />
+        <StatCard label="Occupés" value={`${stats.occupied}`} delta={`${stats.sold} vendus · ${stats.rented} loués`} />
       </div>
 
       <div className="grid grid-cols-2">
         <div className="card">
-          <div className="split">
-            <div>
-              <div style={{ fontWeight: 600 }}>Revenus (6 derniers mois)</div>
-              <div style={{ color: 'var(--muted)', fontSize: 12 }}>Suivi des loyers encaisses.</div>
-            </div>
-            <div className="pill">Temps reel</div>
-          </div>
-          <div className="chart" style={{ marginTop: 16 }}>
-            {revenueSeries.map(item => (
-              <div key={item.label} className="chart-bar">
-                <div
-                  className="chart-bar-fill"
-                  style={{ height: `${(item.value / maxRevenue) * 100}%` }}
-                />
-                <div className="chart-bar-value">{formatCurrency(item.value)}</div>
-                <div className="chart-bar-label">{item.label}</div>
-              </div>
-            ))}
+          <div style={{ fontWeight: 600 }}>Publications</div>
+          <div className="stat-lines">
+            <div><span>Actives</span><strong>{stats.active}</strong></div>
+            <div><span>En attente</span><strong>{stats.pending}</strong></div>
+            <div><span>Expirées</span><strong>{stats.expired}</strong></div>
+            <div><span>Vendues</span><strong>{stats.sold}</strong></div>
+            <div><span>Louées</span><strong>{stats.rented}</strong></div>
           </div>
         </div>
-
         <div className="card">
           <div className="split">
             <div>
-              <div style={{ fontWeight: 600 }}>Activites recentes</div>
-              <div style={{ color: 'var(--muted)', fontSize: 12 }}>Suivi des operations sensibles.</div>
+              <div style={{ fontWeight: 600 }}>Actions à effectuer</div>
+              <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4 }}>Priorités du jour</div>
             </div>
-            <div className="pill">{stats.pendingApproval} biens en attente</div>
           </div>
-          <div style={{ marginTop: 16 }}>
-            <ActivityFeed
-              items={
-                logs.length
-                  ? logs.map(log => ({
-                      title: `${log.action} - ${log.entity}`,
-                      meta: `${log.actor_name || 'Système'} | ${formatDate(log.created_at)}`,
-                    }))
-                  : [
-                      {
-                        title: 'Aucune activite recente',
-                        meta: 'Les operations apparaitront ici.',
-                      },
-                    ]
-              }
-            />
+          <div className="action-list">
+            {actions.every(item => item.count === 0) ? (
+              <div className="action-empty">Aucune action urgente.</div>
+            ) : (
+              actions.map(item => (
+                <button key={item.href} className="action-row" onClick={() => router.push(item.href)}>
+                  <strong>{item.count}</strong>
+                  <span>{item.label}</span>
+                </button>
+              ))
+            )}
           </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div style={{ fontWeight: 600 }}>Activité récente</div>
+        <div style={{ marginTop: 16 }}>
+          <ActivityFeed
+            items={
+              logs.length
+                ? logs.map(log => ({
+                    title: `${log.action} — ${log.entity}`,
+                    meta: `${log.actor_name || 'Système'} · ${formatDate(log.created_at)}`,
+                  }))
+                : [{ title: 'Aucune activité récente', meta: 'Les opérations apparaîtront ici.' }]
+            }
+          />
         </div>
       </div>
     </div>

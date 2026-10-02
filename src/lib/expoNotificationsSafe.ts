@@ -1,7 +1,11 @@
 import Constants from 'expo-constants';
 import { requireOptionalNativeModule } from 'expo-modules-core';
+import * as Notifications from 'expo-notifications';
 
-/** Évite d'importer expo-notifications tant que les modules natifs ne sont pas présents (sinon crash au chargement). */
+/**
+ * Vérifie si les modules natifs nécessaires aux notifications
+ * sont disponibles dans le build actuel.
+ */
 function hasPushNativeStack(): boolean {
   return (
     requireOptionalNativeModule('ExpoPushTokenManager') != null &&
@@ -9,23 +13,45 @@ function hasPushNativeStack(): boolean {
   );
 }
 
+/**
+ * Vérifie si le planificateur de notifications locales est disponible.
+ */
 function hasNotificationScheduler(): boolean {
   return requireOptionalNativeModule('ExpoNotificationScheduler') != null;
 }
 
+/**
+ * Récupère l'ID du projet EAS.
+ */
 function resolveProjectId(): string | undefined {
-  const extra = Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined;
+  const extra = Constants.expoConfig?.extra as
+    | { eas?: { projectId?: string } }
+    | undefined;
+
   return extra?.eas?.projectId ?? Constants.easConfig?.projectId;
 }
 
-export async function safeScheduleLocalNotification(title: string, body: string): Promise<void> {
-  if (!hasNotificationScheduler()) return;
+/**
+ * Programme une notification locale de manière sécurisée.
+ *
+ * Si les notifications natives ne sont pas disponibles
+ * (notamment sur Web ou dans certains builds), la fonction
+ * ne fait simplement rien.
+ */
+export async function safeScheduleLocalNotification(
+  title: string,
+  body: string
+): Promise<void> {
+  if (!hasNotificationScheduler()) {
+    return;
+  }
+
   try {
-    const { default: scheduleNotificationAsync } = await import(
-      'expo-notifications/build/scheduleNotificationAsync'
-    );
-    await scheduleNotificationAsync({
-      content: { title, body },
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+      },
       trigger: null,
     });
   } catch {
@@ -33,28 +59,45 @@ export async function safeScheduleLocalNotification(title: string, body: string)
   }
 }
 
-export async function safeRegisterExpoPushToken(saveToken: (token: string) => Promise<void>): Promise<void> {
-  if (!hasPushNativeStack()) return;
-  try {
-    const { getPermissionsAsync, requestPermissionsAsync } = await import(
-      'expo-notifications/build/NotificationPermissions'
-    );
-    const { default: getExpoPushTokenAsync } = await import(
-      'expo-notifications/build/getExpoPushTokenAsync'
-    );
+/**
+ * Demande l'autorisation puis récupère le token Expo Push.
+ *
+ * Le token est ensuite transmis à saveToken() pour être
+ * enregistré dans Supabase ou ailleurs.
+ */
+export async function safeRegisterExpoPushToken(
+  saveToken: (token: string) => Promise<void>
+): Promise<void> {
+  if (!hasPushNativeStack()) {
+    return;
+  }
 
-    const existing = await getPermissionsAsync();
+  try {
+    const existing = await Notifications.getPermissionsAsync();
+
     let status = existing.status;
+
     if (status !== 'granted') {
-      const request = await requestPermissionsAsync();
+      const request = await Notifications.requestPermissionsAsync();
       status = request.status;
     }
-    if (status !== 'granted') return;
+
+    if (status !== 'granted') {
+      return;
+    }
 
     const projectId = resolveProjectId();
-    const token = (
-      await getExpoPushTokenAsync(projectId ? { projectId } : {})
-    ).data;
+
+    const tokenResponse = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : {}
+    );
+
+    const token = tokenResponse.data;
+
+    if (!token) {
+      return;
+    }
+
     await saveToken(token);
   } catch {
     /* pas de token / pas de réseau / build sans push */

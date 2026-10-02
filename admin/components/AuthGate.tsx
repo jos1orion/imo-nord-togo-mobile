@@ -16,8 +16,10 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
       router.replace('/login');
       return;
     }
-    if (profile && !isStaffRole(profile.role)) {
-      void supabase.auth.signOut().then(() => router.replace('/login?error=staff'));
+    if (profile && (!isStaffRole(profile.role) || profile.account_status === 'suspended')) {
+      void supabase.auth.signOut().then(() =>
+        router.replace(profile.account_status === 'suspended' ? '/login?error=suspended' : '/login?error=staff')
+      );
     }
   }, [loading, user, profile, router]);
 
@@ -41,7 +43,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
         <div className="card" style={{ maxWidth: 520, margin: '0 auto', textAlign: 'center' }}>
           <div style={{ fontWeight: 600 }}>Profil administrateur manquant</div>
           <div style={{ color: 'var(--muted)', marginTop: 6 }}>
-            Ce compte n'a pas accès au back-office. Demandez à un administrateur de vous attribuer un rôle staff.
+            Ce compte n&apos;a pas accès au back-office. Demandez à un administrateur de vous attribuer un rôle staff.
           </div>
           {error ? (
             <div className="alert" style={{ marginTop: 12 }}>
@@ -53,7 +55,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isStaffRole(profile.role)) {
+  if (!isStaffRole(profile.role) || profile.account_status === 'suspended') {
     return null;
   }
 

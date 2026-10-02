@@ -77,6 +77,16 @@ set approved_at = coalesce(approved_at, created_at),
     expires_at = coalesce(expires_at, created_at + interval '30 days')
 where listing_status = 'approved';
 
+alter table public.profiles
+  add column if not exists account_status text not null default 'active';
+
+do $$ begin
+  alter table public.profiles
+    add constraint profiles_account_status_check
+    check (account_status in ('active', 'suspended', 'pending'));
+exception when duplicate_object then null;
+end $$;
+
 create or replace function public.is_admin()
 returns boolean
 language sql
@@ -86,7 +96,9 @@ set search_path = public
 as $$
   select exists (
     select 1 from public.profiles
-    where id = auth.uid() and role = 'ADMIN'
+    where id = auth.uid()
+      and role = 'ADMIN'
+      and coalesce(account_status, 'active') <> 'suspended'
   );
 $$;
 
@@ -99,7 +111,9 @@ set search_path = public
 as $$
   select exists (
     select 1 from public.profiles
-    where id = auth.uid() and role in ('ADMIN', 'AGENT', 'ACCOUNTANT')
+    where id = auth.uid()
+      and role in ('ADMIN', 'AGENT', 'ACCOUNTANT')
+      and coalesce(account_status, 'active') <> 'suspended'
   );
 $$;
 
@@ -142,6 +156,38 @@ drop trigger if exists properties_apply_lifecycle on public.properties;
 create trigger properties_apply_lifecycle
 before insert or update on public.properties
 for each row execute function public.apply_property_lifecycle();
+
+-- The client must never update occupancy directly.  The function verifies
+-- ownership (including AGENT ownership) and maintains lifecycle timestamps.
+create or replace function public.set_property_occupancy(
+  p_property_id uuid,
+  p_status public.property_status
+)
+returns public.properties
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare updated_property public.properties;
+begin
+  if p_status not in ('available', 'occupied') then
+    raise exception 'Statut d''occupation invalide';
+  end if;
+
+  update public.properties
+     set status = p_status,
+         sold_at = case when p_status = 'occupied' then now() else null end,
+         rented_at = case when p_status = 'occupied' then now() else null end
+   where id = p_property_id
+     and (owner_id = auth.uid() or public.is_admin())
+  returning * into updated_property;
+
+  if updated_property.id is null then
+    raise exception 'Bien introuvable ou accès refusé';
+  end if;
+  return updated_property;
+end;
+$$;
 
 -- Called by a Supabase scheduled Edge Function / cron once a day. Public RLS also
 -- checks expires_at, so a late scheduled run can never expose an expired listing.
@@ -229,12 +275,17 @@ alter table public.favorites enable row level security;
 alter table public.messages enable row level security;
 alter table public.user_push_tokens enable row level security;
 
--- Replace permissive/conflicting policies from the two former SQL files.
+-- Replace permissive/conflicting policies. Drops include names from a previous
+-- run of this file so the script is safe to re-execute.
 drop policy if exists "Properties read" on public.properties;
 drop policy if exists "Properties insert own" on public.properties;
 drop policy if exists "Properties update own" on public.properties;
 drop policy if exists "Properties delete own" on public.properties;
 drop policy if exists "properties_select_public_approved" on public.properties;
+drop policy if exists "properties_select_public_or_owner" on public.properties;
+drop policy if exists "properties_insert_own_pending" on public.properties;
+drop policy if exists "properties_update_own_private" on public.properties;
+drop policy if exists "properties_delete_own_private" on public.properties;
 drop policy if exists "properties_admin_all" on public.properties;
 
 create policy "properties_select_public_or_owner" on public.properties for select using (
@@ -247,7 +298,9 @@ create policy "properties_insert_own_pending" on public.properties for insert wi
   auth.uid() = owner_id and listing_status = 'pending' and coalesce(featured, false) = false
 );
 
--- An agent can only correct a private pending/rejected listing that they own.
+-- Marketplace users and AGENT staff can only correct their own private
+-- pending/rejected listings. Approval, publication and featured state stay
+-- exclusively under ADMIN control.
 create policy "properties_update_own_private" on public.properties for update
 using (owner_id = auth.uid() and listing_status in ('pending', 'rejected'))
 with check (owner_id = auth.uid() and listing_status in ('pending', 'rejected') and coalesce(featured, false) = false);
@@ -263,6 +316,10 @@ drop policy if exists "Property images insert own" on public.property_images;
 drop policy if exists "Property images update own" on public.property_images;
 drop policy if exists "Property images delete own" on public.property_images;
 drop policy if exists "property_images_select_public" on public.property_images;
+drop policy if exists "property_images_select_visible" on public.property_images;
+drop policy if exists "property_images_select_visible_property" on public.property_images;
+drop policy if exists "property_images_insert_owner" on public.property_images;
+drop policy if exists "property_images_admin_delete" on public.property_images;
 drop policy if exists "property_images_admin_all" on public.property_images;
 
 create policy "property_images_select_visible_property" on public.property_images for select using (
@@ -281,8 +338,11 @@ create policy "favorites_owner_rw" on public.favorites for all
 using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 drop policy if exists "messages_participants_select" on public.messages;
+drop policy if exists "messages_participants_read" on public.messages;
 drop policy if exists "messages_sender_insert" on public.messages;
 drop policy if exists "messages_participants_update" on public.messages;
+drop policy if exists "messages_receiver_mark_read" on public.messages;
+drop policy if exists "messages_receiver_update" on public.messages;
 create policy "messages_participants_select" on public.messages for select
 using (sender_id = auth.uid() or receiver_id = auth.uid() or public.is_admin());
 create policy "messages_sender_insert" on public.messages for insert with check (sender_id = auth.uid());
@@ -298,7 +358,9 @@ using (user_id = auth.uid()) with check (user_id = auth.uid());
 drop policy if exists "Neighborhoods read" on public.neighborhoods;
 drop policy if exists "Neighborhoods write" on public.neighborhoods;
 drop policy if exists "neighborhoods_public_select" on public.neighborhoods;
+drop policy if exists "neighborhoods_public_read" on public.neighborhoods;
 drop policy if exists "neighborhoods_admin_all" on public.neighborhoods;
+drop policy if exists "neighborhoods_admin_write" on public.neighborhoods;
 create policy "neighborhoods_public_read" on public.neighborhoods for select using (true);
 create policy "neighborhoods_admin_write" on public.neighborhoods for all
 using (public.is_admin()) with check (public.is_admin());
@@ -311,6 +373,7 @@ using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists "Tenant docs read" on public.tenant_documents;
 drop policy if exists "Tenant docs write" on public.tenant_documents;
+drop policy if exists "tenant_documents_admin_all" on public.tenant_documents;
 create policy "tenant_documents_admin_all" on public.tenant_documents for all
 using (public.is_admin()) with check (public.is_admin());
 
@@ -338,12 +401,24 @@ using (public.is_admin()) with check (public.is_admin());
 
 -- Storage write access follows the authenticated owner folder: owner-id/property-id/file.
 drop policy if exists "storage_property_images_admin_all" on storage.objects;
+drop policy if exists "Property images read public" on storage.objects;
+drop policy if exists "storage_property_images_public_read" on storage.objects;
+drop policy if exists "storage_property_images_owner_insert" on storage.objects;
+drop policy if exists "storage_property_images_owner_delete" on storage.objects;
 create policy "storage_property_images_owner_insert" on storage.objects for insert with check (
   bucket_id = 'property-images' and (storage.foldername(name))[1] = auth.uid()::text
 );
 create policy "storage_property_images_owner_delete" on storage.objects for delete using (
   bucket_id = 'property-images' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin())
 );
+
+-- Tenant files are always private: only an administrator may create/read them.
+-- Store the object path in tenant_documents.url and issue short-lived signed URLs
+-- at display time; do not store getPublicUrl() values for this bucket.
+drop policy if exists "tenant_documents_storage_admin_all" on storage.objects;
+create policy "tenant_documents_storage_admin_all" on storage.objects for all
+using (bucket_id = 'tenant-documents' and public.is_admin())
+with check (bucket_id = 'tenant-documents' and public.is_admin());
 
 -- Former marketplace signups received AGENT. Run once when USER does not exist yet
 -- so a later replay of this file cannot demote staff agents created afterwards.
@@ -368,5 +443,5 @@ begin
     $c$select public.expire_due_listings();$c$
   );
 exception when others then
-  raise notice 'pg_cron indisponible : activez l''extension puis executez select cron.schedule(''expire-imo-nord-listings'', ''5 0 * * *'', $$select public.expire_due_listings();$$);';
+  raise notice 'pg_cron indisponible : activez l''extension puis executez : select cron.schedule(''expire-imo-nord-listings'', ''5 0 * * *'', ''select public.expire_due_listings();'');';
 end $$;

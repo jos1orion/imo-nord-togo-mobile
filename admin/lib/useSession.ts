@@ -10,6 +10,7 @@ export type Profile = {
   full_name: string | null;
   phone: string | null;
   role: AppRole;
+  account_status?: 'active' | 'suspended' | 'pending';
   created_at: string;
 };
 
