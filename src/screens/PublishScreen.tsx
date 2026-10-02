@@ -16,15 +16,14 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
 import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-import { PROPERTY_TYPE_COLORS, PropertyType } from '../types';
+import { PROPERTY_TYPE_COLORS, Property, PropertyType } from '../types';
 import COLORS from '../theme/colors';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -33,8 +32,21 @@ type PublishRouteProp = RouteProp<RootStackParamList, 'Publish'>;
 const PublishScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
-  const insets = useSafeAreaInsets();
-  const { addProperty, neighborhoods, addMyPropertyId, currentUser, t, tType } = useApp();
+  const route = useRoute<PublishRouteProp>();
+  const {
+    addProperty,
+    neighborhoods,
+    addMyPropertyId,
+    currentUser,
+    properties,
+    updateProperty,
+    t,
+    tType,
+  } = useApp();
+  const editingProperty = route.params?.propertyId
+    ? properties.find(property => property.id === route.params?.propertyId)
+    : undefined;
+  const isEditing = Boolean(editingProperty);
   const MAX_IMAGES = 8;
   const [submitting, setSubmitting] = useState(false);
   const [draftImages, setDraftImages] = useState<string[]>([]);

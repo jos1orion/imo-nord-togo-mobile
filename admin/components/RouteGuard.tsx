@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { getPermissionForPath, hasPermission, isAdminRole } from '../lib/rbac';
+import { getPermissionForPath, hasPermission, isStaffRole } from '../lib/rbac';
 import { useSession } from '../lib/useSession';
 
 export default function RouteGuard({ children }: { children: React.ReactNode }) {

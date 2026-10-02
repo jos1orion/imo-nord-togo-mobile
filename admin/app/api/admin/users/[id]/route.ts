@@ -57,7 +57,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .select('id')
       .maybeSingle();
     if (error) {
-      return NextResponse.json({ error: 'Profil utilisateur impossible à modifier.' }, { status: 400 });
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (!data) return NextResponse.json({ error: 'Utilisateur introuvable.' }, { status: 404 });
   }
@@ -65,11 +65,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (passwordValue !== undefined) {
     const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: passwordValue });
     if (error) {
-      return NextResponse.json({ error: 'Mot de passe impossible à modifier.' }, { status: 400 });
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
   }
 
-  await recordAdminAction(supabaseAdmin, authUserId, 'update_user', 'user', userId);
   return NextResponse.json({ success: true });
 }
 
@@ -89,9 +88,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
   const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
   if (error) {
-    return NextResponse.json({ error: 'Utilisateur impossible à supprimer.' }, { status: 400 });
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  await recordAdminAction(supabaseAdmin, authUserId, 'delete_user', 'user', userId);
   return NextResponse.json({ success: true });
 }

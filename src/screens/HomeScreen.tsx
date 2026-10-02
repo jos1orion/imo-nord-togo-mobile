@@ -30,7 +30,6 @@ import COLORS from '../theme/colors';
 import { RootStackParamList } from '../../App';
 import { translate } from '../i18n';
 import { isFeaturedProperty, isPublicProperty } from '../utils/propertyVisibility';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -186,7 +185,10 @@ const HomeScreen: React.FC = () => {
     setSelectedCity(null);
     setSelectedNeighborhood(null);
     requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ y: Math.max(listSectionYRef.current - 12, 0), animated: true });
+      scrollRef.current?.scrollToOffset({
+        offset: Math.max(listSectionYRef.current - 12, 0),
+        animated: true,
+      });
     });
   };
   const resetAllFilters = () => {

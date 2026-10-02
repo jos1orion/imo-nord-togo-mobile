@@ -38,13 +38,13 @@ export async function POST(request: Request) {
   }
 
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
-    email: email.trim().toLowerCase(),
+    email,
     password,
     email_confirm: true,
   });
 
   if (error || !data.user) {
-    return NextResponse.json({ error: 'Création du compte impossible.' }, { status: 400 });
+    return NextResponse.json({ error: error?.message ?? 'Création impossible.' }, { status: 400 });
   }
 
   // The database may already create a USER profile through an auth trigger.
@@ -54,7 +54,6 @@ export async function POST(request: Request) {
     full_name: typeof full_name === 'string' ? full_name.trim() || null : null,
     phone: typeof phone === 'string' ? phone.trim() || null : null,
     role,
-    agent_status: role === 'AGENT' ? 'approved' : 'none',
   }, { onConflict: 'id' });
 
   if (profileError) {
@@ -75,6 +74,5 @@ export async function POST(request: Request) {
     }, { status: 500 });
   }
 
-  await recordAdminAction(supabaseAdmin, authUserId, 'create_user', 'user', data.user.id);
   return NextResponse.json({ success: true, userId: data.user.id });
 }

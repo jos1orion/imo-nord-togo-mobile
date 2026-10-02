@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { navGroups } from '../lib/nav';
-import { getStaffRole, hasPermission } from '../lib/rbac';
+import { getStaffRole, hasPermission, isStaffRole } from '../lib/rbac';
 import { useSession } from '../lib/useSession';
 
 const isActive = (pathname: string, href: string) => {

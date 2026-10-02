@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   InteractionManager,
+  Linking,
 } from 'react-native';
 
 import Constants from 'expo-constants';
@@ -22,6 +23,7 @@ import LegalScreen from './SettingsScreen';
 import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
+import { getContactEmail } from '../constants/appConfig';
 import PropertyCard from '../components/PropertyCard';
 import COLORS from '../theme/colors';
 import { isPublicProperty } from '../utils/propertyVisibility';
@@ -230,6 +232,19 @@ const ProfileScreen: React.FC = () => {
       setAuthError(t('profile_auth_invalid'));
     }
   };
+
+    const handleAccountDeletionRequest = async () => {
+      const subject = encodeURIComponent('Suppression de compte Imo Nord Togo');
+      const body = encodeURIComponent(
+        `Bonjour,\n\nJe demande la suppression de mon compte Imo Nord Togo et des données personnelles associées.\n\nAdresse e-mail associée au compte : ${currentUser?.email ?? ''}\n\n`
+      );
+
+      try {
+        await Linking.openURL(`mailto:${getContactEmail()}?subject=${subject}&body=${body}`);
+      } catch {
+        Alert.alert(t('error'), t('profile_delete_account_email_failed'));
+      }
+    };
 
     const handleLogoutPress = async () => {
     if (logoutLoading) return;
@@ -526,6 +541,15 @@ const ProfileScreen: React.FC = () => {
             color={accountVerified ? '#16a34a' : theme === 'dark' ? '#94A3B8' : COLORS.textMuted}
           />
         </View>
+
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={handleAccountDeletionRequest}
+          accessibilityRole="button"
+        >
+          <Ionicons name="trash-outline" size={17} color={COLORS.error} />
+          <Text style={styles.deleteAccountText}>{t('profile_delete_account')}</Text>
+        </TouchableOpacity>
 
         {/* Account Status */}
         <View style={[styles.section, theme === 'dark' && styles.sectionDark]}>
@@ -1591,7 +1615,6 @@ const styles = StyleSheet.create({
 });
 
 export default ProfileScreen;
-
 
 
 

@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import { isAdminRole } from '../../lib/rbac';
+import { isStaffRole } from '../../lib/rbac';
 
 function LoginForm() {
   const router = useRouter();
@@ -42,7 +42,7 @@ function LoginForm() {
       return;
     }
 
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from('profiles')
       .select('role, account_status')
       .eq('id', data.user.id)

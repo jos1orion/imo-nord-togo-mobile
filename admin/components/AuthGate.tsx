@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAdminRole } from '../lib/rbac';
+import { isStaffRole } from '../lib/rbac';
 import { useSession } from '../lib/useSession';
 import { supabase } from '../lib/supabaseClient';
 

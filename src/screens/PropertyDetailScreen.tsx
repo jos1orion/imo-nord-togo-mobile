@@ -25,7 +25,6 @@ import { formatPrice } from '../data/mock-data';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import { canViewProperty, isPublicProperty } from '../utils/propertyVisibility';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -36,7 +35,6 @@ const PropertyDetailScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const route = useRoute<DetailRouteProp>();
-  const insets = useSafeAreaInsets();
   const {
     properties,
     clients,
@@ -1357,4 +1355,3 @@ const styles = StyleSheet.create({
 });
 
 export default PropertyDetailScreen;
-
