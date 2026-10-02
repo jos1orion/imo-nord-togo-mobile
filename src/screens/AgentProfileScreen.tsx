@@ -13,6 +13,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import { isPublicProperty } from '../utils/propertyVisibility';
@@ -21,6 +22,7 @@ type AgentProfileScreenRouteProp = RouteProp<RootStackParamList, 'AgentProfile'>
 type AgentProfileScreenNavigationProp = StackNavigationProp<RootStackParamList, 'AgentProfile'>;
 
 const AgentProfileScreen = () => {
+  const styles = useThemedStyles(baseStyles);
   const { getAgentProfile, users, properties, currentUser, sendMessage, t, tType } = useApp();
   const route = useRoute<AgentProfileScreenRouteProp>();
   const navigation = useNavigation<AgentProfileScreenNavigationProp>();
@@ -181,7 +183,7 @@ const AgentProfileScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
@@ -349,4 +351,3 @@ const styles = StyleSheet.create({
 });
 
 export default AgentProfileScreen;
-

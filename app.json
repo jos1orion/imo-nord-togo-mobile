@@ -68,9 +68,9 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/splash-icon.png",
+          "image": "./assets/kara-immo-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#2563EB"
+          "backgroundColor": "#FFFFFF"
         }
       ],
       "expo-web-browser"

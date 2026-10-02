@@ -4,8 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../../theme/colors';
 import { useApp } from '../../context/AppContext';
 import { safeGetNetworkStateAsync } from '../../lib/expoNetworkSafe';
+import { useThemedStyles } from '../../theme/useThemedStyles';
 
 const OfflineBanner: React.FC = () => {
+  const styles = useThemedStyles(baseStyles);
   const { t } = useApp();
   const [offline, setOffline] = useState(false);
 
@@ -43,7 +45,7 @@ const OfflineBanner: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   icon: { marginRight: 8 },
   bar: {
     flexDirection: 'row',

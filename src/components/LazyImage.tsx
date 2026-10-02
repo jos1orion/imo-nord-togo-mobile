@@ -9,6 +9,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import COLORS from '../theme/colors';
+import { useThemedStyles } from '../theme/useThemedStyles';
 
 type LazyImageProps = {
   uri: string;
@@ -21,6 +22,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
   style,
   resizeMode = 'cover',
 }) => {
+  const styles = useThemedStyles(baseStyles);
   const [loaded, setLoaded] = useState(false);
 
   return (
@@ -41,7 +43,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   wrapper: {
     backgroundColor: COLORS.background,
   },

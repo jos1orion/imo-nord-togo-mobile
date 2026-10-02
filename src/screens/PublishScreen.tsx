@@ -1,10 +1,12 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
+  Modal,
   TextInput,
   Alert,
   Image,
@@ -22,14 +24,24 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
 import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import { supabase } from '../lib/supabase';
 import { PROPERTY_TYPE_COLORS, Property, PropertyType } from '../types';
 import COLORS from '../theme/colors';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 type PublishRouteProp = RouteProp<RootStackParamList, 'Publish'>;
+type PublishGuideStep = 0 | 1 | 2 | 3;
+
+const PUBLISH_GUIDE_STEPS = [
+  { title: 'publish_guide_step_0_title', body: 'publish_guide_step_0_body' },
+  { title: 'publish_guide_step_1_title', body: 'publish_guide_step_1_body' },
+  { title: 'publish_guide_step_2_title', body: 'publish_guide_step_2_body' },
+  { title: 'publish_guide_step_3_title', body: 'publish_guide_step_3_body' },
+] as const;
 
 const PublishScreen: React.FC = () => {
+  const styles = useThemedStyles(baseStyles);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<PublishRouteProp>();
@@ -42,15 +54,19 @@ const PublishScreen: React.FC = () => {
     updateProperty,
     t,
     tType,
+    theme,
   } = useApp();
+  const isDark = theme === 'dark';
   const editingProperty = route.params?.propertyId
     ? properties.find(property => property.id === route.params?.propertyId)
     : undefined;
   const isEditing = Boolean(editingProperty);
   const MAX_IMAGES = 8;
   const [submitting, setSubmitting] = useState(false);
+  const [publishGuideStep, setPublishGuideStep] = useState<PublishGuideStep | null>(null);
   const [draftImages, setDraftImages] = useState<string[]>([]);
   const [step, setStep] = useState(0);
+  const checkedGuideSteps = useRef(new Set<number>());
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -77,6 +93,48 @@ const PublishScreen: React.FC = () => {
   };
 
   const draftKey = currentUser ? `imo:publish-draft:${currentUser.id}` : null;
+
+  useEffect(() => {
+    if (!draftLoaded || isEditing || step < 0 || step > 3 || checkedGuideSteps.current.has(step)) return;
+    checkedGuideSteps.current.add(step);
+
+    let cancelled = false;
+    const guideKey = `imo:publish-step-guide:v1:${currentUser?.id ?? 'guest'}:${step}`;
+    void AsyncStorage.multiGet([
+      guideKey,
+      'imo:publish-step-guide-disabled',
+    ])
+      .then(([seenEntry, disabledEntry]) => {
+        if (
+          !cancelled &&
+          seenEntry[1] !== 'true' &&
+          disabledEntry[1] !== 'true'
+        ) {
+          setPublishGuideStep(step as PublishGuideStep);
+        }
+      })
+      .catch(error => {
+        console.warn('Unable to load the publishing guide state.', error);
+        if (!cancelled) setPublishGuideStep(step as PublishGuideStep);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, draftLoaded, isEditing, step]);
+
+  const dismissPublishGuide = (disableAll = false) => {
+    const guideStep = publishGuideStep;
+    setPublishGuideStep(null);
+    if (guideStep === null) return;
+
+    const guideKey = `imo:publish-step-guide:v1:${currentUser?.id ?? 'guest'}:${guideStep}`;
+    const writes: [string, string][] = [[guideKey, 'true']];
+    if (disableAll) writes.push(['imo:publish-step-guide-disabled', 'true']);
+    void AsyncStorage.multiSet(writes).catch(error => {
+      console.warn('Unable to save the publishing guide state.', error);
+    });
+  };
 
   useEffect(() => {
     if (!draftKey || isEditing) {
@@ -428,7 +486,7 @@ const PublishScreen: React.FC = () => {
         <View style={styles.stepHeader}>
           <Text style={styles.stepTitle}>{t('publish_step').replace('{{step}}', String(step + 1))}  |  {stepLabel}</Text>
           <View style={styles.stepDots}>
-            {[0, 1, 2, 3, 4].map(i => (
+            {[0, 1, 2, 3].map(i => (
               <View key={i} style={[styles.stepDot, step >= i && styles.stepDotActive]} />
             ))}
           </View>
@@ -695,11 +753,79 @@ const PublishScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
+      {publishGuideStep !== null && (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => dismissPublishGuide()}
+        >
+          <Pressable
+            onPress={() => dismissPublishGuide()}
+            style={styles.guideOverlay}
+          >
+            <Pressable
+              onPress={event => event.stopPropagation()}
+              style={[styles.guideCard, isDark && styles.guideCardDark]}
+            >
+              <View style={[styles.guideIcon, isDark && styles.guideIconDark]}>
+                <Ionicons name="create-outline" size={24} color={isDark ? '#93C5FD' : COLORS.primary} />
+              </View>
+              <Text style={styles.guideProgress}>
+                {t('publish_guide_progress')
+                  .replace('{{step}}', String(publishGuideStep + 1))
+                  .replace('{{total}}', '4')}
+              </Text>
+              <Text style={[styles.guideTitle, isDark && styles.guideTextDark]}>
+                {t(PUBLISH_GUIDE_STEPS[publishGuideStep].title)}
+              </Text>
+              <Text style={[styles.guideBody, isDark && styles.guideBodyDark]}>
+                {t(PUBLISH_GUIDE_STEPS[publishGuideStep].body)}
+              </Text>
+              {publishGuideStep === 0 && (
+                <View style={[styles.guideAccountNote, isDark && styles.guideAccountNoteDark]}>
+                  <Ionicons name="information-circle-outline" size={18} color={isDark ? '#93C5FD' : COLORS.primary} />
+                  <Text style={[styles.guideAccountText, isDark && styles.guideTextDark]}>
+                    {t(
+                      currentUser?.role === 'AGENT' || currentUser?.role === 'ADMIN'
+                        ? 'publish_guide_account_approved'
+                        : currentUser?.agentStatus === 'pending'
+                          ? 'publish_guide_account_pending'
+                          : currentUser?.agentStatus === 'rejected'
+                            ? 'publish_guide_account_rejected'
+                            : currentUser
+                              ? 'publish_guide_account_required'
+                              : 'publish_guide_account_sign_in'
+                    )}
+                  </Text>
+                </View>
+              )}
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => dismissPublishGuide()}
+                style={styles.guidePrimaryButton}
+              >
+                <Text style={styles.guidePrimaryText}>{t('publish_guide_got_it')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => dismissPublishGuide(true)}
+                style={styles.guideSkipButton}
+              >
+                <Text style={[styles.guideSkipText, isDark && styles.guideSkipTextDark]}>
+                  {t('publish_guide_skip_all')}
+                </Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
     </KeyboardAvoidingView>
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -729,6 +855,103 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text,
     flex: 1,
+  },
+  guideOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
+  guideCard: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    padding: 24,
+    borderRadius: 24,
+    backgroundColor: '#fff',
+  },
+  guideCardDark: {
+    backgroundColor: '#1F2937',
+  },
+  guideIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+    marginBottom: 16,
+  },
+  guideIconDark: {
+    backgroundColor: '#1E3A5F',
+  },
+  guideProgress: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  guideTitle: {
+    color: COLORS.text,
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  guideTextDark: {
+    color: '#F9FAFB',
+  },
+  guideBody: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 18,
+  },
+  guideBodyDark: {
+    color: '#D1D5DB',
+  },
+  guideAccountNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    marginBottom: 20,
+  },
+  guideAccountNoteDark: {
+    backgroundColor: '#1E3A5F',
+  },
+  guideAccountText: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  guidePrimaryButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    marginBottom: 10,
+  },
+  guidePrimaryText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  guideSkipButton: {
+    alignItems: 'center',
+    padding: 8,
+  },
+  guideSkipText: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+  },
+  guideSkipTextDark: {
+    color: '#D1D5DB',
   },
   clearDraftButton: {
     width: 36,

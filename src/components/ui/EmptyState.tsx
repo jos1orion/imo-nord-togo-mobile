@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import PrimaryButton from './PrimaryButton';
+import { useThemedStyles } from '../../theme/useThemedStyles';
 
 type Props = {
   icon?: keyof typeof Ionicons.glyphMap;
@@ -23,21 +24,24 @@ const EmptyState: React.FC<Props> = ({
   onAction,
   style,
   children,
-}) => (
-  <View style={[styles.wrap, style]} accessibilityRole="text">
-    <View style={styles.iconCircle}>
-      <Ionicons name={icon} size={32} color={COLORS.primary} />
+}) => {
+  const styles = useThemedStyles(baseStyles);
+  return (
+    <View style={[styles.wrap, style]} accessibilityRole="text">
+      <View style={styles.iconCircle}>
+        <Ionicons name={icon} size={32} color={COLORS.primary} />
+      </View>
+      <Text style={styles.title}>{title}</Text>
+      {description ? <Text style={styles.desc}>{description}</Text> : null}
+      {children}
+      {actionLabel && onAction ? (
+        <PrimaryButton title={actionLabel} onPress={onAction} style={styles.button} />
+      ) : null}
     </View>
-    <Text style={styles.title}>{title}</Text>
-    {description ? <Text style={styles.desc}>{description}</Text> : null}
-    {children}
-    {actionLabel && onAction ? (
-      <PrimaryButton title={actionLabel} onPress={onAction} style={styles.button} />
-    ) : null}
-  </View>
-);
+  );
+};
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   wrap: {
     alignItems: 'center',
     justifyContent: 'center',

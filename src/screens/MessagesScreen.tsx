@@ -14,6 +14,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import EmptyState from '../components/ui/EmptyState';
@@ -23,6 +24,7 @@ import { getContactEmail, getWhatsAppUrl } from '../constants/appConfig';
 type MessagesScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Messages'>;
 
 const MessagesScreen = () => {
+  const styles = useThemedStyles(baseStyles);
   const { chats, currentUser, users, t, language } = useApp();
   const navigation = useNavigation<MessagesScreenNavigationProp>();
   const insets = useSafeAreaInsets();
@@ -177,7 +179,7 @@ const MessagesScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

@@ -92,6 +92,7 @@ interface AppContextType {
   setPrivacySetting: (key: 'hideContact' | 'hideListings', value: boolean) => void;
   registerUser: (data: { name: string; email: string; phone: string; password: string; wantsAgentAccess: boolean }) => Promise<{ ok: true } | { ok: false; code: string }>;
   loginUser: (email: string, password: string) => Promise<{ ok: true } | { ok: false; code: string }>;
+  requestAgentAccess: () => Promise<void>;
   logoutUser: () => Promise<void>;
   verifyUser: (id: string, value: boolean) => Promise<void>;
   reviewAgentRequest: (id: string, approved: boolean, reason?: string) => Promise<void>;
@@ -644,7 +645,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [hydrated]);
 
   // The database role is the source of truth. Never grant admin access from an email hard-coded in the APK.
-  const mapAuthUser = useCallback((user: any, role: User['role'] = 'USER', agentStatus: User['agentStatus'] = 'none', agentRejectionReason?: string | null): User => {
+  const mapAuthUser = useCallback((
+    user: any,
+    role: User['role'] = 'USER',
+    agentStatus: User['agentStatus'] = 'none',
+    agentRejectionReason?: string | null,
+    profile?: { full_name?: string | null; phone?: string | null }
+  ): User => {
     const email = String(user.email || '').trim();
     const metadata = user.user_metadata ?? {};
     const name = [
@@ -653,12 +660,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       metadata.display_name,
       metadata.username,
       metadata.user_name,
-    ].find(value => typeof value === 'string' && value.trim())?.trim() ?? '';
+    ].find(value => typeof value === 'string' && value.trim())?.trim()
+      ?? profile?.full_name?.trim()
+      ?? '';
     return ({
       id: user.id,
       name,
       email,
-      phone: String(metadata.phone || '').trim(),
+      phone: String(metadata.phone || profile?.phone || '').trim(),
       verified: user.email_confirmed_at ? true : false,
       isAdmin: role === 'ADMIN',
       role,
@@ -674,11 +683,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     const { data, error } = await supabase
       .from('profiles')
-      .select('role, agent_status, agent_rejection_reason')
+      .select('full_name, phone, role, agent_status, agent_rejection_reason')
       .eq('id', authUser.id)
       .maybeSingle();
     // Failing closed prevents a temporary profile/RLS error from granting admin access.
-    setCurrentUser(mapAuthUser(authUser, error ? 'USER' : data?.role ?? 'USER', error ? 'none' : data?.agent_status ?? 'none', error ? null : data?.agent_rejection_reason));
+    setCurrentUser(mapAuthUser(
+      authUser,
+      error ? 'USER' : data?.role ?? 'USER',
+      error ? 'none' : data?.agent_status ?? 'none',
+      error ? null : data?.agent_rejection_reason,
+      error || !data ? undefined : data
+    ));
   }, [mapAuthUser]);
 
   const notifyLocal = useCallback(async (title: string, body: string) => {
@@ -1787,6 +1802,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return { ok: true } as { ok: true };
   }, []);
 
+  const requestAgentAccess = useCallback(async () => {
+    if (!currentUser) throw new Error('Une connexion est requise pour demander le statut agent.');
+    if (currentUser.role === 'AGENT' || currentUser.role === 'ADMIN') return;
+    if (currentUser.agentStatus === 'pending') return;
+
+    const { error } = await supabase.rpc('request_agent_access');
+    if (error) throw error;
+    setCurrentUser(previous =>
+      previous && previous.id === currentUser.id
+        ? { ...previous, agentStatus: 'pending', agentRejectionReason: null }
+        : previous
+    );
+  }, [currentUser]);
+
   const logoutUser = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
@@ -2340,6 +2369,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setPrivacySetting,
         registerUser,
         loginUser,
+        requestAgentAccess,
         logoutUser,
         verifyUser,
         reviewAgentRequest,

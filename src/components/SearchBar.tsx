@@ -17,6 +17,7 @@ import type {
 } from 'expo-speech-recognition';
 import COLORS from '../theme/colors';
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 
 const noopEmitter = {
   addListener: () => ({ remove: () => {} }),
@@ -45,6 +46,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   placeholder,
   onSearch,
 }) => {
+  const styles = useThemedStyles(baseStyles);
   const { language, t } = useApp();
   const speechModule = useMemo(loadSpeechRecognitionModule, []);
   const speechEventEmitter = (speechModule ?? noopEmitter) as unknown as Parameters<
@@ -273,7 +275,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',

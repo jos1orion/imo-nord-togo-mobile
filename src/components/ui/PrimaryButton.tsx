@@ -1,6 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, ViewStyle } from 'react-native';
 import COLORS from '../../theme/colors';
+import { useThemedStyles } from '../../theme/useThemedStyles';
 
 type Props = {
   title: string;
@@ -12,6 +13,7 @@ type Props = {
 };
 
 const PrimaryButton: React.FC<Props> = ({ title, onPress, loading, variant = 'primary', disabled, style }) => {
+  const styles = useThemedStyles(baseStyles);
   const isPrimary = variant === 'primary';
   return (
     <TouchableOpacity
@@ -31,7 +33,7 @@ const PrimaryButton: React.FC<Props> = ({ title, onPress, loading, variant = 'pr
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   base: {
     minHeight: 48,
     paddingHorizontal: 20,

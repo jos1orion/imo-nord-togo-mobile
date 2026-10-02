@@ -3,9 +3,11 @@ import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
 
 const NotificationsScreen: React.FC = () => {
+  const styles = useThemedStyles(baseStyles);
   const navigation = useNavigation();
   const { notifications, markNotificationRead, clearNotifications, language, t } = useApp();
 
@@ -76,7 +78,7 @@ const NotificationsScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row',

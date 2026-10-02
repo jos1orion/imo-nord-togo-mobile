@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LegalScreen from './SettingsScreen';
 import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import { supabase } from '../lib/supabase';
 import { getContactEmail } from '../constants/appConfig';
 import PropertyCard from '../components/PropertyCard';
@@ -36,6 +37,7 @@ type ProfileRouteProp = RouteProp<
 >;
 
 const ProfileScreen: React.FC = () => {
+  const styles = useThemedStyles(baseStyles);
   const [legalModal, setLegalModal] = useState<'privacy' | 'terms' | null>(null);
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const route = useRoute<ProfileRouteProp>();
@@ -863,7 +865,7 @@ const ProfileScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -1697,7 +1699,6 @@ const styles = StyleSheet.create({
 });
 
 export default ProfileScreen;
-
 
 
 

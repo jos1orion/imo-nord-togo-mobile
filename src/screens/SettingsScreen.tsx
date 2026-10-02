@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
 import { getContactEmail, getContactPhoneDigits } from '../constants/appConfig';
 
@@ -18,6 +19,7 @@ interface LegalScreenProps {
 }
 
 const LegalScreen: React.FC<LegalScreenProps> = ({ type, onClose }) => {
+  const styles = useThemedStyles(baseStyles);
   const { language, theme } = useApp();
   const isDark = theme === 'dark';
   const content =
@@ -273,7 +275,7 @@ Phone: +${getContactPhoneDigits()}
 Address: Avenue de la Liberation, Kara, Togo
 `;
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.card,

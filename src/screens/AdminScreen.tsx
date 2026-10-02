@@ -836,7 +836,6 @@ const AdminScreen: React.FC = () => {
       totalClients: clients.length,
       pendingProperties: pending.length,
       soldProperties: sold.length,
-      totalValue: properties.reduce((sum, p) => sum + p.price, 0),
       propertiesByType,
     };
   }, [properties, clients]);
@@ -1387,6 +1386,8 @@ const AdminScreen: React.FC = () => {
     return (
       <ScrollView
         style={styles.tabContent}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 32, 48) }}
+        nestedScrollEnabled
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.overviewCard}>
@@ -1511,12 +1512,6 @@ const AdminScreen: React.FC = () => {
           <Text style={styles.statLabel}>{tAdmin("Vendus/Loues")}</Text>
         </View>
       </ScrollView>
-
-      {/* Value Card */}
-      <View style={styles.valueCard}>
-        <Text style={styles.valueLabel}>{tAdmin("Valeur totale du portefeuille")}</Text>
-        <Text style={styles.valueAmount}>{formatPrice(stats.totalValue)}</Text>
-      </View>
 
       {/* Properties by Type */}
       <View style={styles.sectionHeaderRow}>
@@ -4024,20 +4019,6 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
     color: theme.textMuted,
     marginTop: 1,
   },
-  valueCard: {
-    backgroundColor: theme.surface,
-    padding: 10,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: theme.border,
-    shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 1,
-  },
   overviewCard: {
     backgroundColor: theme.headerBg,
     borderRadius: 12,
@@ -4093,18 +4074,6 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
     fontWeight: '800',
     color: theme.warning,
     marginTop: 4,
-  },
-  valueLabel: {
-    fontSize: 9,
-    color: theme.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  valueAmount: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: theme.text,
-    marginTop: 6,
   },
   sectionTitle: {
     fontSize: 14,
@@ -5098,7 +5067,5 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
 });
 
 export default AdminScreen;
-
-
 
 

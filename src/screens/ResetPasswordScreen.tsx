@@ -3,9 +3,11 @@ import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, Tou
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
 
 export default function ResetPasswordScreen({ navigation }: { navigation: any }) {
+  const styles = useThemedStyles(baseStyles);
   const { t } = useApp();
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -56,7 +58,7 @@ export default function ResetPasswordScreen({ navigation }: { navigation: any })
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background, padding: 24 },
   back: { marginTop: 18, marginBottom: 28, width: 44 },
   card: { backgroundColor: COLORS.card, borderRadius: 20, padding: 24, gap: 16 },

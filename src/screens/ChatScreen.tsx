@@ -15,6 +15,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 
@@ -22,6 +23,7 @@ type ChatScreenRouteProp = RouteProp<RootStackParamList, 'Chat'>;
 type ChatScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Chat'>;
 
 const ChatScreen = () => {
+  const styles = useThemedStyles(baseStyles);
   const { getChatMessages, sendMessage, markMessagesAsRead, users, currentUser, t } = useApp();
   const route = useRoute<ChatScreenRouteProp>();
   const navigation = useNavigation<ChatScreenNavigationProp>();
@@ -127,7 +129,7 @@ const ChatScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,

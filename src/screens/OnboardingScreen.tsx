@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import { safeImpactLight, safeNotificationSuccess, safeSelection } from '../lib/expoHapticsSafe';
 import type { TranslationKey } from '../i18n';
 import COLORS from '../theme/colors';
@@ -29,6 +30,7 @@ const SLIDES: { title: TranslationKey; body: TranslationKey }[] = [
 ];
 
 const OnboardingScreen: React.FC<Props> = ({ onComplete }) => {
+  const styles = useThemedStyles(baseStyles);
   const { t, theme } = useApp();
   const isDark = theme === 'dark';
   const insets = useSafeAreaInsets();
@@ -102,7 +104,7 @@ const OnboardingScreen: React.FC<Props> = ({ onComplete }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: COLORS.background,

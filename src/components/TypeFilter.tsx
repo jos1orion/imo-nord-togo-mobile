@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { PropertyType } from '../types';
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
 
 interface TypeFilterProps {
@@ -16,6 +17,7 @@ interface TypeFilterProps {
 }
 
 const TypeFilter: React.FC<TypeFilterProps> = ({ selectedType, onSelectType }) => {
+  const styles = useThemedStyles(baseStyles);
   const { tType, t } = useApp();
   const types: (PropertyType | 'ALL')[] = [
     'ALL',
@@ -53,7 +55,7 @@ const TypeFilter: React.FC<TypeFilterProps> = ({ selectedType, onSelectType }) =
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     marginVertical: 0,
     paddingVertical: 6,
@@ -87,7 +89,6 @@ const styles = StyleSheet.create({
 });
 
 export default TypeFilter;
-
 
 
 

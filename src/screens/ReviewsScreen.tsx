@@ -13,6 +13,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import { canViewProperty } from '../utils/propertyVisibility';
@@ -21,6 +22,7 @@ type ReviewsScreenRouteProp = RouteProp<RootStackParamList, 'Reviews'>;
 type ReviewsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Reviews'>;
 
 const ReviewsScreen = () => {
+  const styles = useThemedStyles(baseStyles);
   const { getPropertyReviews, addReview, getAverageRating, properties, currentUser, language, t } = useApp();
   const route = useRoute<ReviewsScreenRouteProp>();
   const navigation = useNavigation<ReviewsScreenNavigationProp>();
@@ -203,7 +205,7 @@ const ReviewsScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',

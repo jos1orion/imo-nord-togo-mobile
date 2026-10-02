@@ -20,6 +20,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import { PROPERTY_TYPE_COLORS } from '../types';
 import { formatPrice } from '../data/mock-data';
 import { RootStackParamList } from '../../App';
@@ -32,6 +33,7 @@ type NavigationProp = StackNavigationProp<RootStackParamList>;
 type DetailRouteProp = RouteProp<RootStackParamList, 'PropertyDetail'>;
 
 const PropertyDetailScreen: React.FC = () => {
+  const styles = useThemedStyles(baseStyles);
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const route = useRoute<DetailRouteProp>();
@@ -92,9 +94,21 @@ const PropertyDetailScreen: React.FC = () => {
       clients.find(c => c.id === property.clientId)?.phone,
       users.find(u => u.id === property.clientId)?.phone,
       users.find(u => u.id === property.ownerId)?.phone,
+      currentUser && (property.ownerId === currentUser.id || property.clientId === currentUser.id)
+        ? currentUser.phone
+        : null,
     ];
     return candidates.find(phone => typeof phone === 'string' && phone.trim().length > 0)?.trim() ?? '';
-  }, [property.contactPhone, property.client?.phone, property.clientId, property.ownerId, clients, users]);
+  }, [
+    property.contactPhone,
+    property.client?.phone,
+    property.clientId,
+    property.ownerId,
+    clients,
+    users,
+    currentUser?.id,
+    currentUser?.phone,
+  ]);
 
   const normalizeDigits = (value: string) => {
     const digits = value.replace(/\D/g, '');
@@ -599,7 +613,7 @@ const PropertyDetailScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

@@ -5,6 +5,7 @@ import { safeImpactLight } from '../lib/expoHapticsSafe';
 import { Property, PROPERTY_TYPE_COLORS } from '../types';
 import { formatPrice } from '../data/mock-data';
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
 import { typography } from '../theme/typography';
 import LazyImage from './LazyImage';
@@ -19,6 +20,7 @@ interface PropertyCardProps {
 }
 
 const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact = false }) => {
+  const styles = useThemedStyles(baseStyles);
   const cardWidth = compact ? width * 0.8 : width - 32;
   const { toggleFavorite, isFavorite, propertyStats, tType, t, language } = useApp();
   const favorite = isFavorite(property.id);
@@ -47,8 +49,12 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
     ) || 'https://via.placeholder.com/400x300';
 
   return (
-    <View
+    <TouchableOpacity
       style={[styles.card, { width: cardWidth }, compact && styles.compactCard]}
+      onPress={onPress}
+      activeOpacity={0.9}
+      accessibilityRole="button"
+      accessibilityLabel={`${t('view_details')}: ${property.title}`}
     >
       <View style={[styles.imageContainer, compact && styles.imageContainerCompact]}>
         <LazyImage uri={coverImage} style={styles.image} resizeMode="cover" />
@@ -160,11 +166,11 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
           </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.card,
     borderRadius: 18,
@@ -419,6 +425,3 @@ const styles = StyleSheet.create({
 });
 
 export default React.memo(PropertyCard);
-
-
-

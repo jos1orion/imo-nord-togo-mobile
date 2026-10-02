@@ -25,6 +25,7 @@ import SearchBar from '../components/SearchBar';
 import OfflineBanner from '../components/ui/OfflineBanner';
 import EmptyState from '../components/ui/EmptyState';
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import { Property, PropertyType } from '../types';
 import COLORS from '../theme/colors';
 import { RootStackParamList } from '../../App';
@@ -36,6 +37,7 @@ const { width } = Dimensions.get('window');
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 const HomeScreen: React.FC = () => {
+  const styles = useThemedStyles(baseStyles);
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const {
@@ -87,6 +89,17 @@ const HomeScreen: React.FC = () => {
   const [sortMode, setSortMode] = useState<'recent' | 'priceAsc' | 'priceDesc'>('recent');
   const [neighborhoodOpen, setNeighborhoodOpen] = useState(false);
   const [neighborhoodQuery, setNeighborhoodQuery] = useState('');
+  const availableNeighborhoods = useMemo(() => {
+    const names = [
+      ...neighborhoods,
+      ...properties
+        .filter(isPublicProperty)
+        .map(property => property.neighborhood?.trim())
+        .filter((name): name is string => Boolean(name)),
+    ];
+    return [...new Map(names.map(name => [name.toLowerCase(), name])).values()]
+      .sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  }, [neighborhoods, properties]);
   const filteredNeighborhoods = useMemo(() => {
     const cityNeighborhoods = selectedCity
       ? Array.from(new Set(
@@ -96,12 +109,12 @@ const HomeScreen: React.FC = () => {
             .map(property => property.neighborhood?.trim())
             .filter((name): name is string => Boolean(name))
         ))
-      : neighborhoods;
+      : availableNeighborhoods;
     const base = neighborhoodQuery.trim()
       ? cityNeighborhoods.filter(name => name.toLowerCase().includes(neighborhoodQuery.trim().toLowerCase()))
       : cityNeighborhoods;
     return [...base].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
-  }, [neighborhoodQuery, neighborhoods, properties, selectedCity]);
+  }, [availableNeighborhoods, neighborhoodQuery, properties, selectedCity]);
   const cities = useMemo(
     () => Array.from(new Set(properties.filter(isPublicProperty).map(p => (p.city || p.location).trim()).filter(Boolean))).sort(),
     [properties]
@@ -124,11 +137,11 @@ const HomeScreen: React.FC = () => {
 
   useEffect(() => {
     if (!selectedNeighborhood) return;
-    const exists = neighborhoods.some(
+    const exists = availableNeighborhoods.some(
       name => name.toLowerCase() === selectedNeighborhood.toLowerCase()
     );
     if (!exists) setSelectedNeighborhood(null);
-  }, [neighborhoods, selectedNeighborhood]);
+  }, [availableNeighborhoods, selectedNeighborhood]);
   const activeListings = properties.filter(isPublicProperty).length;
   const totalLikes = Object.values(propertyStats).reduce(
     (sum, stats) => sum + (stats.likes ?? 0),
@@ -152,7 +165,7 @@ const HomeScreen: React.FC = () => {
           .filter(Boolean)
       )
     ).slice(0, 4);
-    const neighborhoodCandidates = neighborhoods.slice(0, 4);
+    const neighborhoodCandidates = availableNeighborhoods.slice(0, 4);
     const city = cityCandidates[0] || 'Kara';
     const hood = neighborhoodCandidates[0] || city;
     return [
@@ -172,7 +185,7 @@ const HomeScreen: React.FC = () => {
         type: 'land' as PropertyType,
       },
     ];
-  }, [neighborhoods, properties, language]);
+  }, [availableNeighborhoods, properties, language]);
 
   const applySuggestion = (query: string, type?: PropertyType) => {
     if (type) setFilterType(type);
@@ -180,10 +193,18 @@ const HomeScreen: React.FC = () => {
     handleSearchSubmit();
   };
 
-  const showAllProperties = () => {
+  const resetAllFilters = () => {
     resetFilters();
+    setFilterType('ALL');
+    setSearchQuery('');
     setSelectedCity(null);
     setSelectedNeighborhood(null);
+    setNeighborhoodQuery('');
+    setNeighborhoodOpen(false);
+    setSortMode('recent');
+  };
+  const showAllProperties = () => {
+    resetAllFilters();
     requestAnimationFrame(() => {
       scrollRef.current?.scrollToOffset({
         offset: Math.max(listSectionYRef.current - 12, 0),
@@ -191,15 +212,9 @@ const HomeScreen: React.FC = () => {
       });
     });
   };
-  const resetAllFilters = () => {
-    resetFilters();
-    setSelectedCity(null);
-    setSelectedNeighborhood(null);
-    setNeighborhoodQuery('');
-    setSortMode('recent');
-  };
   const activeFilterChips = useMemo(() => {
     const chips: string[] = [];
+    if (searchQuery) chips.push(searchQuery);
     if (selectedCity) chips.push(selectedCity);
     if (selectedNeighborhood) chips.push(selectedNeighborhood);
     if (filterType !== 'ALL') chips.push(tType(filterType));
@@ -210,7 +225,7 @@ const HomeScreen: React.FC = () => {
     if (filters.minBathrooms) chips.push(`${filters.minBathrooms}+ sdb`);
     if (filters.minArea) chips.push(`${filters.minArea} m2+`);
     return chips;
-  }, [filters, filterType, selectedCity, selectedNeighborhood, tType]);
+  }, [filters, filterType, searchQuery, selectedCity, selectedNeighborhood, tType]);
 
 
   useEffect(() => {
@@ -747,7 +762,7 @@ const HomeScreen: React.FC = () => {
         </View>
       )}
 
-      {neighborhoods.length > 0 && (
+      {availableNeighborhoods.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('home_neighborhoods_popular')}</Text>
@@ -764,7 +779,7 @@ const HomeScreen: React.FC = () => {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.neighborhoodsScroll}
           >
-            {neighborhoods.slice(0, 12).map(name => (
+            {availableNeighborhoods.slice(0, 12).map(name => (
               <TouchableOpacity
                 key={name}
                 style={[
@@ -773,6 +788,7 @@ const HomeScreen: React.FC = () => {
                 ]}
                 onPress={() => {
                   LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  setSelectedCity(null);
                   setSelectedNeighborhood(name);
                   if (listSectionYRef.current > 0) {
                     scrollRef.current?.scrollToOffset({ offset: listSectionYRef.current - 10, animated: true });
@@ -819,7 +835,7 @@ const HomeScreen: React.FC = () => {
               icon="search-outline"
               title={t('empty_category')}
               actionLabel={filterType === 'ALL' ? t('home_empty_reset') : t('back')}
-              onAction={filterType === 'ALL' ? resetFilters : handleCategoryBack}
+              onAction={filterType === 'ALL' ? resetAllFilters : handleCategoryBack}
               style={styles.emptyStateWrap}
             />
           )
@@ -930,7 +946,7 @@ const HomeScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

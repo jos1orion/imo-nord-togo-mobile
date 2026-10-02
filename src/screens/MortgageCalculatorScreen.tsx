@@ -13,12 +13,14 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 
 type MortgageCalculatorScreenNavigationProp = StackNavigationProp<RootStackParamList, 'MortgageCalculator'>;
 
 const MortgageCalculatorScreen = () => {
+  const styles = useThemedStyles(baseStyles);
   const { calculateMortgage, t, theme } = useApp();
   const navigation = useNavigation<MortgageCalculatorScreenNavigationProp>();
   const isDark = theme === 'dark';
@@ -231,7 +233,7 @@ const MortgageCalculatorScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
   },

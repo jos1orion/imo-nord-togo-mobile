@@ -1,8 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, LogBox, Platform, Pressable, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  LogBox,
+  Modal,
+  Platform,
+  Pressable,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
-import { createNavigationContainerRef, NavigationContainer, NavigatorScreenParams } from '@react-navigation/native';
+import {
+  createNavigationContainerRef,
+  DarkTheme as NavigationDarkTheme,
+  DefaultTheme as NavigationLightTheme,
+  NavigationContainer,
+  NavigatorScreenParams,
+} from '@react-navigation/native';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,6 +49,17 @@ import { typography } from './src/theme/typography';
 import { supabase } from './src/lib/supabase';
 
 const ONBOARDING_KEY = 'imo:onboardingComplete';
+const FIRST_VISIT_GUIDE_PREFIX = 'imo:firstVisitGuide:';
+const FIRST_VISIT_GUIDE_DISABLED_KEY = 'imo:firstVisitGuideDisabled';
+
+const FIRST_VISIT_GUIDES = {
+  Home: { title: 'guide_home_title', body: 'guide_home_body' },
+  Publish: { title: 'guide_publish_title', body: 'guide_publish_body' },
+  Messages: { title: 'guide_messages_title', body: 'guide_messages_body' },
+  Profile: { title: 'guide_profile_title', body: 'guide_profile_body' },
+} as const;
+
+type GuideSection = keyof typeof FIRST_VISIT_GUIDES;
 
 type TabParamList = {
   Home: undefined;
@@ -65,7 +93,7 @@ LogBox.ignoreLogs([
 ]);
 
 const TabNavigator = () => {
-  const { t, language, currentUser } = useApp();
+  const { t, language } = useApp();
   const paper = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -145,20 +173,6 @@ const TabNavigator = () => {
         name="Publish"
         component={ListingsScreen}
         options={{ tabBarLabel: t('publish_tab') }}
-        listeners={({ navigation }) => ({
-          tabPress: event => {
-            if (!currentUser) {
-              event.preventDefault();
-              Alert.alert(t('loginRequired'), t('login_required_publish_body'), [
-                { text: t('cancel'), style: 'cancel' },
-                {
-                  text: t('profile_register'),
-                  onPress: () => navigation.navigate('Profile', { authMode: 'register' }),
-                },
-              ]);
-            }
-          },
-        })}
       />
       <Tab.Screen name="Messages" component={MessagesScreen} options={{ tabBarLabel: t('support_title') }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('tab_profile') }} />
@@ -171,6 +185,61 @@ const AppContent = () => {
   const paperTheme = theme === 'light' ? lightPaperTheme : darkPaperTheme;
   const [navReady, setNavReady] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [guideSection, setGuideSection] = useState<GuideSection | null>(null);
+  const activeRouteRef = React.useRef<string | undefined>(undefined);
+  const checkedGuideSectionsRef = React.useRef(new Set<GuideSection>());
+  const guideDisabledRef = React.useRef(false);
+
+  const checkFirstVisitGuide = React.useCallback((routeName?: string) => {
+    activeRouteRef.current = routeName;
+    if (!routeName || !(routeName in FIRST_VISIT_GUIDES)) return;
+    const section = routeName as GuideSection;
+    if (guideDisabledRef.current || checkedGuideSectionsRef.current.has(section)) return;
+    checkedGuideSectionsRef.current.add(section);
+
+    void (async () => {
+      try {
+        const [disabled, seen] = await Promise.all([
+          AsyncStorage.getItem(FIRST_VISIT_GUIDE_DISABLED_KEY),
+          AsyncStorage.getItem(`${FIRST_VISIT_GUIDE_PREFIX}${section}`),
+        ]);
+        if (disabled === 'true') {
+          guideDisabledRef.current = true;
+          return;
+        }
+        if (
+          seen !== 'true' &&
+          activeRouteRef.current === section &&
+          !guideDisabledRef.current
+        ) {
+          setGuideSection(section);
+        }
+      } catch (error) {
+        console.warn('Unable to load first-visit guide state.', error);
+        if (activeRouteRef.current === section && !guideDisabledRef.current) {
+          setGuideSection(section);
+        }
+      }
+    })();
+  }, []);
+
+  const dismissGuide = React.useCallback((disableAll = false) => {
+    const section = guideSection;
+    setGuideSection(null);
+    if (disableAll) guideDisabledRef.current = true;
+    if (!section) return;
+
+    void (async () => {
+      try {
+        await AsyncStorage.setItem(`${FIRST_VISIT_GUIDE_PREFIX}${section}`, 'true');
+        if (disableAll) {
+          await AsyncStorage.setItem(FIRST_VISIT_GUIDE_DISABLED_KEY, 'true');
+        }
+      } catch (error) {
+        console.warn('Unable to save first-visit guide state.', error);
+      }
+    })();
+  }, [guideSection]);
 
   useEffect(() => {
     const handleAuthUrl = async (url: string | null) => {
@@ -233,7 +302,12 @@ const AppContent = () => {
 
   return (
     <PaperProvider theme={paperTheme}>
-      <NavigationContainer ref={navigationRef}>
+      <NavigationContainer
+        ref={navigationRef}
+        theme={theme === 'dark' ? NavigationDarkTheme : NavigationLightTheme}
+        onReady={() => checkFirstVisitGuide(navigationRef.getCurrentRoute()?.name)}
+        onStateChange={() => checkFirstVisitGuide(navigationRef.getCurrentRoute()?.name)}
+      >
         <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
         <Stack.Navigator
           initialRouteName={showOnboarding ? 'Onboarding' : 'MainTabs'}
@@ -273,6 +347,96 @@ const AppContent = () => {
           <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ presentation: 'card' }} />
         </Stack.Navigator>
       </NavigationContainer>
+      {guideSection && (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => dismissGuide()}
+        >
+          <Pressable
+            onPress={() => dismissGuide()}
+            style={{
+              flex: 1,
+              justifyContent: 'center',
+              padding: 24,
+              backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            }}
+          >
+            <Pressable
+              onPress={event => event.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: 420,
+                alignSelf: 'center',
+                padding: 24,
+                borderRadius: 24,
+                backgroundColor: paperTheme.colors.surface,
+              }}
+            >
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: paperTheme.colors.primaryContainer,
+                  marginBottom: 18,
+                }}
+              >
+                <Ionicons name="sparkles" size={24} color={paperTheme.colors.primary} />
+              </View>
+              <Text
+                style={{
+                  color: paperTheme.colors.onSurface,
+                  fontSize: 21,
+                  fontWeight: '700',
+                  marginBottom: 10,
+                }}
+              >
+                {t(FIRST_VISIT_GUIDES[guideSection].title)}
+              </Text>
+              <Text
+                style={{
+                  color: paperTheme.colors.onSurfaceVariant,
+                  fontSize: 15,
+                  lineHeight: 23,
+                  marginBottom: 24,
+                }}
+              >
+                {t(FIRST_VISIT_GUIDES[guideSection].body)}
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => dismissGuide()}
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: 48,
+                  borderRadius: 14,
+                  backgroundColor: paperTheme.colors.primary,
+                  marginBottom: 12,
+                }}
+              >
+                <Text style={{ color: paperTheme.colors.onPrimary, fontSize: 15, fontWeight: '700' }}>
+                  {t('guide_got_it')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => dismissGuide(true)}
+                style={{ alignItems: 'center', padding: 8 }}
+              >
+                <Text style={{ color: paperTheme.colors.onSurfaceVariant, fontSize: 13 }}>
+                  {t('guide_skip_all')}
+                </Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
     </PaperProvider>
   );
 };

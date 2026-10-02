@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../../App';
 import PropertyCard from '../components/PropertyCard';
 import { useApp } from '../context/AppContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
 import { isPublicProperty } from '../utils/propertyVisibility';
 
@@ -25,12 +26,13 @@ type ListingsTabParamList = {
   Home: undefined;
   Publish: undefined;
   Messages: undefined;
-  Profile: undefined;
+  Profile: { authMode?: 'login' | 'register' } | undefined;
 };
 
 type NavigationProp = BottomTabNavigationProp<ListingsTabParamList, 'Publish'>;
 
 const ListingsScreen: React.FC = () => {
+  const styles = useThemedStyles(baseStyles);
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const {
@@ -40,9 +42,12 @@ const ListingsScreen: React.FC = () => {
     neighborhoodAlerts,
     toggleNeighborhoodAlert,
     updatePropertyStatus,
+    currentUser,
+    requestAgentAccess,
     t,
   } = useApp();
   const [busyListings, setBusyListings] = useState<Record<string, boolean>>({});
+  const [requestingAgentAccess, setRequestingAgentAccess] = useState(false);
   const myProperties = getMyProperties();
   const favoriteCount = properties.filter(
     property => favorites.includes(property.id) && isPublicProperty(property)
@@ -67,6 +72,67 @@ const ListingsScreen: React.FC = () => {
         propertyId,
       })
     );
+  };
+
+  const openRegistration = () => {
+    navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('MainTabs', {
+      screen: 'Profile',
+      params: { authMode: 'register' },
+    });
+  };
+
+  const agentAccessState = !currentUser
+    ? 'guest'
+    : currentUser.role === 'ADMIN' || currentUser.role === 'AGENT'
+      ? 'approved'
+      : currentUser.role && currentUser.role !== 'USER'
+        ? 'ineligible'
+      : currentUser.agentStatus === 'pending'
+        ? 'pending'
+        : currentUser.agentStatus === 'rejected'
+          ? 'rejected'
+          : 'none';
+  const agentAccessMessageKey = {
+    guest: 'listing_agent_access_guest',
+    none: 'listing_agent_access_none',
+    pending: 'listing_agent_access_pending',
+    rejected: 'listing_agent_access_rejected',
+    approved: 'listing_agent_access_approved',
+    ineligible: 'listing_agent_access_ineligible',
+  } as const;
+
+  const handleAgentAccessRequest = async () => {
+    if (requestingAgentAccess) return;
+    setRequestingAgentAccess(true);
+    try {
+      await requestAgentAccess();
+      Alert.alert(t('success'), t('listing_agent_request_sent'));
+    } catch (error) {
+      console.error('Unable to submit agent access request.', error);
+      Alert.alert(t('error'), t('listing_agent_request_error'));
+    } finally {
+      setRequestingAgentAccess(false);
+    }
+  };
+
+  const openPublishOrRequestAccess = () => {
+    if (agentAccessState === 'guest') {
+      openRegistration();
+      return;
+    }
+    if (agentAccessState === 'approved') {
+      navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('Publish');
+      return;
+    }
+    if (agentAccessState === 'pending') {
+      Alert.alert(t('listing_agent_access_title'), t('listing_agent_access_pending'));
+      return;
+    }
+    if (agentAccessState === 'ineligible') {
+      Alert.alert(t('listing_agent_access_title'), t('listing_agent_access_ineligible'));
+      return;
+    }
+    void handleAgentAccessRequest();
   };
 
   const confirmListingStatus = (
@@ -106,12 +172,22 @@ const ListingsScreen: React.FC = () => {
           style={styles.publishButton}
           activeOpacity={0.85}
           accessibilityRole="button"
-          onPress={() =>
-            navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('Publish')
-          }
+          onPress={openPublishOrRequestAccess}
         >
           <Ionicons name="add" size={20} color="#fff" />
-          <Text style={styles.publishButtonText}>{t('home_publish_card_title')}</Text>
+          <Text style={styles.publishButtonText}>
+            {agentAccessState === 'approved'
+              ? t('home_publish_card_title')
+              : agentAccessState === 'guest'
+                ? t('listing_agent_access_sign_in_short')
+                : agentAccessState === 'pending'
+                  ? t('listing_agent_access_pending_button')
+                  : agentAccessState === 'rejected'
+                    ? t('listing_agent_access_retry')
+                    : agentAccessState === 'ineligible'
+                      ? t('listing_agent_access_title')
+                      : t('listing_agent_access_request')}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -123,6 +199,67 @@ const ListingsScreen: React.FC = () => {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.section}>
+          <View style={styles.agentStatusHeader}>
+            <Ionicons
+              name={agentAccessState === 'approved' ? 'checkmark-circle' : 'information-circle'}
+              size={22}
+              color={agentAccessState === 'approved' ? COLORS.accent : COLORS.primary}
+            />
+            <Text style={styles.sectionTitle}>{t('listing_agent_access_title')}</Text>
+          </View>
+          <Text style={styles.helperText}>
+            {t(agentAccessMessageKey[agentAccessState])}
+          </Text>
+          {agentAccessState === 'guest' && (
+            <TouchableOpacity
+              style={styles.accessButton}
+              accessibilityRole="button"
+              onPress={openRegistration}
+            >
+              <Text style={styles.accessButtonText}>{t('listing_agent_access_sign_in')}</Text>
+            </TouchableOpacity>
+          )}
+          {agentAccessState === 'none' && (
+            <TouchableOpacity
+              style={[styles.accessButton, requestingAgentAccess && styles.disabled]}
+              accessibilityRole="button"
+              disabled={requestingAgentAccess}
+              onPress={() => void handleAgentAccessRequest()}
+            >
+              {requestingAgentAccess ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.accessButtonText}>{t('listing_agent_access_request')}</Text>
+              )}
+            </TouchableOpacity>
+          )}
+          {agentAccessState === 'rejected' && (
+            <>
+              {currentUser?.agentRejectionReason ? (
+                <Text style={styles.rejectionReason}>
+                  {t('listing_agent_access_rejection_reason').replace(
+                    '{{reason}}',
+                    currentUser.agentRejectionReason
+                  )}
+                </Text>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.accessButton, requestingAgentAccess && styles.disabled]}
+                accessibilityRole="button"
+                disabled={requestingAgentAccess}
+                onPress={() => void handleAgentAccessRequest()}
+              >
+                {requestingAgentAccess ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.accessButtonText}>{t('listing_agent_access_retry')}</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+
         <View style={styles.summaryRow}>
           <View style={styles.summaryCard}>
             <Ionicons name="home-outline" size={18} color={COLORS.primary} />
@@ -282,7 +419,7 @@ const ListingsScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -374,6 +511,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text,
     marginBottom: 14,
+  },
+  agentStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  accessButton: {
+    minHeight: 44,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    marginTop: 12,
+  },
+  accessButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  rejectionReason: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: COLORS.error,
+    marginTop: 6,
   },
   emptyText: {
     fontSize: 13,
