@@ -4,6 +4,7 @@ import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { isStaffRole } from '../../lib/rbac';
+import { fetchStaffProfileAccess } from '../../lib/profileAccess';
 
 function LoginForm() {
   const router = useRouter();
@@ -42,11 +43,16 @@ function LoginForm() {
       return;
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, account_status')
-      .eq('id', data.user.id)
-      .maybeSingle();
+    const { data: profile, error: profileError } = await fetchStaffProfileAccess(
+      supabase,
+      data.user.id
+    );
+
+    if (profileError) {
+      setLoading(false);
+      setError('Impossible de vérifier votre profil staff dans Supabase. Vérifiez le schéma et les politiques RLS.');
+      return;
+    }
 
     if (profile?.account_status === 'suspended') {
       await supabase.auth.signOut();

@@ -22,7 +22,7 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
       router.replace('/');
       return;
     }
-    if (!hasPermission('ADMIN', required)) {
+    if (!hasPermission(profile.role, required)) {
       router.replace('/');
     }
   }, [pathname, profile, loading, router]);

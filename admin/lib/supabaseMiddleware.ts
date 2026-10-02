@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { isStaffRole } from './rbac';
+import { fetchStaffProfileAccess } from './profileAccess';
 
 const PUBLIC_PATHS = [
   '/login',
@@ -55,7 +56,11 @@ export async function updateSession(request: NextRequest) {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
+  if (authError) {
+    return new NextResponse('Unable to connect to Supabase Auth.', { status: 503 });
+  }
 
   if (!user && !isPublicPath(path) && !path.startsWith('/api/')) {
     const url = request.nextUrl.clone();
@@ -64,11 +69,14 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && !path.startsWith('/api/')) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, account_status')
-      .eq('id', user.id)
-      .maybeSingle();
+    const { data: profile, error: profileError } = await fetchStaffProfileAccess(
+      supabase,
+      user.id
+    );
+
+    if (profileError) {
+      return new NextResponse('Unable to verify staff access with Supabase.', { status: 503 });
+    }
 
     if (!isStaffRole(profile?.role) || profile?.account_status === 'suspended') {
       await supabase.auth.signOut();

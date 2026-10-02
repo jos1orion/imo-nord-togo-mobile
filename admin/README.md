@@ -44,6 +44,9 @@ Avant toute mise en production, exécuter dans l’éditeur SQL de Supabase dans
 
 1. `docs/supabase-user-role.sql`
 2. `docs/supabase-production-migration.sql`
+3. `docs/supabase-backoffice-schema-repair.sql` uniquement si l’étape précédente a été interrompue ou si la base est partiellement migrée. Ce correctif de colonnes ne remplace pas la migration de sécurité complète.
+
+La route `/api/health` vérifie maintenant Supabase et les colonnes requises par le back-office ; une réponse HTTP 503 avec `schema: incomplete` indique qu’une migration est nécessaire.
 
 Ne pas exécuter `docs/supabase-bootstrap-production.sql` sur un projet existant. La migration produit le rôle `USER` par défaut, le trigger de création de profil, les politiques RLS restrictives et la planification d’expiration des annonces.
 
