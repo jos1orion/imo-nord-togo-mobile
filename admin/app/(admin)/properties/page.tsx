@@ -99,6 +99,7 @@ export default function PropertiesPage() {
   const [page, setPage] = useState(1);
   const [didInitEdit, setDidInitEdit] = useState(false);
   const canSetAdminListingFields = profile?.role === 'ADMIN';
+  const canUseBulkActions = profile?.role === 'ADMIN';
   const [supportsFeaturedColumn, setSupportsFeaturedColumn] = useState(true);
   const previewImages = useMemo(
     () =>
@@ -353,8 +354,14 @@ export default function PropertiesPage() {
     }
     setSaving(true);
     try {
-      const listingStatusForSave: ListingStatus = editingId || canSetAdminListingFields ? form.listingStatus : 'pending';
-      const featuredForSave = editingId || canSetAdminListingFields ? form.featured : false;
+      // Agents submit and correct their own private drafts only. Approval and
+      // featured status are reserved for administrators and enforced again by RLS.
+      const listingStatusForSave: ListingStatus = canSetAdminListingFields
+        ? form.listingStatus
+        : editingId
+        ? form.listingStatus
+        : 'pending';
+      const featuredForSave = canSetAdminListingFields ? form.featured : false;
       const basePayload = {
         title: form.title,
         type: form.type,
@@ -517,6 +524,7 @@ export default function PropertiesPage() {
   }, [searchParams]);
 
   const renderMainAction = (property: PropertyRow) => {
+    if (!canSetAdminListingFields) return null;
     if (property.listing_status === 'pending') {
       return (
         <button
@@ -546,21 +554,34 @@ export default function PropertiesPage() {
     return null;
   };
 
-  const renderMenu = (property: PropertyRow) => (
-    <details className="action-menu" onClick={event => event.stopPropagation()}>
-      <summary className="icon-button">...</summary>
-      <div className="action-menu-list">
-        <button onClick={() => handleListingStatus(property.id, 'approved')}>Approuver</button>
-        <button onClick={() => handleListingStatus(property.id, 'rejected')}>Refuser</button>
-        <button onClick={() => handleFeatured(property.id, !property.featured)}>
-          {property.featured ? 'Retirer vedette' : 'Mettre en vedette'}
-        </button>
-        <button onClick={() => handleEdit(property)}>Modifier</button>
-        <button onClick={() => handleListingStatus(property.id, 'archived')}>Archiver</button>
-        <button className="danger" onClick={() => handleDelete(property.id)}>Supprimer</button>
-      </div>
-    </details>
-  );
+  const renderMenu = (property: PropertyRow) => {
+    const agentCanEditOwnDraft =
+      profile?.role === 'AGENT' &&
+      property.owner_id === user?.id &&
+      (property.listing_status === 'pending' || property.listing_status === 'rejected');
+
+    if (!canSetAdminListingFields && !agentCanEditOwnDraft) return null;
+
+    return (
+      <details className="action-menu" onClick={event => event.stopPropagation()}>
+        <summary className="icon-button">...</summary>
+        <div className="action-menu-list">
+          {canSetAdminListingFields ? (
+            <>
+              <button onClick={() => handleListingStatus(property.id, 'approved')}>Approuver</button>
+              <button onClick={() => handleListingStatus(property.id, 'rejected')}>Refuser</button>
+              <button onClick={() => handleFeatured(property.id, !property.featured)}>
+                {property.featured ? 'Retirer vedette' : 'Mettre en vedette'}
+              </button>
+              <button onClick={() => handleListingStatus(property.id, 'archived')}>Archiver</button>
+            </>
+          ) : null}
+          <button onClick={() => handleEdit(property)}>Modifier</button>
+          <button className="danger" onClick={() => handleDelete(property.id)}>Supprimer</button>
+        </div>
+      </details>
+    );
+  };
 
   return (
     <div className="grid">
@@ -675,11 +696,11 @@ export default function PropertiesPage() {
       <div className="table-toolbar slim">
         <div className="pill-row">
           <div className="pill">{sortedProperties.length} biens</div>
-          {selectedIds.size > 0 ? <div className="pill">{selectedIds.size} selectionnes</div> : null}
+          {canUseBulkActions && selectedIds.size > 0 ? <div className="pill">{selectedIds.size} selectionnes</div> : null}
           <div className="pill">Page {page} / {totalPages}</div>
         </div>
         <div className="toolbar-actions">
-          {selectedIds.size > 0 ? (
+          {canUseBulkActions && selectedIds.size > 0 ? (
             <details className="dropdown">
               <summary>Actions groupees</summary>
               <div className="dropdown-menu">
@@ -783,9 +804,9 @@ export default function PropertiesPage() {
             <div className="form-field">
               <label>Validation</label>
               <select
-                value={editingId || canSetAdminListingFields ? form.listingStatus : 'pending'}
+                value={canSetAdminListingFields ? form.listingStatus : editingId ? form.listingStatus : 'pending'}
                 onChange={event => setForm({ ...form, listingStatus: event.target.value as ListingStatus })}
-                disabled={!editingId && !canSetAdminListingFields}
+                disabled={!canSetAdminListingFields}
               >
                 <option value="pending">En attente</option>
                 <option value="approved">Approuvé</option>
@@ -796,9 +817,9 @@ export default function PropertiesPage() {
             <div className="form-field">
               <label>Vedette</label>
               <select
-                value={(editingId || canSetAdminListingFields ? form.featured : false) ? 'yes' : 'no'}
+                value={(canSetAdminListingFields ? form.featured : false) ? 'yes' : 'no'}
                 onChange={event => setForm({ ...form, featured: event.target.value === 'yes' })}
-                disabled={!supportsFeaturedColumn || (!editingId && !canSetAdminListingFields)}
+                disabled={!supportsFeaturedColumn || !canSetAdminListingFields}
               >
                 <option value="no">Non</option>
                 <option value="yes">Oui</option>
@@ -854,16 +875,18 @@ export default function PropertiesPage() {
                     <span className={`status-badge ${property.listing_status}`}>
                       {getListingLabel(property.listing_status)}
                     </span>
-                    <label
-                      className="property-select"
-                      onClick={event => event.stopPropagation()}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(property.id)}
-                        onChange={() => toggleSelection(property.id)}
-                      />
-                    </label>
+                    {canUseBulkActions ? (
+                      <label
+                        className="property-select"
+                        onClick={event => event.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(property.id)}
+                          onChange={() => toggleSelection(property.id)}
+                        />
+                      </label>
+                    ) : null}
                   </div>
                   <div className="property-body">
                     <div className="property-title">{property.title}</div>
@@ -883,6 +906,7 @@ export default function PropertiesPage() {
                         value={property.listing_status}
                         onChange={event => handleListingStatus(property.id, event.target.value as ListingStatus)}
                         onClick={event => event.stopPropagation()}
+                        disabled={!canSetAdminListingFields}
                       >
                         <option value="pending">En attente</option>
                         <option value="approved">Approuvé</option>
@@ -945,11 +969,13 @@ export default function PropertiesPage() {
                       className="table-row-click"
                     >
                       <td onClick={event => event.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(property.id)}
-                          onChange={() => toggleSelection(property.id)}
-                        />
+                        {canUseBulkActions ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(property.id)}
+                            onChange={() => toggleSelection(property.id)}
+                          />
+                        ) : null}
                       </td>
                       <td>
                         <div className="table-thumb">

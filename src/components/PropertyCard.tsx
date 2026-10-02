@@ -47,12 +47,8 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
     ) || 'https://via.placeholder.com/400x300';
 
   return (
-    <TouchableOpacity
+    <View
       style={[styles.card, { width: cardWidth }, compact && styles.compactCard]}
-      onPress={onPress}
-      activeOpacity={0.9}
-      accessibilityRole="button"
-      accessibilityLabel={`${property.title}, ${locationLabel}`}
     >
       <View style={[styles.imageContainer, compact && styles.imageContainerCompact]}>
         <LazyImage uri={coverImage} style={styles.image} resizeMode="cover" />
@@ -164,7 +160,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
           </View>
         </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 };
 

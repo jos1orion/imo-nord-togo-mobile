@@ -6,15 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.100.0",
     "clsx": "^2.1.1",
-    "next": "^16.3.5",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "next": "^15.5.25",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
@@ -23,5 +23,10 @@
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.3.5",
     "typescript": "^5.3.3"
+  },
+  "overrides": {
+    "nanoid": "^3.3.19",
+    "postcss": "^8.5.23",
+    "sharp": "^0.35.4"
   }
 }

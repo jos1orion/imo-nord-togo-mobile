@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,9 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
+import { translateAdmin, type AdminTranslationKey } from '../i18n/admin';
 import { supabase } from '../lib/supabase';
 import {
   PROPERTY_TYPE_LABELS,
@@ -165,6 +167,7 @@ const darkTheme: AdminTheme = {
 };
 
 const AdminScreen: React.FC = () => {
+  const insets = useSafeAreaInsets();
   useEffect(() => {
     if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -175,6 +178,8 @@ const AdminScreen: React.FC = () => {
     clients,
     users,
     currentUser,
+    language,
+    tType,
     neighborhoods,
     reports,
     resolveReport,
@@ -212,6 +217,12 @@ const AdminScreen: React.FC = () => {
     tenantDocuments,
     addTenantDocumentRecord,
   } = useApp();
+  const tAdmin = (key: AdminTranslationKey) => translateAdmin(language, key);
+  const dateLocale = language === 'en' ? 'en-US' : 'fr-FR';
+  const formatAdminDate = (value: string | number | Date) =>
+    new Date(value).toLocaleDateString(dateLocale);
+  const formatAdminDateTime = (value: string | number | Date) =>
+    new Date(value).toLocaleString(dateLocale);
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const handleTabChange = (tab: TabType) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -446,7 +457,7 @@ const AdminScreen: React.FC = () => {
   const handleSaveContract = async () => {
     const rentAmount = parseFloat(contractForm.rentAmount);
     if (!contractForm.propertyId || !contractForm.tenantId || !contractForm.startDate || !contractForm.endDate || Number.isNaN(rentAmount)) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
+      Alert.alert(tAdmin("Erreur"), tAdmin("Veuillez remplir tous les champs."));
       return;
     }
     try {
@@ -469,18 +480,18 @@ const AdminScreen: React.FC = () => {
           status: contractForm.status,
         });
       }
-      Alert.alert('Succes', editingContractId ? 'Contrat mis a jour.' : 'Contrat enregistre.');
+      Alert.alert(tAdmin("Succes"), editingContractId ? tAdmin("Contrat mis a jour.") : tAdmin("Contrat enregistre."));
       closeContractModal();
       setEditingContractId(null);
     } catch {
-      Alert.alert('Erreur', "Impossible d'enregistrer le contrat.");
+      Alert.alert(tAdmin("Erreur"), tAdmin("Impossible d'enregistrer le contrat."));
     }
   };
 
   const handleSavePayment = async () => {
     const amount = parseFloat(paymentForm.amount);
     if (!paymentForm.contractId || Number.isNaN(amount) || !paymentForm.paidAt) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
+      Alert.alert(tAdmin("Erreur"), tAdmin("Veuillez remplir tous les champs."));
       return;
     }
     try {
@@ -501,21 +512,21 @@ const AdminScreen: React.FC = () => {
           status: paymentForm.status,
         });
       }
-      Alert.alert('Succes', editingPaymentId ? 'Paiement mis a jour.' : 'Paiement enregistre.');
+      Alert.alert(tAdmin("Succes"), editingPaymentId ? tAdmin("Paiement mis a jour.") : tAdmin("Paiement enregistre."));
       closePaymentModal();
       setEditingPaymentId(null);
     } catch {
-      Alert.alert('Erreur', "Impossible d'enregistrer le paiement.");
+      Alert.alert(tAdmin("Erreur"), tAdmin("Impossible d'enregistrer le paiement."));
     }
   };
 
   const pickTenantDocType = () =>
     new Promise<'cni' | 'contract' | 'other' | null>(resolve => {
-      Alert.alert('Type de document', 'Choisir le type', [
-        { text: 'CNI', onPress: () => resolve('cni') },
-        { text: 'Contrat', onPress: () => resolve('contract') },
-        { text: 'Autre', onPress: () => resolve('other') },
-        { text: 'Annuler', style: 'cancel', onPress: () => resolve(null) },
+      Alert.alert(tAdmin("Type de document"), tAdmin("Choisir le type"), [
+        { text: tAdmin("CNI"), onPress: () => resolve('cni') },
+        { text: tAdmin("Contrat"), onPress: () => resolve('contract') },
+        { text: tAdmin("Autre"), onPress: () => resolve('other') },
+        { text: tAdmin("Annuler"), style: 'cancel', onPress: () => resolve(null) },
       ]);
     });
 
@@ -524,9 +535,9 @@ const AdminScreen: React.FC = () => {
     if (!contract) return contractId;
     const property = properties.find(p => p.id === contract.propertyId);
     const tenant = clients.find(c => c.id === contract.tenantId);
-    const propertyLabel = property?.title || 'Bien';
-    const tenantLabel = tenant?.name || 'Locataire';
-    return `${propertyLabel} ? ${tenantLabel}`;
+    const propertyLabel = property?.title || tAdmin("Bien");
+    const tenantLabel = tenant?.name || tAdmin("Locataire");
+    return `${propertyLabel} – ${tenantLabel}`;
   };
 
   const escapeHtml = (value: string) =>
@@ -554,8 +565,8 @@ const AdminScreen: React.FC = () => {
       const PrintModule = loadPrintModule();
       if (!PrintModule?.printToFileAsync) {
         Alert.alert(
-          'Recu PDF',
-          "L'impression PDF n'est pas disponible dans Expo Go. Utilise un dev build."
+          tAdmin("Recu PDF"),
+          tAdmin("L'impression PDF n'est pas disponible dans Expo Go. Utilise un dev build.")
         );
         return;
       }
@@ -579,37 +590,30 @@ const AdminScreen: React.FC = () => {
             </style>
           </head>
           <body>
-            <h1>Reçu de paiement</h1>
-            <div class="muted">Imo Nord Togo - ${new Date().toLocaleDateString('fr-FR')}</div>
+            <h1>${tAdmin("Reçu de paiement")}</h1>
+            <div class="muted">Imo Nord Togo - ${formatAdminDate(new Date())}</div>
             <div class="card">
-              <div class="row"><div class="label">Locataire</div><div class="value">${escapeHtml(tenant?.name || 'Locataire')}</div></div>
-              <div class="row"><div class="label">Bien</div><div class="value">${escapeHtml(property?.title || 'Bien')}</div></div>
-              <div class="row"><div class="label">Contrat</div><div class="value">${escapeHtml(payment.contractId)}</div></div>
-              <div class="row"><div class="label">Montant</div><div class="value">${escapeHtml(formatPrice(payment.amount))}</div></div>
-              <div class="row"><div class="label">Date paiement</div><div class="value">${escapeHtml(new Date(payment.paidAt).toLocaleDateString('fr-FR'))}</div></div>
-              <div class="row"><div class="label">Mode</div><div class="value">${escapeHtml(payment.method)}</div></div>
-              <div class="row"><div class="label">Statut</div><div class="value">${escapeHtml(payment.status)}</div></div>
+              <div class="row"><div class="label">${tAdmin("Locataire")}</div><div class="value">${escapeHtml(tenant?.name || tAdmin("Locataire"))}</div></div>
+              <div class="row"><div class="label">${tAdmin("Bien")}</div><div class="value">${escapeHtml(property?.title || tAdmin("Bien"))}</div></div>
+              <div class="row"><div class="label">${tAdmin("Contrat")}</div><div class="value">${escapeHtml(payment.contractId)}</div></div>
+              <div class="row"><div class="label">${tAdmin("Montant")}</div><div class="value">${escapeHtml(formatPrice(payment.amount))}</div></div>
+              <div class="row"><div class="label">${tAdmin("Date paiement")}</div><div class="value">${escapeHtml(formatAdminDate(payment.paidAt))}</div></div>
+              <div class="row"><div class="label">${tAdmin("Mode")}</div><div class="value">${escapeHtml(tAdmin(payment.method === 'cash' ? 'Cash' : 'Mobile Money'))}</div></div>
+              <div class="row"><div class="label">${tAdmin("Statut")}</div><div class="value">${escapeHtml(tAdmin(payment.status === 'paid' ? 'Payé' : payment.status === 'pending' ? 'En attente' : 'En retard'))}</div></div>
             </div>
           </body>
         </html>
       `;
 
-      const normalizedHtml = html
-        .replace(/Re\S* de paiement/u, 'Recu de paiement')
-        .replace(/Imo Nord Togo[^<]*/u, value => {
-          const date = value.match(/\d{2}\/\d{2}\/\d{4}/)?.[0];
-          return date ? `Imo Nord Togo - ${date}` : 'Imo Nord Togo';
-        });
-
-      const { uri } = await PrintModule.printToFileAsync({ html: normalizedHtml });
+      const { uri } = await PrintModule.printToFileAsync({ html });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
       } else {
-        await Share.share({ message: 'Recu de paiement', url: uri });
+        await Share.share({ message: tAdmin("Reçu de paiement"), url: uri });
       }
     } catch {
-      Alert.alert('Erreur', "Impossible de générer le reçu PDF.");
+      Alert.alert(tAdmin("Erreur"), tAdmin("Impossible de générer le reçu PDF."));
     }
   };
 
@@ -658,13 +662,12 @@ const AdminScreen: React.FC = () => {
         });
         throw new Error(`Upload failed: ${uploadResult.status}`);
       }
-      const { data: publicUrl } = supabase.storage.from('tenant-documents').getPublicUrl(path);
       const { data: docRow, error: docError } = await supabase
         .from('tenant_documents')
         .insert({
           tenant_id: tenant.id,
           type: docType,
-          url: publicUrl.publicUrl,
+          url: path,
         })
         .select()
         .single();
@@ -678,9 +681,9 @@ const AdminScreen: React.FC = () => {
           createdAt: docRow.created_at ?? new Date().toISOString(),
         });
       }
-      Alert.alert('Succes', 'Document ajoute.');
+      Alert.alert(tAdmin("Succes"), tAdmin("Document ajoute."));
     } catch (err) {
-      Alert.alert('Erreur', "Impossible d'ajouter le document.");
+      Alert.alert(tAdmin("Erreur"), tAdmin("Impossible d'ajouter le document."));
     } finally {
       setUploadingTenantDocId(null);
     }
@@ -689,7 +692,7 @@ const AdminScreen: React.FC = () => {
   const handleSaveClient = () => {
     if (!editingClientId) return;
     if (!clientForm.name.trim() || !clientForm.phone.trim()) {
-      Alert.alert('Erreur', 'Nom et tlphone sont obligatoires');
+      Alert.alert(tAdmin("Erreur"), tAdmin("Nom et tlphone sont obligatoires"));
       return;
     }
     updateClient(editingClientId, {
@@ -697,7 +700,7 @@ const AdminScreen: React.FC = () => {
       email: clientForm.email.trim(),
       phone: clientForm.phone.trim(),
     });
-    Alert.alert('Succes', 'Locataire modifie avec succes.');
+    Alert.alert(tAdmin("Succes"), tAdmin("Locataire modifie avec succes."));
     closeClientModal();
   };
 
@@ -720,7 +723,7 @@ const AdminScreen: React.FC = () => {
   const handleSaveUser = () => {
     if (!editingUserId) return;
     if (!userForm.name.trim() || !userForm.phone.trim()) {
-      Alert.alert('Erreur', 'Nom et tlphone sont obligatoires');
+      Alert.alert(tAdmin("Erreur"), tAdmin("Nom et tlphone sont obligatoires"));
       return;
     }
     updateUser(editingUserId, {
@@ -728,20 +731,20 @@ const AdminScreen: React.FC = () => {
       email: userForm.email.trim(),
       phone: userForm.phone.trim(),
     });
-    Alert.alert('Succes', 'Compte modifie avec succes.');
+    Alert.alert(tAdmin("Succes"), tAdmin("Compte modifie avec succes."));
     closeUserModal();
   };
 
   const handleAddNeighborhood = () => {
     if (!newNeighborhood.trim()) {
-      Alert.alert('Erreur', 'Entrez un nom de quartier.');
+      Alert.alert(tAdmin("Erreur"), tAdmin("Entrez un nom de quartier."));
       return;
     }
     const exists = neighborhoods.some(
       name => name.toLowerCase() === newNeighborhood.trim().toLowerCase()
     );
     if (exists) {
-      Alert.alert('Erreur', 'Ce quartier existe deja.');
+      Alert.alert(tAdmin("Erreur"), tAdmin("Ce quartier existe deja."));
       return;
     }
     addNeighborhood(newNeighborhood);
@@ -754,17 +757,17 @@ const AdminScreen: React.FC = () => {
     ).length;
     if (usageCount > 0) {
       Alert.alert(
-        'Quartier utilise',
-        `Ce quartier est utilise par ${usageCount} bien(s). Deplacez-les avant suppression.`
+        tAdmin("Quartier utilise"),
+        tAdmin("Ce quartier est utilise par {count} bien(s). Deplacez-les avant suppression.").replace('{count}', String(usageCount))
       );
       return;
     }
     Alert.alert(
-      'Supprimer le quartier',
-      `Supprimer "${name}" ?`,
+      tAdmin("Supprimer le quartier"),
+      tAdmin("Supprimer \"{name}\" ?").replace('{name}', name),
       [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Supprimer', style: 'destructive', onPress: () => removeNeighborhood(name) },
+        { text: tAdmin("Annuler"), style: 'cancel' },
+        { text: tAdmin("Supprimer"), style: 'destructive', onPress: () => removeNeighborhood(name) },
       ]
     );
   };
@@ -787,19 +790,16 @@ const AdminScreen: React.FC = () => {
     if (neighborhoodSaving) return;
     const cleaned = neighborhoodEditValue.trim();
     if (!cleaned) {
-      Alert.alert('Erreur', 'Entrez un nom de quartier.');
+      Alert.alert(tAdmin("Erreur"), tAdmin("Entrez un nom de quartier."));
       return;
     }
     try {
       setNeighborhoodSaving(true);
       await updateNeighborhood(editingNeighborhoodName, cleaned);
-      Alert.alert('Succes', 'Quartier modifie avec succes.');
+      Alert.alert(tAdmin("Succes"), tAdmin("Quartier modifie avec succes."));
       closeEditNeighborhood();
-    } catch (error) {
-      const message = error instanceof Error && error.message
-        ? error.message
-        : "Impossible de modifier le quartier.";
-      Alert.alert('Erreur', message);
+    } catch {
+      Alert.alert(tAdmin("Erreur"), tAdmin("Impossible de modifier le quartier."));
     } finally {
       setNeighborhoodSaving(false);
     }
@@ -857,9 +857,9 @@ const AdminScreen: React.FC = () => {
       <View style={[styles.container, styles.gateContainer]}>
         <View style={styles.gateCard}>
           <Ionicons name="lock-closed" size={28} color={theme.accent} />
-          <Text style={styles.gateTitle}>Accès réservé</Text>
+          <Text style={styles.gateTitle}>{tAdmin("Accès réservé")}</Text>
           <Text style={styles.gateSubtitle}>
-            Connectez-vous avec un compte administrateur pour accéder au back-office.
+            {tAdmin("Connectez-vous avec un compte administrateur pour accéder au back-office.")}
           </Text>
         </View>
       </View>
@@ -893,25 +893,25 @@ const AdminScreen: React.FC = () => {
   };
 
   const searchScopes: { label: string; value: SearchScope }[] = [
-    { label: 'Tout', value: 'ALL' },
-    { label: 'Annonces', value: 'PROPERTIES' },
-    { label: 'Locataires', value: 'CLIENTS' },
-    { label: 'Contrats', value: 'CONTRACTS' },
-    { label: 'Paiements', value: 'TRANSACTIONS' },
+    { label: tAdmin("Tout"), value: 'ALL' },
+    { label: tAdmin("Annonces"), value: 'PROPERTIES' },
+    { label: tAdmin("Locataires"), value: 'CLIENTS' },
+    { label: tAdmin("Contrats"), value: 'CONTRACTS' },
+    { label: tAdmin("Paiements"), value: 'TRANSACTIONS' },
   ];
 
   const getStatusLabel = (property: Property) => {
-    if (property.status === 'available') return 'Disponible';
-    if (property.status === 'occupied') return 'Occupé';
-    return property.status;
+    if (property.status === 'available') return tAdmin("Disponible");
+    if (property.status === 'occupied') return tAdmin("Occupé");
+    return tAdmin("Disponible");
   };
 
   const getListingLabel = (status?: ListingStatus) => {
-    if (status === 'pending') return 'En attente';
-    if (status === 'approved') return 'Approuvé';
-    if (status === 'rejected') return 'Refusé';
-    if (status === 'archived') return 'Archivé';
-    return status ?? 'Approuvé';
+    if (status === 'pending') return tAdmin("En attente");
+    if (status === 'approved') return tAdmin("Approuvé");
+    if (status === 'rejected') return tAdmin("Refusé");
+    if (status === 'archived') return tAdmin("Archivé");
+    return tAdmin("Approuvé");
   };
 
   const logAdminAction = async (
@@ -1003,11 +1003,13 @@ const AdminScreen: React.FC = () => {
 
   const confirmSold = (property: Property) => {
     Alert.alert(
-      'Confirmer occupation',
-      `Marquer "${property.title}" comme Occupé ?`,
+      tAdmin("Confirmer occupation"),
+      tAdmin('Marquer "{title}" comme {status} ?')
+        .replace('{title}', property.title)
+        .replace('{status}', tAdmin('Occupé')),
       [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Occupé', style: 'destructive', onPress: () => handleAvailability(property, 'occupied') },
+        { text: tAdmin("Annuler"), style: 'cancel' },
+        { text: tAdmin('Occupé'), style: 'destructive', onPress: () => handleAvailability(property, 'occupied') },
       ]
     );
   };
@@ -1077,14 +1079,14 @@ const AdminScreen: React.FC = () => {
     try {
       await updatePaymentStatus(payment.id, 'paid');
     } catch {
-      Alert.alert('Erreur', "Impossible de mettre a jour le paiement.");
+      Alert.alert(tAdmin("Erreur"), tAdmin("Impossible de mettre a jour le paiement."));
     }
   };
   const handleDispute = async (payment: { id: string }) => {
     try {
       await updatePaymentStatus(payment.id, 'late');
     } catch {
-      Alert.alert('Erreur', "Impossible de mettre a jour le paiement.");
+      Alert.alert(tAdmin("Erreur"), tAdmin("Impossible de mettre a jour le paiement."));
     }
   };
   const handleOpenDocument = (_document: Document) => {};
@@ -1102,11 +1104,11 @@ const AdminScreen: React.FC = () => {
 
   const handleSetupPin = async () => {
     if (pinInput.trim().length < 4) {
-      Alert.alert('PIN invalide', 'Le PIN doit contenir au moins 4 chiffres.');
+      Alert.alert(tAdmin("PIN invalide"), tAdmin("Le PIN doit contenir au moins 4 chiffres."));
       return;
     }
     if (pinInput !== pinConfirm) {
-      Alert.alert('PIN different', 'La confirmation ne correspond pas.');
+      Alert.alert(tAdmin("PIN different"), tAdmin("La confirmation ne correspond pas."));
       return;
     }
     try {
@@ -1115,9 +1117,9 @@ const AdminScreen: React.FC = () => {
       setUnlocked(true);
       setPinInput('');
       setPinConfirm('');
-      Alert.alert('Succes', 'PIN Admin enregistre.');
+      Alert.alert(tAdmin("Succes"), tAdmin("PIN Admin enregistre."));
     } catch {
-      Alert.alert('Erreur', "Impossible d'enregistrer le PIN sur cet appareil.");
+      Alert.alert(tAdmin("Erreur"), tAdmin("Impossible d'enregistrer le PIN sur cet appareil."));
     }
   };
 
@@ -1127,7 +1129,7 @@ const AdminScreen: React.FC = () => {
       setUnlocked(true);
       setPinInput('');
     } else {
-      Alert.alert('Acces refuse', 'PIN incorrect.');
+      Alert.alert(tAdmin("Acces refuse"), tAdmin("PIN incorrect."));
     }
   };
 
@@ -1153,14 +1155,14 @@ const AdminScreen: React.FC = () => {
       const shareAvailable = await Sharing.isAvailableAsync();
       if (shareAvailable) {
         await Sharing.shareAsync(uri, {
-          dialogTitle: 'Exporter le backup',
+          dialogTitle: tAdmin("Exporter le backup"),
           mimeType: 'application/json',
         });
       } else {
         await Share.share({ message: json });
       }
     } catch {
-      Alert.alert('Erreur', "Impossible d'exporter le backup.");
+      Alert.alert(tAdmin("Erreur"), tAdmin("Impossible d'exporter le backup."));
     }
   };
 
@@ -1179,7 +1181,7 @@ const AdminScreen: React.FC = () => {
 
       const picked = result.assets?.[0];
       if (!picked?.uri) {
-        Alert.alert('Erreur', 'Fichier non support.');
+        Alert.alert(tAdmin("Erreur"), tAdmin("Fichier non support."));
         return;
       }
 
@@ -1189,27 +1191,27 @@ const AdminScreen: React.FC = () => {
       const parsed = JSON.parse(content);
 
       if (!isValidBackup(parsed)) {
-        Alert.alert('Backup invalide', 'Le fichier ne contient pas les donnes attendues.');
+        Alert.alert(tAdmin("Backup invalide"), tAdmin("Le fichier ne contient pas les donnes attendues."));
         return;
       }
 
       Alert.alert(
-        'Importer backup',
-        "Cette action remplacera les donnes actuelles. Continuer ?",
+        tAdmin("Importer backup"),
+        tAdmin("Cette action remplacera les donnes actuelles. Continuer ?"),
         [
-          { text: 'Annuler', style: 'cancel' },
+          { text: tAdmin("Annuler"), style: 'cancel' },
           {
-            text: 'Importer',
+            text: tAdmin("Importer"),
             style: 'destructive',
             onPress: () => {
               replaceData({ properties: parsed.properties, clients: parsed.clients });
-              Alert.alert('Succes', 'Backup importe.');
+              Alert.alert(tAdmin("Succes"), tAdmin("Backup importe."));
             },
           },
         ]
       );
     } catch {
-      Alert.alert('Erreur', "Impossible d'importer le backup.");
+      Alert.alert(tAdmin("Erreur"), tAdmin("Impossible d'importer le backup."));
     }
   };
 
@@ -1217,12 +1219,12 @@ const AdminScreen: React.FC = () => {
     try {
       const remaining = MAX_PROPERTY_IMAGES - draftImages.length;
       if (remaining <= 0) {
-        Alert.alert('Limite atteinte', `Maximum ${MAX_PROPERTY_IMAGES} images par bien.`);
+        Alert.alert(tAdmin("Limite atteinte"), tAdmin("Maximum {count} images par bien.").replace('{count}', String(MAX_PROPERTY_IMAGES)));
         return;
       }
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Permission requise', "Autorisez l'acces aux photos pour choisir une image.");
+        Alert.alert(tAdmin("Permission requise"), tAdmin("Autorisez l'acces aux photos pour choisir une image."));
         return;
       }
 
@@ -1242,7 +1244,7 @@ const AdminScreen: React.FC = () => {
         setDraftImages(prev => [...uris, ...prev].slice(0, MAX_PROPERTY_IMAGES));
       }
     } catch {
-      Alert.alert('Erreur', "Impossible d'ouvrir la galerie.");
+      Alert.alert(tAdmin("Erreur"), tAdmin("Impossible d'ouvrir la galerie."));
     }
   };
 
@@ -1250,12 +1252,12 @@ const AdminScreen: React.FC = () => {
     try {
       const remaining = MAX_PROPERTY_IMAGES - draftImages.length;
       if (remaining <= 0) {
-        Alert.alert('Limite atteinte', `Maximum ${MAX_PROPERTY_IMAGES} images par bien.`);
+        Alert.alert(tAdmin("Limite atteinte"), tAdmin("Maximum {count} images par bien.").replace('{count}', String(MAX_PROPERTY_IMAGES)));
         return;
       }
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Permission requise', 'Autorisez la camra pour prendre une photo.');
+        Alert.alert(tAdmin("Permission requise"), tAdmin("Autorisez la camra pour prendre une photo."));
         return;
       }
 
@@ -1267,13 +1269,13 @@ const AdminScreen: React.FC = () => {
       const uri = result.assets?.[0]?.uri;
       if (uri) setDraftImages(prev => [uri, ...prev].slice(0, MAX_PROPERTY_IMAGES));
     } catch {
-      Alert.alert('Erreur', "Impossible d'ouvrir la camra.");
+      Alert.alert(tAdmin("Erreur"), tAdmin("Impossible d'ouvrir la camra."));
     }
   };
 
   const handleAddProperty = async () => {
     if (draftImages.length > MAX_PROPERTY_IMAGES) {
-      Alert.alert('Erreur', `Maximum ${MAX_PROPERTY_IMAGES} images par bien.`);
+      Alert.alert(tAdmin("Erreur"), tAdmin("Maximum {count} images par bien.").replace('{count}', String(MAX_PROPERTY_IMAGES)));
       return;
     }
     const priceValue = parseInt(formData.price, 10);
@@ -1284,12 +1286,12 @@ const AdminScreen: React.FC = () => {
       !formData.location.trim() ||
       !formData.clientPhone.trim()
     ) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires');
+      Alert.alert(tAdmin("Erreur"), tAdmin("Veuillez remplir tous les champs obligatoires"));
       return;
     }
 
     if (draftImages.length === 0) {
-      Alert.alert('Erreur', 'Ajoutez au moins une photo pour publier cette annonce.');
+      Alert.alert(tAdmin("Erreur"), tAdmin("Ajoutez au moins une photo pour publier cette annonce."));
       return;
     }
 
@@ -1326,7 +1328,7 @@ const AdminScreen: React.FC = () => {
         title: formData.title.trim(),
       });
 
-      Alert.alert('Succes', 'Annonce modifiee avec succes.');
+      Alert.alert(tAdmin("Succes"), tAdmin("Annonce modifiee avec succes."));
     } else {
       const created = await addProperty({
         title: formData.title.trim(),
@@ -1354,7 +1356,7 @@ const AdminScreen: React.FC = () => {
       });
       logAdminAction('create', 'property', created.id, { title: created.title });
 
-      Alert.alert('Succes', 'Annonce ajoutee avec succes.');
+      Alert.alert(tAdmin("Succes"), tAdmin("Annonce ajoutee avec succes."));
     }
 
     closePropertyModal();
@@ -1362,11 +1364,11 @@ const AdminScreen: React.FC = () => {
   };
   const handleDeleteProperty = (id: string, title: string) => {
     Alert.alert(
-      'Confirmer la suppression',
-      `Voulez-vous vraiment supprimer "${title}"?`,
+      tAdmin("Confirmer la suppression"),
+      tAdmin("Voulez-vous vraiment supprimer \"{title}\"?").replace('{title}', title),
       [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Supprimer', style: 'destructive', onPress: async () => {
+        { text: tAdmin("Annuler"), style: 'cancel' },
+        { text: tAdmin("Supprimer"), style: 'destructive', onPress: async () => {
           await deleteProperty(id);
           logAdminAction('delete', 'property', id, { title });
         } },
@@ -1390,24 +1392,24 @@ const AdminScreen: React.FC = () => {
         <View style={styles.overviewCard}>
           <View style={styles.overviewHeader}>
             <View>
-              <Text style={styles.overviewTitle}>Vue rapide</Text>
-              <Text style={styles.overviewSubtitle}>Alertes prioritaires du jour</Text>
+              <Text style={styles.overviewTitle}>{tAdmin("Vue rapide")}</Text>
+              <Text style={styles.overviewSubtitle}>{tAdmin("Alertes prioritaires du jour")}</Text>
             </View>
             <View style={styles.overviewBadge}>
-              <Text style={styles.overviewBadgeText}>Live</Text>
+              <Text style={styles.overviewBadgeText}>{tAdmin("Live")}</Text>
             </View>
           </View>
           <View style={styles.overviewGrid}>
             <View style={styles.overviewItem}>
-              <Text style={styles.overviewLabel}>Annonces a valider</Text>
+              <Text style={styles.overviewLabel}>{tAdmin("Annonces a valider")}</Text>
               <Text style={styles.overviewValue}>{pendingListings}</Text>
             </View>
             <View style={styles.overviewItem}>
-              <Text style={styles.overviewLabel}>Messages</Text>
+              <Text style={styles.overviewLabel}>{tAdmin("Messages")}</Text>
               <Text style={styles.overviewValue}>{unreadMessages}</Text>
             </View>
             <View style={styles.overviewItem}>
-              <Text style={styles.overviewLabel}>Paiements en attente</Text>
+              <Text style={styles.overviewLabel}>{tAdmin("Paiements en attente")}</Text>
               <Text style={styles.overviewValue}>{pendingTransactions}</Text>
             </View>
           </View>
@@ -1416,17 +1418,17 @@ const AdminScreen: React.FC = () => {
       {/* Backup */}
       <View style={styles.backupCard}>
         <View style={styles.backupHeader}>
-          <Text style={styles.backupTitle}>Sauvegarde</Text>
-          <Text style={styles.backupSub}>Exporter / importer les donnees</Text>
+          <Text style={styles.backupTitle}>{tAdmin("Sauvegarde")}</Text>
+          <Text style={styles.backupSub}>{tAdmin("Exporter / importer les donnees")}</Text>
         </View>
         <View style={styles.backupActions}>
           <TouchableOpacity style={styles.backupButton} onPress={handleExportBackup}>
             <Ionicons name="download" size={18} color="#fff" />
-            <Text style={styles.backupButtonText}>Exporter</Text>
+            <Text style={styles.backupButtonText}>{tAdmin("Exporter")}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.backupButtonSecondary} onPress={handleImportBackup}>
             <Ionicons name="cloud-upload" size={18} color={theme.accentText} />
-            <Text style={styles.backupButtonTextSecondary}>Importer</Text>
+            <Text style={styles.backupButtonTextSecondary}>{tAdmin("Importer")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1438,7 +1440,7 @@ const AdminScreen: React.FC = () => {
           onPress={() => setActiveTab('neighborhoods')}
         >
           <Ionicons name="location" size={16} color={theme.accentText} />
-          <Text style={styles.quickLinkText}>Gerer quartiers</Text>
+          <Text style={styles.quickLinkText}>{tAdmin("Gerer quartiers")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -1455,10 +1457,10 @@ const AdminScreen: React.FC = () => {
             <View style={[styles.statIconWrap, { backgroundColor: theme.accentSoft }]}>
               <Ionicons name="home" size={16} color={theme.accentText} />
             </View>
-            <Text style={styles.statMeta}>Inventaire</Text>
+            <Text style={styles.statMeta}>{tAdmin("Inventaire")}</Text>
           </View>
           <Text style={styles.statNumber}>{stats.totalProperties}</Text>
-          <Text style={styles.statLabel}>Biens</Text>
+          <Text style={styles.statLabel}>{tAdmin("Biens")}</Text>
         </View>
 
         <View style={[styles.statCard, styles.cardElevated]}>
@@ -1467,10 +1469,10 @@ const AdminScreen: React.FC = () => {
             <View style={[styles.statIconWrap, { backgroundColor: theme.infoSoft }]}>
               <Ionicons name="people" size={16} color={theme.info} />
             </View>
-            <Text style={styles.statMeta}>Base locataires</Text>
+            <Text style={styles.statMeta}>{tAdmin("Base locataires")}</Text>
           </View>
           <Text style={styles.statNumber}>{stats.totalClients}</Text>
-          <Text style={styles.statLabel}>Locataires</Text>
+          <Text style={styles.statLabel}>{tAdmin("Locataires")}</Text>
         </View>
 
         <View style={[styles.statCard, styles.cardElevated]}>
@@ -1479,10 +1481,10 @@ const AdminScreen: React.FC = () => {
             <View style={[styles.statIconWrap, { backgroundColor: theme.surfaceAlt }]}>
               <Ionicons name="people-circle" size={16} color={theme.text} />
             </View>
-            <Text style={styles.statMeta}>Audience</Text>
+            <Text style={styles.statMeta}>{tAdmin("Audience")}</Text>
           </View>
           <Text style={styles.statNumber}>{visitorCount}</Text>
-          <Text style={styles.statLabel}>Visiteurs</Text>
+          <Text style={styles.statLabel}>{tAdmin("Visiteurs")}</Text>
         </View>
 
         <View style={[styles.statCard, styles.cardElevated]}>
@@ -1491,10 +1493,10 @@ const AdminScreen: React.FC = () => {
             <View style={[styles.statIconWrap, { backgroundColor: theme.warningSoft }]}>
               <Ionicons name="time" size={16} color={theme.warning} />
             </View>
-            <Text style={styles.statMeta}>Backlog</Text>
+            <Text style={styles.statMeta}>{tAdmin("Backlog")}</Text>
           </View>
           <Text style={styles.statNumber}>{stats.pendingProperties}</Text>
-          <Text style={styles.statLabel}>En attente</Text>
+          <Text style={styles.statLabel}>{tAdmin("En attente")}</Text>
         </View>
 
         <View style={[styles.statCard, styles.cardElevated]}>
@@ -1503,24 +1505,24 @@ const AdminScreen: React.FC = () => {
             <View style={[styles.statIconWrap, { backgroundColor: theme.surfaceAlt }]}>
               <Ionicons name="checkmark-circle" size={16} color={theme.text} />
             </View>
-            <Text style={styles.statMeta}>Clotures</Text>
+            <Text style={styles.statMeta}>{tAdmin("Clotures")}</Text>
           </View>
           <Text style={styles.statNumber}>{stats.soldProperties}</Text>
-          <Text style={styles.statLabel}>Vendus/Loues</Text>
+          <Text style={styles.statLabel}>{tAdmin("Vendus/Loues")}</Text>
         </View>
       </ScrollView>
 
       {/* Value Card */}
       <View style={styles.valueCard}>
-        <Text style={styles.valueLabel}>Valeur totale du portefeuille</Text>
+        <Text style={styles.valueLabel}>{tAdmin("Valeur totale du portefeuille")}</Text>
         <Text style={styles.valueAmount}>{formatPrice(stats.totalValue)}</Text>
       </View>
 
       {/* Properties by Type */}
       <View style={styles.sectionHeaderRow}>
         <View>
-          <Text style={styles.sectionTitle}>Repartition par type</Text>
-          <Text style={styles.sectionSubtitle}>Lecture rapide du mix d'annonces.</Text>
+          <Text style={styles.sectionTitle}>{tAdmin("Repartition par type")}</Text>
+          <Text style={styles.sectionSubtitle}>{tAdmin("Lecture rapide du mix d'annonces.")}</Text>
         </View>
       </View>
       <View style={styles.typeBreakdown}>
@@ -1528,7 +1530,7 @@ const AdminScreen: React.FC = () => {
           <View key={item.type} style={styles.typeRow}>
             <View style={styles.typeInfo}>
               <View style={[styles.typeDot, { backgroundColor: PROPERTY_TYPE_COLORS[item.type] }]} />
-              <Text style={styles.typeName}>{PROPERTY_TYPE_LABELS[item.type]}</Text>
+              <Text style={styles.typeName}>{tType(item.type)}</Text>
             </View>
             <View style={styles.typeBar}>
               <View
@@ -1549,12 +1551,12 @@ const AdminScreen: React.FC = () => {
       {/* Recent Activity */}
       <View style={styles.sectionHeaderRow}>
         <View>
-          <Text style={styles.sectionTitle}>Activite recente</Text>
-          <Text style={styles.sectionSubtitle}>Dernieres actions sur les annonces.</Text>
+          <Text style={styles.sectionTitle}>{tAdmin("Activite recente")}</Text>
+          <Text style={styles.sectionSubtitle}>{tAdmin("Dernieres actions sur les annonces.")}</Text>
         </View>
         {properties.length > recentProperties.length && (
           <TouchableOpacity onPress={() => setActiveTab('properties')}>
-            <Text style={styles.sectionLink}>Voir tout</Text>
+            <Text style={styles.sectionLink}>{tAdmin("Voir tout")}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -1567,9 +1569,7 @@ const AdminScreen: React.FC = () => {
             <Text style={styles.activityTitle} numberOfLines={1}>{property.title}</Text>
             <Text style={styles.activitySubtitle}>{formatPrice(property.price)}</Text>
           </View>
-          <Text style={styles.activityDate}>
-            {new Date(property.createdAt).toLocaleDateString('fr-FR')}
-          </Text>
+          <Text style={styles.activityDate}>{formatAdminDate(property.createdAt)}</Text>
         </View>
       ))}
       </ScrollView>
@@ -1604,8 +1604,8 @@ const AdminScreen: React.FC = () => {
       <View>
         <View style={styles.sectionHeaderRow}>
           <View>
-            <Text style={styles.sectionTitle}>Annonces</Text>
-            <Text style={styles.sectionSubtitle}>Validation, priorite et qualite.</Text>
+            <Text style={styles.sectionTitle}>{tAdmin("Annonces")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Validation, priorite et qualite.")}</Text>
           </View>
           <View style={styles.sectionCount}>
             <Text style={styles.sectionCountText}>{searchedProperties.length}</Text>
@@ -1628,9 +1628,9 @@ const AdminScreen: React.FC = () => {
                 ]}
               >
                 {status === 'ALL'
-                  ? 'Tous'
+                  ? tAdmin("Tous")
                   : status === 'available'
-                  ? 'Disponibles'
+                  ? tAdmin("Disponibles")
                   : 'Occupés'}
               </Text>
             </TouchableOpacity>
@@ -1653,14 +1653,14 @@ const AdminScreen: React.FC = () => {
                 ]}
               >
                 {status === 'ALL'
-                  ? 'Validation'
+                  ? tAdmin("Validation")
                   : status === 'pending'
-                  ? 'En attente'
+                  ? tAdmin("En attente")
                   : status === 'approved'
-                  ? 'Approuvé'
+                  ? tAdmin("Approuvé")
                   : status === 'rejected'
-                  ? 'Refusé'
-                  : 'Archivé'}
+                  ? tAdmin("Refusé")
+                  : tAdmin("Archivé")}
               </Text>
             </TouchableOpacity>
           ))}
@@ -1676,12 +1676,12 @@ const AdminScreen: React.FC = () => {
               color={featuredOnly ? theme.warning : theme.textMuted}
             />
             <Text style={[styles.filterToggleText, featuredOnly && styles.filterToggleTextActive]}>
-              Vedette
+              {tAdmin("Vedette")}
             </Text>
           </TouchableOpacity>
         </View>
         {searchedProperties.length === 0 && (
-          <Text style={styles.emptyText}>Aucune annonce pour ce filtre.</Text>
+          <Text style={styles.emptyText}>{tAdmin("Aucune annonce pour ce filtre.")}</Text>
         )}
       </View>
     );
@@ -1695,7 +1695,7 @@ const AdminScreen: React.FC = () => {
         ListFooterComponent={
           hasMoreProperties ? (
             <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('properties')}>
-              <Text style={styles.loadMoreText}>Charger plus</Text>
+              <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
             </TouchableOpacity>
           ) : null
         }
@@ -1718,14 +1718,14 @@ const AdminScreen: React.FC = () => {
                 {property.featured ? (
                   <View style={styles.featuredBadge}>
                     <Ionicons name="star" size={12} color={theme.warning} />
-                    <Text style={styles.featuredBadgeText}>Vedette</Text>
+                    <Text style={styles.featuredBadgeText}>{tAdmin("Vedette")}</Text>
                   </View>
                 ) : null}
               </View>
 
               <View style={styles.propertyHeaderRow}>
                 <View style={[styles.propertyTypeBadge, { backgroundColor: PROPERTY_TYPE_COLORS[property.type] }]}>
-                  <Text style={styles.propertyTypeText}>{PROPERTY_TYPE_LABELS[property.type]}</Text>
+                  <Text style={styles.propertyTypeText}>{tType(property.type)}</Text>
                 </View>
                 <View style={styles.statusStack}>
                   <View
@@ -1759,7 +1759,7 @@ const AdminScreen: React.FC = () => {
 
               <View style={styles.actionGrid}>
                 <ActionButton
-                  label="VIP"
+                  label={tAdmin("VIP")}
                   icon={property.featured ? 'star' : 'star-outline'}
                   onPress={() => handleToggleFeatured(property)}
                   style={property.featured ? styles.actionVipActive : styles.actionVip}
@@ -1767,7 +1767,7 @@ const AdminScreen: React.FC = () => {
                 />
                 {listingStatus !== 'approved' && (
                   <ActionButton
-                    label="Valider"
+                    label={tAdmin("Valider")}
                     icon="checkmark-circle"
                     onPress={() => handleSetListingStatus(property, 'approved')}
                     style={styles.actionApprove}
@@ -1776,7 +1776,7 @@ const AdminScreen: React.FC = () => {
                 )}
                 {listingStatus !== 'rejected' && (
                   <ActionButton
-                    label="Refuser"
+                    label={tAdmin("Refuser")}
                     icon="close-circle"
                     onPress={() => handleSetListingStatus(property, 'rejected')}
                     style={styles.actionReject}
@@ -1785,7 +1785,7 @@ const AdminScreen: React.FC = () => {
                 )}
                 {listingStatus !== 'archived' && (
                   <ActionButton
-                    label="Archiver"
+                    label={tAdmin("Archiver")}
                     icon="archive"
                     onPress={() => handleSetListingStatus(property, 'archived')}
                     style={styles.actionArchive}
@@ -1793,7 +1793,7 @@ const AdminScreen: React.FC = () => {
                   />
                 )}
                 <ActionButton
-                  label="Editer"
+                  label={tAdmin("Editer")}
                   icon="create-outline"
                   onPress={() => openEditPropertyModal(property)}
                   style={styles.actionEdit}
@@ -1801,7 +1801,7 @@ const AdminScreen: React.FC = () => {
                 />
                 {property.status !== 'available' && (
                   <ActionButton
-                    label="Disponible"
+                    label={tAdmin("Disponible")}
                     icon="checkmark"
                     onPress={() => handleAvailability(property, 'available')}
                     style={styles.actionApprove}
@@ -1810,7 +1810,7 @@ const AdminScreen: React.FC = () => {
                 )}
                 {property.status !== 'occupied' && (
                   <ActionButton
-                    label="Occupé"
+                    label={tAdmin("Occupé")}
                     icon="key-outline"
                     onPress={() => confirmSold(property)}
                     style={styles.actionSold}
@@ -1818,7 +1818,7 @@ const AdminScreen: React.FC = () => {
                   />
                 )}
                 <ActionButton
-                  label="Supprimer"
+                  label={tAdmin("Supprimer")}
                   icon="trash"
                   onPress={() => handleDeleteProperty(property.id, property.title)}
                   style={styles.actionDelete}
@@ -1847,8 +1847,8 @@ const AdminScreen: React.FC = () => {
     const listHeader = (
       <View style={styles.sectionHeaderRow}>
         <View>
-          <Text style={styles.sectionTitle}>Locataires</Text>
-          <Text style={styles.sectionSubtitle}>Contacts et contrats en cours.</Text>
+          <Text style={styles.sectionTitle}>{tAdmin("Locataires")}</Text>
+          <Text style={styles.sectionSubtitle}>{tAdmin("Contacts et contrats en cours.")}</Text>
         </View>
         <View style={styles.sectionCount}>
           <Text style={styles.sectionCountText}>{filteredClients.length}</Text>
@@ -1865,7 +1865,7 @@ const AdminScreen: React.FC = () => {
         ListFooterComponent={
           hasMoreClients ? (
             <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('clients')}>
-              <Text style={styles.loadMoreText}>Charger plus</Text>
+              <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
             </TouchableOpacity>
           ) : null
         }
@@ -1881,7 +1881,7 @@ const AdminScreen: React.FC = () => {
             </View>
             <View style={styles.clientStats}>
               <Text style={styles.clientPropertyCount}>
-                {contractCountByTenant.get(client.id) ?? 0} contrats
+                {contractCountByTenant.get(client.id) ?? 0} {tAdmin("Contrats").toLowerCase()}
               </Text>
               <TouchableOpacity
                 style={styles.clientEditButton}
@@ -1927,8 +1927,8 @@ const AdminScreen: React.FC = () => {
     const listHeader = (
       <View style={styles.sectionHeaderRow}>
         <View>
-          <Text style={styles.sectionTitle}>Comptes</Text>
-          <Text style={styles.sectionSubtitle}>Verification et acces utilisateurs.</Text>
+          <Text style={styles.sectionTitle}>{tAdmin("Comptes")}</Text>
+          <Text style={styles.sectionSubtitle}>{tAdmin("Verification et acces utilisateurs.")}</Text>
         </View>
         <View style={styles.sectionCount}>
           <Text style={styles.sectionCountText}>{filteredUsers.length}</Text>
@@ -1942,11 +1942,11 @@ const AdminScreen: React.FC = () => {
         data={visibleUsers}
         keyExtractor={item => item.id}
         ListHeaderComponent={listHeader}
-        ListEmptyComponent={<Text style={styles.emptyText}>Aucun compte pour le moment.</Text>}
+        ListEmptyComponent={<Text style={styles.emptyText}>{tAdmin("Aucun compte pour le moment.")}</Text>}
         ListFooterComponent={
           hasMoreUsers ? (
             <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('users')}>
-              <Text style={styles.loadMoreText}>Charger plus</Text>
+              <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
             </TouchableOpacity>
           ) : null
         }
@@ -1991,7 +1991,7 @@ const AdminScreen: React.FC = () => {
                   styles.accountVerifyText,
                   user.verified && { color: theme.textMuted },
                 ]}>
-                  {user.verified ? 'Retirer' : 'Verifier'}
+                  {user.verified ? tAdmin("Retirer") : tAdmin("Verifier")}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -2012,15 +2012,15 @@ const AdminScreen: React.FC = () => {
       ? neighborhoods.filter(name => includesQuery(name))
       : neighborhoods;
     const sortedNeighborhoods = [...filteredNeighborhoods].sort((a, b) =>
-      a.localeCompare(b, 'fr', { sensitivity: 'base' })
+        a.localeCompare(b, language === 'en' ? 'en' : 'fr', { sensitivity: 'base' })
     );
 
       return (
         <ScrollView style={styles.tabContent} keyboardShouldPersistTaps="handled">
         <View style={styles.sectionHeaderRow}>
           <View>
-            <Text style={styles.sectionTitle}>Quartiers</Text>
-            <Text style={styles.sectionSubtitle}>Zones principales de publication.</Text>
+            <Text style={styles.sectionTitle}>{tAdmin("Quartiers")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Zones principales de publication.")}</Text>
           </View>
           <View style={styles.sectionCount}>
             <Text style={styles.sectionCountText}>{filteredNeighborhoods.length}</Text>
@@ -2031,7 +2031,7 @@ const AdminScreen: React.FC = () => {
             style={[styles.input, styles.neighborhoodInput]}
             value={newNeighborhood}
             onChangeText={setNewNeighborhood}
-            placeholder="Ajouter un quartier"
+            placeholder={tAdmin("Ajouter un quartier")}
             placeholderTextColor={theme.textSoft}
           />
           <TouchableOpacity style={styles.neighborhoodAddButton} onPress={handleAddNeighborhood}>
@@ -2041,7 +2041,7 @@ const AdminScreen: React.FC = () => {
 
         <View style={styles.neighborhoodList}>
           {sortedNeighborhoods.length === 0 && (
-            <Text style={styles.emptyText}>Aucun quartier pour le moment.</Text>
+            <Text style={styles.emptyText}>{tAdmin("Aucun quartier pour le moment.")}</Text>
           )}
             {sortedNeighborhoods.map(name => {
               const count = properties.filter(
@@ -2102,22 +2102,22 @@ const AdminScreen: React.FC = () => {
       <ScrollView style={styles.tabContent}>
         <View style={styles.sectionHeaderRow}>
           <View>
-            <Text style={styles.sectionTitle}>Signalements</Text>
-            <Text style={styles.sectionSubtitle}>Moderation et alertes fraude.</Text>
+            <Text style={styles.sectionTitle}>{tAdmin("Signalements")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Moderation et alertes fraude.")}</Text>
           </View>
           <View style={styles.sectionCount}>
             <Text style={styles.sectionCountText}>{filteredReports.length}</Text>
           </View>
         </View>
         {filteredReports.length === 0 ? (
-          <Text style={styles.emptyText}>Aucun signalement pour le moment.</Text>
+          <Text style={styles.emptyText}>{tAdmin("Aucun signalement pour le moment.")}</Text>
         ) : (
           visibleReports.map(report => {
             const property = properties.find(p => p.id === report.propertyId);
             return (
               <View key={report.id} style={styles.reportCard}>
                 <View style={styles.reportHeader}>
-                  <Text style={styles.reportTitle}>{property?.title || 'Annonce supprimee'}</Text>
+                  <Text style={styles.reportTitle}>{property?.title || tAdmin("Annonce supprimee")}</Text>
                   <View
                     style={[
                       styles.reportStatus,
@@ -2125,21 +2125,21 @@ const AdminScreen: React.FC = () => {
                     ]}
                   >
                     <Text style={styles.reportStatusText}>
-                      {report.status === 'OPEN' ? 'Ouvert' : 'Resolue'}
+                      {report.status === 'OPEN' ? tAdmin("Ouvert") : tAdmin("Resolue")}
                     </Text>
                   </View>
                 </View>
                 <Text style={styles.reportMeta}>
-                  {[property?.neighborhood, property?.location].filter(Boolean).join(' | ') || 'Localité inconnue'}
+                  {[property?.neighborhood, property?.location].filter(Boolean).join(' | ') || tAdmin("Localité inconnue")}
                 </Text>
                 <Text style={styles.reportReason}>
-                  Raison: {report.reason === 'FRAUD'
-                    ? 'Fraude'
+                  {tAdmin("Raison:")} {report.reason === 'FRAUD'
+                    ? tAdmin("Fraude")
                     : report.reason === 'DUPLICATE'
-                    ? 'Doublon'
+                    ? tAdmin("Doublon")
                     : report.reason === 'INAPPROPRIATE'
-                    ? 'Inapproprie'
-                    : 'Autre'}
+                    ? tAdmin("Inapproprie")
+                    : tAdmin("Autre")}
                 </Text>
                 {report.message ? <Text style={styles.reportMessage}>{report.message}</Text> : null}
                 {report.status === 'OPEN' && (
@@ -2148,7 +2148,7 @@ const AdminScreen: React.FC = () => {
                     onPress={() => resolveReport(report.id)}
                   >
                     <Ionicons name="checkmark" size={16} color={theme.accent} />
-                    <Text style={styles.reportResolveText}>Marquer comme resolu</Text>
+                    <Text style={styles.reportResolveText}>{tAdmin("Marquer comme resolu")}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -2157,7 +2157,7 @@ const AdminScreen: React.FC = () => {
         )}
         {hasMoreReports && (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('reports')}>
-            <Text style={styles.loadMoreText}>Charger plus</Text>
+            <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -2180,15 +2180,15 @@ const AdminScreen: React.FC = () => {
       <ScrollView style={styles.tabContent}>
         <View style={styles.sectionHeaderRow}>
           <View>
-            <Text style={styles.sectionTitle}>Messages</Text>
-            <Text style={styles.sectionSubtitle}>Suivi des conversations en cours.</Text>
+            <Text style={styles.sectionTitle}>{tAdmin("Messages")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Suivi des conversations en cours.")}</Text>
           </View>
           <View style={styles.sectionCount}>
             <Text style={styles.sectionCountText}>{filteredMessages.length}</Text>
           </View>
         </View>
         {filteredMessages.length === 0 ? (
-          <Text style={styles.emptyText}>Aucun message pour le moment.</Text>
+          <Text style={styles.emptyText}>{tAdmin("Aucun message pour le moment.")}</Text>
         ) : (
           visibleMessages.map(message => (
             <View key={message.id} style={styles.infoCard}>
@@ -2196,35 +2196,35 @@ const AdminScreen: React.FC = () => {
                 <Text style={styles.infoTitle} numberOfLines={1}>{message.content}</Text>
                 <View style={[styles.badge, message.read ? styles.badgeMuted : styles.badgeAccent]}>
                   <Text style={[styles.badgeText, message.read ? styles.badgeTextMuted : styles.badgeTextAccent]}>
-                    {message.read ? 'Lu' : 'Non lu'}
+                    {message.read ? tAdmin("Lu") : tAdmin("Non lu")}
                   </Text>
                 </View>
               </View>
               <View style={styles.infoRow}>
                 <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>De: {message.senderId}</Text>
+                  <Text style={styles.metaChipText}>{tAdmin("De:")} {message.senderId}</Text>
                 </View>
                 <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>A: {message.receiverId}</Text>
+                  <Text style={styles.metaChipText}>{tAdmin("A:")} {message.receiverId}</Text>
                 </View>
                 {message.propertyId ? (
                   <View style={styles.metaChip}>
-                    <Text style={styles.metaChipText}>Bien: {message.propertyId}</Text>
+                    <Text style={styles.metaChipText}>{tAdmin("Bien:")} {message.propertyId}</Text>
                   </View>
                 ) : null}
               </View>
               <Text style={styles.infoMeta}>
-                {new Date(message.timestamp).toLocaleString('fr-FR')}
+                {formatAdminDateTime(message.timestamp)}
               </Text>
               <View style={styles.quickActionsRow}>
                 <QuickAction
-                  label="Repondre"
+                  label={tAdmin("Repondre")}
                   icon="chatbubble-ellipses-outline"
                   tone="primary"
                   onPress={() => handleQuickReply(message)}
                 />
                 <QuickAction
-                  label="Clore"
+                  label={tAdmin("Clore")}
                   icon="checkmark-done-outline"
                   onPress={() => handleCloseMessage(message.id)}
                 />
@@ -2234,7 +2234,7 @@ const AdminScreen: React.FC = () => {
         )}
         {hasMoreMessages && (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('messages')}>
-            <Text style={styles.loadMoreText}>Charger plus</Text>
+            <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -2255,40 +2255,40 @@ const AdminScreen: React.FC = () => {
       <ScrollView style={styles.tabContent}>
         <View style={styles.sectionHeaderRow}>
           <View>
-            <Text style={styles.sectionTitle}>Avis</Text>
-            <Text style={styles.sectionSubtitle}>Qualite, confiance et moderation.</Text>
+            <Text style={styles.sectionTitle}>{tAdmin("Avis")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Qualite, confiance et moderation.")}</Text>
           </View>
           <View style={styles.sectionCount}>
             <Text style={styles.sectionCountText}>{filteredReviews.length}</Text>
           </View>
         </View>
         {filteredReviews.length === 0 ? (
-          <Text style={styles.emptyText}>Aucun avis pour le moment.</Text>
+          <Text style={styles.emptyText}>{tAdmin("Aucun avis pour le moment.")}</Text>
         ) : (
           visibleReviews.map(review => (
             <View key={review.id} style={styles.infoCard}>
               <View style={styles.infoHeader}>
-                <Text style={styles.infoTitle}>Note: {review.rating}/5</Text>
+                <Text style={styles.infoTitle}>{tAdmin("Note:")} {review.rating}/5</Text>
                 <View style={[styles.badge, review.verified ? styles.badgeSuccess : styles.badgeWarning]}>
                   <Text style={[styles.badgeText, review.verified ? styles.badgeTextSuccess : styles.badgeTextWarning]}>
-                    {review.verified ? 'Verifie' : 'A verifier'}
+                    {review.verified ? tAdmin("Vérifié") : tAdmin("À vérifier")}
                   </Text>
                 </View>
               </View>
-              <Text style={styles.infoMeta}>Bien: {review.propertyId}</Text>
+              <Text style={styles.infoMeta}>{tAdmin("Bien:")} {review.propertyId}</Text>
               {review.comment ? <Text style={styles.reportMessage}>{review.comment}</Text> : null}
               <Text style={styles.infoMeta}>
-                {new Date(review.createdAt).toLocaleString('fr-FR')}
+                {formatAdminDateTime(review.createdAt)}
               </Text>
               <View style={styles.quickActionsRow}>
                 <QuickAction
-                  label="Verifier"
+                  label={tAdmin("Verifier")}
                   icon="shield-checkmark-outline"
                   tone="primary"
                   onPress={() => handleVerifyReview(review.id)}
                 />
                 <QuickAction
-                  label="Masquer"
+                  label={tAdmin("Masquer")}
                   icon="eye-off-outline"
                   tone="danger"
                   onPress={() => handleHideReview(review.id)}
@@ -2299,7 +2299,7 @@ const AdminScreen: React.FC = () => {
         )}
         {hasMoreReviews && (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('reviews')}>
-            <Text style={styles.loadMoreText}>Charger plus</Text>
+            <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -2324,15 +2324,15 @@ const AdminScreen: React.FC = () => {
       <ScrollView style={styles.tabContent}>
         <View style={styles.sectionHeaderRow}>
           <View>
-            <Text style={styles.sectionTitle}>Profils agents</Text>
-            <Text style={styles.sectionSubtitle}>Performance, specialites et ventes.</Text>
+            <Text style={styles.sectionTitle}>{tAdmin("Profils agents")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Performance, specialites et ventes.")}</Text>
           </View>
           <View style={styles.sectionCount}>
             <Text style={styles.sectionCountText}>{filteredAgents.length}</Text>
           </View>
         </View>
         {filteredAgents.length === 0 ? (
-          <Text style={styles.emptyText}>Aucun profil d'agent pour le moment.</Text>
+          <Text style={styles.emptyText}>{tAdmin("Aucun profil d'agent pour le moment.")}</Text>
         ) : (
           visibleAgents.map(agent => {
             const user = users.find(u => u.id === agent.userId);
@@ -2344,12 +2344,12 @@ const AdminScreen: React.FC = () => {
                   </Text>
                 </View>
                 <View style={styles.clientInfo}>
-                  <Text style={styles.clientName}>{user?.name || 'Utilisateur inconnu'}</Text>
+                  <Text style={styles.clientName}>{user?.name || tAdmin("Utilisateur inconnu")}</Text>
                   <Text style={styles.clientEmail}>
-                    Ventes: {agent.totalSales} | Commission: {agent.totalCommission} XOF
+                    {tAdmin("Ventes:")} {agent.totalSales} | {tAdmin("Commission:")} {agent.totalCommission} XOF
                   </Text>
                   <Text style={styles.clientPhone}>
-                    Note: {agent.rating.toFixed(1)} ({agent.reviewCount} avis)
+                    {tAdmin("Note:")} {agent.rating.toFixed(1)} ({agent.reviewCount} {tAdmin("avis")})
                   </Text>
                 </View>
               </View>
@@ -2358,7 +2358,7 @@ const AdminScreen: React.FC = () => {
         )}
         {hasMoreAgents && (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('agents')}>
-            <Text style={styles.loadMoreText}>Charger plus</Text>
+            <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -2378,43 +2378,44 @@ const AdminScreen: React.FC = () => {
       <ScrollView style={styles.tabContent}>
         <View style={styles.sectionHeaderRow}>
           <View>
-            <Text style={styles.sectionTitle}>Annonces premium</Text>
-            <Text style={styles.sectionSubtitle}>Mise en avant et dates actives.</Text>
+            <Text style={styles.sectionTitle}>{tAdmin("Annonces premium")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Mise en avant et dates actives.")}</Text>
           </View>
           <View style={styles.sectionCount}>
             <Text style={styles.sectionCountText}>{filteredPremium.length}</Text>
           </View>
         </View>
         {filteredPremium.length === 0 ? (
-          <Text style={styles.emptyText}>Aucune annonce premium pour le moment.</Text>
+          <Text style={styles.emptyText}>{tAdmin("Aucune annonce premium pour le moment.")}</Text>
         ) : (
           visiblePremium.map(premium => (
             <View key={premium.propertyId} style={styles.infoCard}>
               <View style={styles.infoHeader}>
-                <Text style={styles.infoTitle}>Bien: {premium.propertyId}</Text>
+                <Text style={styles.infoTitle}>{tAdmin("Bien:")} {premium.propertyId}</Text>
                 <View style={[styles.badge, styles.badgeAccent]}>
                   <Text style={[styles.badgeText, styles.badgeTextAccent]}>{premium.plan}</Text>
                 </View>
               </View>
               <Text style={styles.infoMeta}>
-                Du {new Date(premium.startDate).toLocaleDateString('fr-FR')} au {new Date(premium.endDate).toLocaleDateString('fr-FR')}
+                {tAdmin("Du {start} au {end}")
+                  .replace('{start}', formatAdminDate(premium.startDate))
+                  .replace('{end}', formatAdminDate(premium.endDate))}
               </Text>
               <View style={styles.quickActionsRow}>
                 <QuickAction
-                  label="Renouveler"
+                  label={tAdmin("Renouveler")}
                   icon="refresh-outline"
                   tone="primary"
                   onPress={() => handleRenewPremium(premium)}
                 />
                 <QuickAction
-                  label="Detail"
+                  label={tAdmin("Detail")}
                   icon="open-outline"
                   onPress={() => Alert.alert(
-                    'Premium',
-                    'Plan ' +
-                      premium.plan +
-                      " actif jusqu'au " +
-                      new Date(premium.endDate).toLocaleDateString('fr-FR')
+                    tAdmin("Premium"),
+                    tAdmin("Plan {plan} actif jusqu'au {date}")
+                      .replace('{plan}', premium.plan)
+                      .replace('{date}', formatAdminDate(premium.endDate))
                   )}
                 />
               </View>
@@ -2423,7 +2424,7 @@ const AdminScreen: React.FC = () => {
         )}
         {hasMorePremium && (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('premium')}>
-            <Text style={styles.loadMoreText}>Charger plus</Text>
+            <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -2446,53 +2447,53 @@ const AdminScreen: React.FC = () => {
       <ScrollView style={styles.tabContent}>
         <View style={styles.sectionHeaderRow}>
           <View>
-            <Text style={styles.sectionTitle}>Regles de commission</Text>
-            <Text style={styles.sectionSubtitle}>Taux et seuils par agent.</Text>
+            <Text style={styles.sectionTitle}>{tAdmin("Regles de commission")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Taux et seuils par agent.")}</Text>
           </View>
           <View style={styles.sectionCount}>
             <Text style={styles.sectionCountText}>{filteredCommissions.length}</Text>
           </View>
         </View>
         {filteredCommissions.length === 0 ? (
-          <Text style={styles.emptyText}>Aucune regle de commission pour le moment.</Text>
+          <Text style={styles.emptyText}>{tAdmin("Aucune regle de commission pour le moment.")}</Text>
         ) : (
           visibleCommissions.map(rule => (
             <View key={rule.id} style={styles.infoCard}>
               <View style={styles.infoHeader}>
-                <Text style={styles.infoTitle}>Agent: {rule.agentId}</Text>
+                <Text style={styles.infoTitle}>{tAdmin("Agent:")} {rule.agentId}</Text>
                 <View style={[styles.badge, rule.active ? styles.badgeSuccess : styles.badgeMuted]}>
                   <Text style={[styles.badgeText, rule.active ? styles.badgeTextSuccess : styles.badgeTextMuted]}>
-                    {rule.active ? 'Actif' : 'Inactif'}
+                    {rule.active ? tAdmin("Actif") : tAdmin("Inactif")}
                   </Text>
                 </View>
               </View>
               <View style={styles.infoRow}>
                 <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>Taux: {rule.percentage}%</Text>
+                  <Text style={styles.metaChipText}>{tAdmin("Taux:")} {rule.percentage}%</Text>
                 </View>
                 <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>Min: {rule.minAmount} XOF</Text>
+                  <Text style={styles.metaChipText}>{tAdmin("Min:")} {rule.minAmount} XOF</Text>
                 </View>
                 <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>Max: {rule.maxAmount} XOF</Text>
+                  <Text style={styles.metaChipText}>{tAdmin("Max:")} {rule.maxAmount} XOF</Text>
                 </View>
                 <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>Type: {rule.propertyType}</Text>
+                  <Text style={styles.metaChipText}>{tAdmin("Type:")} {rule.propertyType === 'ALL' ? tAdmin("Tout") : tType(rule.propertyType)}</Text>
                 </View>
               </View>
               <View style={styles.quickActionsRow}>
                 <QuickAction
-                  label={rule.active ? 'Desactiver' : 'Activer'}
+                  label={rule.active ? tAdmin("Desactiver") : tAdmin("Activer")}
                   icon={rule.active ? 'pause-circle-outline' : 'play-circle-outline'}
                   tone={rule.active ? 'danger' : 'primary'}
                   onPress={() => handleToggleCommission(rule)}
                 />
                 <QuickAction
-                  label="Detail"
+                  label={tAdmin("Detail")}
                   icon="information-circle-outline"
                   onPress={() => Alert.alert(
-                    'Commission',
-                    'Taux ' + rule.percentage + '% | Type ' + rule.propertyType
+                    tAdmin("Commission"),
+                    `${tAdmin('Taux')} ${rule.percentage}% | ${tAdmin('Type')} ${rule.propertyType === 'ALL' ? tAdmin('Tout') : tType(rule.propertyType)}`
                   )}
                 />
               </View>
@@ -2501,7 +2502,7 @@ const AdminScreen: React.FC = () => {
         )}
         {hasMoreCommissions && (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('commissions')}>
-            <Text style={styles.loadMoreText}>Charger plus</Text>
+            <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -2522,8 +2523,8 @@ const AdminScreen: React.FC = () => {
       <ScrollView style={styles.tabContent}>
         <View style={styles.sectionHeaderRow}>
           <View>
-            <Text style={styles.sectionTitle}>Paiements</Text>
-            <Text style={styles.sectionSubtitle}>Suivi des loyers et reglements.</Text>
+            <Text style={styles.sectionTitle}>{tAdmin("Paiements")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Suivi des loyers et reglements.")}</Text>
           </View>
           <View style={styles.sectionCount}>
             <Text style={styles.sectionCountText}>{filteredPayments.length}</Text>
@@ -2533,7 +2534,7 @@ const AdminScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
         {filteredPayments.length === 0 ? (
-          <Text style={styles.emptyText}>Aucun paiement pour le moment.</Text>
+          <Text style={styles.emptyText}>{tAdmin("Aucun paiement pour le moment.")}</Text>
         ) : (
           visiblePayments.map(payment => (
             <View key={payment.id} style={styles.infoCard}>
@@ -2559,39 +2560,39 @@ const AdminScreen: React.FC = () => {
                         : styles.badgeTextDanger,
                     ]}
                   >
-                    {payment.status}
+                    {tAdmin(payment.status === 'paid' ? 'Payé' : payment.status === 'pending' ? 'En attente' : 'En retard')}
                   </Text>
                 </View>
               </View>
               <Text style={styles.infoMeta}>
-                Contrat: {getContractLabel(payment.contractId)}
+                {tAdmin("Contrat:")} {getContractLabel(payment.contractId)}
               </Text>
               <Text style={styles.infoMeta}>
-                Mode: {payment.method}
+                {tAdmin("Mode:")} {tAdmin(payment.method === 'cash' ? 'Cash' : 'Mobile Money')}
               </Text>
               <Text style={styles.infoMeta}>
-                {new Date(payment.paidAt).toLocaleString('fr-FR')}
+                {formatAdminDateTime(payment.paidAt)}
               </Text>
               <View style={styles.quickActionsRow}>
                 <QuickAction
-                  label="Editer"
+                  label={tAdmin("Editer")}
                   icon="create-outline"
                   onPress={() => openEditPayment(payment)}
                 />
                 <QuickAction
-                  label="Recu PDF"
+                  label={tAdmin("Recu PDF")}
                   icon="document-text-outline"
                   tone="primary"
                   onPress={() => printPaymentReceipt(payment)}
                 />
                 <QuickAction
-                  label="Marquer paye"
+                  label={tAdmin("Marquer paye")}
                   icon="checkmark-circle-outline"
                   tone="primary"
                   onPress={() => handleMarkPaid(payment)}
                 />
                 <QuickAction
-                  label="Litige"
+                  label={tAdmin("Litige")}
                   icon="alert-circle-outline"
                   tone="danger"
                   onPress={() => handleDispute(payment)}
@@ -2602,7 +2603,7 @@ const AdminScreen: React.FC = () => {
         )}
         {hasMorePayments && (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('payments')}>
-            <Text style={styles.loadMoreText}>Charger plus</Text>
+            <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -2623,8 +2624,8 @@ const AdminScreen: React.FC = () => {
       <ScrollView style={styles.tabContent}>
         <View style={styles.sectionHeaderRow}>
           <View>
-            <Text style={styles.sectionTitle}>Contrats</Text>
-            <Text style={styles.sectionSubtitle}>Baux en cours et historiques.</Text>
+            <Text style={styles.sectionTitle}>{tAdmin("Contrats")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Baux en cours et historiques.")}</Text>
           </View>
           <View style={styles.sectionCount}>
             <Text style={styles.sectionCountText}>{filteredContracts.length}</Text>
@@ -2634,7 +2635,7 @@ const AdminScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
         {filteredContracts.length === 0 ? (
-          <Text style={styles.emptyText}>Aucun contrat pour le moment.</Text>
+          <Text style={styles.emptyText}>{tAdmin("Aucun contrat pour le moment.")}</Text>
         ) : (
           visibleContracts.map(contract => {
             const property = properties.find(p => p.id === contract.propertyId);
@@ -2642,7 +2643,7 @@ const AdminScreen: React.FC = () => {
             return (
               <View key={contract.id} style={styles.infoCard}>
                 <View style={styles.infoHeader}>
-                  <Text style={styles.infoTitle}>{property?.title || 'Bien'}</Text>
+                  <Text style={styles.infoTitle}>{property?.title || tAdmin("Bien")}</Text>
                   <View style={[
                     styles.badge,
                     contract.status === 'active' ? styles.badgeSuccess : styles.badgeMuted,
@@ -2651,28 +2652,28 @@ const AdminScreen: React.FC = () => {
                       styles.badgeText,
                       contract.status === 'active' ? styles.badgeTextSuccess : styles.badgeTextMuted,
                     ]}>
-                      {contract.status}
+                      {tAdmin(contract.status === 'active' ? 'Actif' : 'Expire')}
                     </Text>
                   </View>
                 </View>
                 <Text style={styles.infoMeta}>
-                  Locataire: {tenant?.name || contract.tenantId}
+                  {tAdmin("Locataire:")} {tenant?.name || contract.tenantId}
                 </Text>
                 <Text style={styles.infoMeta}>
-                  Periode: {contract.startDate} ? {contract.endDate}
+                  {tAdmin("Periode:")} {formatAdminDate(contract.startDate)} – {formatAdminDate(contract.endDate)}
                 </Text>
                 <Text style={styles.infoMeta}>
-                  Loyer: {contract.rentAmount} XOF
+                  {tAdmin("Loyer:")} {contract.rentAmount} XOF
                 </Text>
                 <View style={styles.quickActionsRow}>
                   <QuickAction
-                    label="Editer"
+                    label={tAdmin("Editer")}
                     icon="create-outline"
                     onPress={() => openEditContract(contract)}
                   />
                   {contract.status !== 'active' && (
                     <QuickAction
-                      label="Activer"
+                      label={tAdmin("Activer")}
                       icon="checkmark-circle-outline"
                       tone="primary"
                       onPress={() => updateContractStatus(contract.id, 'active')}
@@ -2680,7 +2681,7 @@ const AdminScreen: React.FC = () => {
                   )}
                   {contract.status !== 'expired' && (
                     <QuickAction
-                      label="Expirer"
+                      label={tAdmin("Expirer")}
                       icon="time-outline"
                       tone="danger"
                       onPress={() => updateContractStatus(contract.id, 'expired')}
@@ -2693,7 +2694,7 @@ const AdminScreen: React.FC = () => {
         )}
         {hasMoreContracts && (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('contracts')}>
-            <Text style={styles.loadMoreText}>Charger plus</Text>
+            <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -2714,39 +2715,49 @@ const AdminScreen: React.FC = () => {
       <ScrollView style={styles.tabContent}>
         <View style={styles.sectionHeaderRow}>
           <View>
-            <Text style={styles.sectionTitle}>Documents</Text>
-            <Text style={styles.sectionSubtitle}>Contrats, pieces et preuves.</Text>
+            <Text style={styles.sectionTitle}>{tAdmin("Documents")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Contrats, pieces et preuves.")}</Text>
           </View>
           <View style={styles.sectionCount}>
             <Text style={styles.sectionCountText}>{filteredDocuments.length}</Text>
           </View>
         </View>
         {filteredDocuments.length === 0 ? (
-          <Text style={styles.emptyText}>Aucun document pour le moment.</Text>
+          <Text style={styles.emptyText}>{tAdmin("Aucun document pour le moment.")}</Text>
         ) : (
           visibleDocuments.map(document => (
             <View key={document.id} style={styles.infoCard}>
               <View style={styles.infoHeader}>
                 <Text style={styles.infoTitle}>{document.name}</Text>
                 <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>{document.type}</Text>
+                  <Text style={styles.metaChipText}>
+                    {document.type === 'contract'
+                      ? tAdmin('Contrat')
+                      : document.type === 'inspection'
+                      ? tAdmin('Inspection')
+                      : document.type === 'permit'
+                      ? tAdmin('Permis')
+                      : document.type === 'other'
+                      ? tAdmin('Autre')
+                      : document.type}
+                  </Text>
                 </View>
               </View>
               <Text style={styles.infoMeta}>
-                Propriete: {document.propertyId}
+                {tAdmin("Propriete:")} {document.propertyId}
               </Text>
               <Text style={styles.infoMeta}>
-                Upload: {new Date(document.uploadedAt).toLocaleString('fr-FR')}
+                {tAdmin("Upload:")} {formatAdminDateTime(document.uploadedAt)}
               </Text>
               <View style={styles.quickActionsRow}>
                 <QuickAction
-                  label="Ouvrir"
+                  label={tAdmin("Ouvrir")}
                   icon="document-text-outline"
                   tone="primary"
                   onPress={() => handleOpenDocument(document)}
                 />
                 <QuickAction
-                  label="Partager"
+                  label={tAdmin("Partager")}
                   icon="share-social-outline"
                   onPress={() => handleShareDocument(document)}
                 />
@@ -2756,7 +2767,7 @@ const AdminScreen: React.FC = () => {
         )}
         {hasMoreDocuments && (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('documents')}>
-            <Text style={styles.loadMoreText}>Charger plus</Text>
+            <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -2766,7 +2777,7 @@ const AdminScreen: React.FC = () => {
     return (
       <View style={[styles.container, styles.gateContainer]}>
         <ActivityIndicator size="large" color={theme.accent} />
-        <Text style={styles.gateSubtitle}>Chargement...</Text>
+        <Text style={styles.gateSubtitle}>{tAdmin("Chargement...")}</Text>
       </View>
     );
   }
@@ -2776,16 +2787,16 @@ const AdminScreen: React.FC = () => {
       <View style={[styles.container, styles.gateContainer]}>
         <View style={styles.gateCard}>
           <Ionicons name="lock-closed" size={28} color={theme.accent} />
-          <Text style={styles.gateTitle}>Creer un PIN Admin</Text>
+          <Text style={styles.gateTitle}>{tAdmin("Creer un PIN Admin")}</Text>
           <Text style={styles.gateSubtitle}>
-            Ce PIN protege l'acces au back-office et la sauvegarde.
+            {tAdmin("Ce PIN protege l'acces au back-office et la sauvegarde.")}
           </Text>
 
           <TextInput
             style={styles.gateInput}
             value={pinInput}
             onChangeText={setPinInput}
-            placeholder="Nouveau PIN (min 4)"
+            placeholder={tAdmin("Nouveau PIN (min 4)")}
             keyboardType="number-pad"
             secureTextEntry
           />
@@ -2793,13 +2804,13 @@ const AdminScreen: React.FC = () => {
             style={styles.gateInput}
             value={pinConfirm}
             onChangeText={setPinConfirm}
-            placeholder="Confirmer le PIN"
+            placeholder={tAdmin("Confirmer le PIN")}
             keyboardType="number-pad"
             secureTextEntry
           />
 
           <TouchableOpacity style={styles.gateButton} onPress={handleSetupPin}>
-            <Text style={styles.gateButtonText}>Enregistrer</Text>
+            <Text style={styles.gateButtonText}>{tAdmin("Enregistrer")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -2811,20 +2822,20 @@ const AdminScreen: React.FC = () => {
       <View style={[styles.container, styles.gateContainer]}>
         <View style={styles.gateCard}>
           <Ionicons name="shield-checkmark" size={28} color={theme.accent} />
-          <Text style={styles.gateTitle}>Acces Admin</Text>
-          <Text style={styles.gateSubtitle}>Saisie securisee pour acceder au mini back-office.</Text>
+          <Text style={styles.gateTitle}>{tAdmin("Acces Admin")}</Text>
+          <Text style={styles.gateSubtitle}>{tAdmin("Saisie securisee pour acceder au mini back-office.")}</Text>
 
           <TextInput
             style={styles.gateInput}
             value={pinInput}
             onChangeText={setPinInput}
-            placeholder="PIN"
+            placeholder={tAdmin("PIN")}
             keyboardType="number-pad"
             secureTextEntry
           />
 
           <TouchableOpacity style={styles.gateButton} onPress={handleUnlock}>
-            <Text style={styles.gateButtonText}>Deverrouiller</Text>
+            <Text style={styles.gateButtonText}>{tAdmin("Deverrouiller")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -2834,16 +2845,16 @@ const AdminScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 16, 48) }]}>
         <View style={styles.headerLeft}>
           <View style={styles.headerBadgeRow}>
             <View style={styles.headerBadge}>
-              <Text style={styles.headerBadgeText}>Mini Admin</Text>
+              <Text style={styles.headerBadgeText}>{tAdmin("Mini Admin")}</Text>
             </View>
-            <Text style={styles.headerEyebrow}>Back office mobile</Text>
+            <Text style={styles.headerEyebrow}>{tAdmin("Back office mobile")}</Text>
           </View>
-          <Text style={styles.headerTitle}>Console Admin</Text>
-          <Text style={styles.headerSubtitle}>Actions rapides et supervision quotidienne.</Text>
+          <Text style={styles.headerTitle}>{tAdmin("Console Admin")}</Text>
+          <Text style={styles.headerSubtitle}>{tAdmin("Actions rapides et supervision quotidienne.")}</Text>
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity
@@ -2867,9 +2878,9 @@ const AdminScreen: React.FC = () => {
 
       <View style={styles.toolbarCard}>
         <View style={styles.toolbarHeader}>
-          <Text style={styles.toolbarTitle}>Recherche & filtres</Text>
+          <Text style={styles.toolbarTitle}>{tAdmin("Recherche & filtres")}</Text>
           <View style={styles.toolbarBadge}>
-            <Text style={styles.toolbarBadgeText}>Global</Text>
+            <Text style={styles.toolbarBadgeText}>{tAdmin("Global")}</Text>
           </View>
         </View>
         <View style={[styles.searchBar, styles.searchBarShadow, styles.searchBarCompact]}>
@@ -2878,7 +2889,7 @@ const AdminScreen: React.FC = () => {
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Rechercher partout..."
+            placeholder={tAdmin("Rechercher partout...")}
             placeholderTextColor={theme.textSoft}
           />
           {searchQuery.length > 0 && (
@@ -2929,13 +2940,13 @@ const AdminScreen: React.FC = () => {
           contentContainerStyle={styles.tabsContent}
         >
           {[
-            { id: 'dashboard' as TabType, label: 'Dashboard', icon: 'stats-chart' },
-            { id: 'properties' as TabType, label: 'Annonces', icon: 'list' },
-            { id: 'clients' as TabType, label: 'Locataires', icon: 'people' },
-            { id: 'contracts' as TabType, label: 'Contrats', icon: 'document-text' },
-            { id: 'transactions' as TabType, label: 'Paiements', icon: 'card' },
-            { id: 'neighborhoods' as TabType, label: 'Quartiers', icon: 'location' },
-            { id: 'accounts' as TabType, label: 'Comptes', icon: 'person-circle' },
+            { id: 'dashboard' as TabType, label: tAdmin("Dashboard"), icon: 'stats-chart' },
+            { id: 'properties' as TabType, label: tAdmin("Annonces"), icon: 'list' },
+            { id: 'clients' as TabType, label: tAdmin("Locataires"), icon: 'people' },
+            { id: 'contracts' as TabType, label: tAdmin("Contrats"), icon: 'document-text' },
+            { id: 'transactions' as TabType, label: tAdmin("Paiements"), icon: 'card' },
+            { id: 'neighborhoods' as TabType, label: tAdmin("Quartiers"), icon: 'location' },
+            { id: 'accounts' as TabType, label: tAdmin("Comptes"), icon: 'person-circle' },
           ].map(tab => (
             <TouchableOpacity
               key={tab.id}
@@ -2986,40 +2997,40 @@ const AdminScreen: React.FC = () => {
             <TouchableOpacity onPress={closePropertyModal}>
               <Ionicons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>{editingPropertyId ? 'Modifier annonce' : 'Nouvelle annonce'}</Text>
+            <Text style={styles.modalTitle}>{editingPropertyId ? tAdmin("Modifier annonce") : tAdmin("Nouvelle annonce")}</Text>
             <TouchableOpacity onPress={handleAddProperty}>
               <Ionicons name="checkmark" size={24} color={theme.accent} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
-            <Text style={styles.inputLabel}>Titre *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Titre *")}</Text>
             <TextInput
               style={styles.input}
               value={formData.title}
               onChangeText={text => setFormData({ ...formData, title: text })}
-              placeholder="Ex: Villa moderne  Kara"
+              placeholder={tAdmin("Ex: Villa moderne  Kara")}
             />
 
-            <Text style={styles.inputLabel}>Description</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Description")}</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
               value={formData.description}
               onChangeText={text => setFormData({ ...formData, description: text })}
-              placeholder="Dcrivez le bien..."
+              placeholder={tAdmin("Dcrivez le bien...")}
               multiline
               numberOfLines={4}
             />
 
-            <Text style={styles.inputLabel}>Photos ({draftImages.length}/{MAX_PROPERTY_IMAGES})</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Photos")} ({draftImages.length}/{MAX_PROPERTY_IMAGES})</Text>
             <View style={styles.photoActions}>
               <TouchableOpacity style={styles.photoButton} onPress={addImageFromCamera}>
                 <Ionicons name="camera" size={18} color={theme.accentText} />
-                <Text style={styles.photoButtonText}>Camra</Text>
+                <Text style={styles.photoButtonText}>{tAdmin("Camra")}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.photoButton} onPress={addImageFromLibrary}>
                 <Ionicons name="images" size={18} color={theme.accentText} />
-                <Text style={styles.photoButtonText}>Galerie</Text>
+                <Text style={styles.photoButtonText}>{tAdmin("Galerie")}</Text>
               </TouchableOpacity>
             </View>
 
@@ -3039,9 +3050,9 @@ const AdminScreen: React.FC = () => {
               </ScrollView>
             )}
 
-            <Text style={styles.inputLabel}>Type de bien</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Type de bien")}</Text>
             <View style={styles.typeSelector}>
-              {Object.entries(PROPERTY_TYPE_LABELS).map(([type, label]) => (
+              {Object.keys(PROPERTY_TYPE_LABELS).map(type => (
                 <TouchableOpacity
                   key={type}
                   style={[
@@ -3051,68 +3062,68 @@ const AdminScreen: React.FC = () => {
                   onPress={() => setFormData({ ...formData, type: type as PropertyType })}
                 >
                   <Text style={[styles.typeOptionText, formData.type === type && { color: theme.accent }]}>
-                    {label}
+                    {tType(type as PropertyType)}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Text style={styles.inputLabel}>Prix (FCFA) *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Prix (FCFA) *")}</Text>
             <TextInput
               style={styles.input}
               value={formData.price}
               onChangeText={text => setFormData({ ...formData, price: text })}
-              placeholder="Ex: 50000000"
+              placeholder={tAdmin("Ex: 50000000")}
               keyboardType="numeric"
             />
 
-            <Text style={styles.inputLabel}>Localité (Ville) *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Localité (Ville) *")}</Text>
             <TextInput
               style={styles.input}
               value={formData.city}
               onChangeText={text => setFormData({ ...formData, city: text })}
-              placeholder="Ex: Kara"
+              placeholder={tAdmin("Ex: Kara")}
             />
 
-            <Text style={styles.inputLabel}>Téléphone du propriétaire *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Téléphone du propriétaire *")}</Text>
             <TextInput
               style={styles.input}
               value={formData.clientPhone}
               onChangeText={text => setFormData({ ...formData, clientPhone: text })}
-              placeholder="Ex: +228 90 12 34 56"
+              placeholder={tAdmin("Ex: +228 90 12 34 56")}
               keyboardType="phone-pad"
             />
 
-            <Text style={styles.inputLabel}>Nom du propriétaire</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Nom du propriétaire")}</Text>
             <TextInput
               style={styles.input}
               value={formData.clientName}
               onChangeText={text => setFormData({ ...formData, clientName: text })}
-              placeholder="Ex: Koffi Mensah"
+              placeholder={tAdmin("Ex: Koffi Mensah")}
             />
 
-            <Text style={styles.inputLabel}>Email du propriétaire</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Email du propriétaire")}</Text>
             <TextInput
               style={styles.input}
               value={formData.clientEmail}
               onChangeText={text => setFormData({ ...formData, clientEmail: text })}
-              placeholder="Ex: contact@example.com"
+              placeholder={tAdmin("Ex: contact@example.com")}
               keyboardType="email-address"
               autoCapitalize="none"
             />
 
-            <Text style={styles.inputLabel}>Surface (m2)</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Surface (m2)")}</Text>
             <TextInput
               style={styles.input}
               value={formData.area}
               onChangeText={text => setFormData({ ...formData, area: text })}
-              placeholder="Ex: 200"
+              placeholder={tAdmin("Ex: 200")}
               keyboardType="numeric"
             />
 
             {neighborhoods.length > 0 && (
               <View style={styles.neighborhoodPicker}>
-                <Text style={styles.neighborhoodPickerLabel}>Choisir un quartier</Text>
+                <Text style={styles.neighborhoodPickerLabel}>{tAdmin("Choisir un quartier")}</Text>
                 <View style={styles.neighborhoodPickerList}>
                   {neighborhoods.map(name => (
                     <TouchableOpacity
@@ -3137,29 +3148,29 @@ const AdminScreen: React.FC = () => {
               </View>
             )}
 
-            <Text style={styles.inputLabel}>Quartier *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Quartier *")}</Text>
             <TextInput
               style={styles.input}
               value={formData.location}
               onChangeText={text => setFormData({ ...formData, location: text })}
-              placeholder="Ex: Quartier Kpod"
+              placeholder={tAdmin("Ex: Quartier Kpod")}
             />
 
-            <Text style={styles.inputLabel}>Chambres</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Chambres")}</Text>
             <TextInput
               style={styles.input}
               value={formData.bedrooms}
               onChangeText={text => setFormData({ ...formData, bedrooms: text })}
-              placeholder="Nombre de chambres"
+              placeholder={tAdmin("Nombre de chambres")}
               keyboardType="numeric"
             />
 
-            <Text style={styles.inputLabel}>Équipements (séparés par des virgules)</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Équipements (séparés par des virgules)")}</Text>
             <TextInput
               style={styles.input}
               value={formData.amenities}
               onChangeText={text => setFormData({ ...formData, amenities: text })}
-              placeholder="Ex: Piscine, Jardin, Garage"
+              placeholder={tAdmin("Ex: Piscine, Jardin, Garage")}
             />
           </ScrollView>
         </View>
@@ -3177,22 +3188,22 @@ const AdminScreen: React.FC = () => {
             <TouchableOpacity onPress={closeClientModal}>
               <Ionicons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Modifier locataire</Text>
+            <Text style={styles.modalTitle}>{tAdmin("Modifier locataire")}</Text>
             <TouchableOpacity onPress={handleSaveClient}>
               <Ionicons name="checkmark" size={24} color={theme.accent} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
-            <Text style={styles.inputLabel}>Nom *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Nom *")}</Text>
             <TextInput
               style={styles.input}
               value={clientForm.name}
               onChangeText={text => setClientForm({ ...clientForm, name: text })}
-              placeholder="Nom du locataire"
+              placeholder={tAdmin("Nom du locataire")}
             />
 
-            <Text style={styles.inputLabel}>Tlphone *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Tlphone *")}</Text>
             <TextInput
               style={styles.input}
               value={clientForm.phone}
@@ -3201,7 +3212,7 @@ const AdminScreen: React.FC = () => {
               keyboardType="phone-pad"
             />
 
-            <Text style={styles.inputLabel}>Email</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Email")}</Text>
             <TextInput
               style={styles.input}
               value={clientForm.email}
@@ -3226,7 +3237,7 @@ const AdminScreen: React.FC = () => {
               <TouchableOpacity onPress={closeEditNeighborhood}>
                 <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>Modifier quartier</Text>
+              <Text style={styles.modalTitle}>{tAdmin("Modifier quartier")}</Text>
               <TouchableOpacity onPress={handleUpdateNeighborhood} disabled={neighborhoodSaving}>
                 {neighborhoodSaving ? (
                   <ActivityIndicator size="small" color={theme.accent} />
@@ -3237,12 +3248,12 @@ const AdminScreen: React.FC = () => {
             </View>
 
           <ScrollView style={styles.modalContent}>
-            <Text style={styles.inputLabel}>Nom du quartier</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Nom du quartier")}</Text>
             <TextInput
               style={styles.input}
               value={neighborhoodEditValue}
               onChangeText={setNeighborhoodEditValue}
-              placeholder="Nom du quartier"
+              placeholder={tAdmin("Nom du quartier")}
               placeholderTextColor={theme.textSoft}
             />
           </ScrollView>
@@ -3261,14 +3272,14 @@ const AdminScreen: React.FC = () => {
             <TouchableOpacity onPress={closeContractModal}>
               <Ionicons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>{editingContractId ? 'Modifier contrat' : 'Nouveau contrat'}</Text>
+            <Text style={styles.modalTitle}>{editingContractId ? tAdmin("Modifier contrat") : tAdmin("Nouveau contrat")}</Text>
             <TouchableOpacity onPress={handleSaveContract}>
               <Ionicons name="checkmark" size={24} color={theme.accent} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
-            <Text style={styles.inputLabel}>Bien *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Bien *")}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectRow}>
               {properties.map(property => (
                 <TouchableOpacity
@@ -3292,7 +3303,7 @@ const AdminScreen: React.FC = () => {
               ))}
             </ScrollView>
 
-            <Text style={styles.inputLabel}>Locataire *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Locataire *")}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectRow}>
               {clients.map(client => (
                 <TouchableOpacity
@@ -3316,7 +3327,7 @@ const AdminScreen: React.FC = () => {
               ))}
             </ScrollView>
 
-            <Text style={styles.inputLabel}>Date debut *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Date debut *")}</Text>
             <TextInput
               style={styles.input}
               value={contractForm.startDate}
@@ -3324,7 +3335,7 @@ const AdminScreen: React.FC = () => {
               placeholder="YYYY-MM-DD"
             />
 
-            <Text style={styles.inputLabel}>Date fin *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Date fin *")}</Text>
             <TextInput
               style={styles.input}
               value={contractForm.endDate}
@@ -3332,16 +3343,16 @@ const AdminScreen: React.FC = () => {
               placeholder="YYYY-MM-DD"
             />
 
-            <Text style={styles.inputLabel}>Loyer (XOF) *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Loyer (XOF) *")}</Text>
             <TextInput
               style={styles.input}
               value={contractForm.rentAmount}
               onChangeText={text => setContractForm({ ...contractForm, rentAmount: text })}
-              placeholder="Montant"
+              placeholder={tAdmin("Montant")}
               keyboardType="numeric"
             />
 
-            <Text style={styles.inputLabel}>Statut</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Statut")}</Text>
             <View style={styles.selectRow}>
               {(['active', 'expired'] as const).map(status => (
                 <TouchableOpacity
@@ -3358,7 +3369,7 @@ const AdminScreen: React.FC = () => {
                       contractForm.status === status && styles.selectChipTextActive,
                     ]}
                   >
-                    {status === 'active' ? 'Actif' : 'Expire'}
+                    {status === 'active' ? tAdmin("Actif") : tAdmin("Expire")}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -3379,14 +3390,14 @@ const AdminScreen: React.FC = () => {
             <TouchableOpacity onPress={closePaymentModal}>
               <Ionicons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>{editingPaymentId ? 'Modifier paiement' : 'Nouveau paiement'}</Text>
+            <Text style={styles.modalTitle}>{editingPaymentId ? tAdmin("Modifier paiement") : tAdmin("Nouveau paiement")}</Text>
             <TouchableOpacity onPress={handleSavePayment}>
               <Ionicons name="checkmark" size={24} color={theme.accent} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
-            <Text style={styles.inputLabel}>Contrat *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Contrat *")}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectRow}>
               {contracts.map(contract => (
                 <TouchableOpacity
@@ -3410,16 +3421,16 @@ const AdminScreen: React.FC = () => {
               ))}
             </ScrollView>
 
-            <Text style={styles.inputLabel}>Montant (XOF) *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Montant (XOF) *")}</Text>
             <TextInput
               style={styles.input}
               value={paymentForm.amount}
               onChangeText={text => setPaymentForm({ ...paymentForm, amount: text })}
-              placeholder="Montant"
+              placeholder={tAdmin("Montant")}
               keyboardType="numeric"
             />
 
-            <Text style={styles.inputLabel}>Date paiement *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Date paiement *")}</Text>
             <TextInput
               style={styles.input}
               value={paymentForm.paidAt}
@@ -3427,7 +3438,7 @@ const AdminScreen: React.FC = () => {
               placeholder="YYYY-MM-DD"
             />
 
-            <Text style={styles.inputLabel}>Mode</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Mode")}</Text>
             <View style={styles.selectRow}>
               {(['cash', 'mobile_money'] as const).map(method => (
                 <TouchableOpacity
@@ -3444,13 +3455,13 @@ const AdminScreen: React.FC = () => {
                       paymentForm.method === method && styles.selectChipTextActive,
                     ]}
                   >
-                    {method === 'cash' ? 'Cash' : 'Mobile Money'}
+                    {method === 'cash' ? tAdmin("Cash") : tAdmin("Mobile Money")}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Text style={styles.inputLabel}>Statut</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Statut")}</Text>
             <View style={styles.selectRow}>
               {(['paid', 'pending', 'late'] as const).map(status => (
                 <TouchableOpacity
@@ -3467,7 +3478,7 @@ const AdminScreen: React.FC = () => {
                       paymentForm.status === status && styles.selectChipTextActive,
                     ]}
                   >
-                    {status === 'paid' ? 'Pay?' : status === 'pending' ? 'En attente' : 'En retard'}
+                    {status === 'paid' ? tAdmin("Payé") : status === 'pending' ? tAdmin("En attente") : tAdmin("En retard")}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -3488,32 +3499,41 @@ const AdminScreen: React.FC = () => {
             <TouchableOpacity onPress={closeTenantDocs}>
               <Ionicons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Documents locataire</Text>
+            <Text style={styles.modalTitle}>{tAdmin("Documents locataire")}</Text>
             <View style={{ width: 24 }} />
           </View>
 
           <ScrollView style={styles.modalContent}>
             {tenantDocuments.filter(d => d.tenantId === activeTenantId).length === 0 ? (
-              <Text style={styles.emptyText}>Aucun document pour ce locataire.</Text>
+              <Text style={styles.emptyText}>{tAdmin("Aucun document pour ce locataire.")}</Text>
             ) : (
               tenantDocuments
                 .filter(d => d.tenantId === activeTenantId)
                 .map(doc => (
                   <View key={doc.id} style={styles.infoCard}>
                     <View style={styles.infoHeader}>
-                      <Text style={styles.infoTitle}>{doc.type}</Text>
+                      <Text style={styles.infoTitle}>{tAdmin(doc.type === 'cni' ? 'CNI' : doc.type === 'contract' ? 'Contrat' : 'Autre')}</Text>
                       <View style={styles.metaChip}>
                         <Text style={styles.metaChipText}>
-                          {new Date(doc.createdAt).toLocaleDateString('fr-FR')}
+                          {formatAdminDate(doc.createdAt)}
                         </Text>
                       </View>
                     </View>
                     <View style={styles.quickActionsRow}>
                       <QuickAction
-                        label="Ouvrir"
+                        label={tAdmin("Ouvrir")}
                         icon="document-text-outline"
                         tone="primary"
-                        onPress={() => Linking.openURL(doc.url)}
+                        onPress={async () => {
+                          const { data, error } = await supabase.storage
+                            .from('tenant-documents')
+                            .createSignedUrl(doc.url, 60);
+                          if (error || !data?.signedUrl) {
+                            Alert.alert(tAdmin("Erreur"), tAdmin("Impossible d'ouvrir ce document."));
+                            return;
+                          }
+                          await Linking.openURL(data.signedUrl);
+                        }}
                       />
                     </View>
                   </View>
@@ -3535,22 +3555,22 @@ const AdminScreen: React.FC = () => {
             <TouchableOpacity onPress={closeUserModal}>
               <Ionicons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Modifier compte</Text>
+            <Text style={styles.modalTitle}>{tAdmin("Modifier compte")}</Text>
             <TouchableOpacity onPress={handleSaveUser}>
               <Ionicons name="checkmark" size={24} color={theme.accent} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
-            <Text style={styles.inputLabel}>Nom *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Nom *")}</Text>
             <TextInput
               style={styles.input}
               value={userForm.name}
               onChangeText={text => setUserForm({ ...userForm, name: text })}
-              placeholder="Nom complet"
+              placeholder={tAdmin("Nom complet")}
             />
 
-            <Text style={styles.inputLabel}>Tlphone *</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Tlphone *")}</Text>
             <TextInput
               style={styles.input}
               value={userForm.phone}
@@ -3559,7 +3579,7 @@ const AdminScreen: React.FC = () => {
               keyboardType="phone-pad"
             />
 
-            <Text style={styles.inputLabel}>Email</Text>
+            <Text style={styles.inputLabel}>{tAdmin("Email")}</Text>
             <TextInput
               style={styles.input}
               value={userForm.email}
@@ -5078,9 +5098,6 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
 });
 
 export default AdminScreen;
-
-
-
 
 
 

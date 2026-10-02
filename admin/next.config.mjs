@@ -7,10 +7,7 @@ const adminRoot = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   reactStrictMode: true,
   typedRoutes: false,
-  outputFileTracingRoot: adminRoot,
-  turbopack: {
-    root: adminRoot,
-  },
+  outputFileTracingRoot: new URL('..', import.meta.url).pathname,
 };
 
 export default nextConfig;

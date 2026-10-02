@@ -7,7 +7,7 @@ type LegalSection = {
   body: string;
 };
 
-const contactEmail = 'kondgbandi@gmail.com';
+const contactEmail = 'contact@imonordtogo.com';
 const contactPhone = '+228 99 21 08 81';
 
 const documents: Record<LegalDocument, { title: string; intro: string; sections: LegalSection[] }> = {
@@ -105,9 +105,9 @@ export default function PublicLegalPage({ document }: { document: LegalDocument 
   return (
     <main className="public-legal">
       <article className="public-legal-card">
-        <div className="public-legal-brand" aria-label="Imo Nord Togo">
+        <Link className="public-legal-brand" href="/" aria-label="Imo Nord Togo">
           IMO <span>NORD TOGO</span>
-        </div>
+        </Link>
         <p className="public-legal-eyebrow">Imo Nord Togo</p>
         <h1>{content.title}</h1>
         <p className="public-legal-intro">{content.intro}</p>

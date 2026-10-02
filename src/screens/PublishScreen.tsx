@@ -16,14 +16,15 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
 import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-import { PROPERTY_TYPE_LABELS, PROPERTY_TYPE_COLORS, Property, PropertyType } from '../types';
+import { PROPERTY_TYPE_COLORS, PropertyType } from '../types';
 import COLORS from '../theme/colors';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -32,12 +33,8 @@ type PublishRouteProp = RouteProp<RootStackParamList, 'Publish'>;
 const PublishScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
-  const route = useRoute<PublishRouteProp>();
-  const { addProperty, updateProperty, properties, neighborhoods, addMyPropertyId, currentUser, t } = useApp();
-  const editingProperty = route.params?.propertyId
-    ? properties.find(property => property.id === route.params?.propertyId)
-    : undefined;
-  const isEditing = Boolean(editingProperty);
+  const insets = useSafeAreaInsets();
+  const { addProperty, neighborhoods, addMyPropertyId, currentUser, t, tType } = useApp();
   const MAX_IMAGES = 8;
   const [submitting, setSubmitting] = useState(false);
   const [draftImages, setDraftImages] = useState<string[]>([]);
@@ -284,7 +281,7 @@ const PublishScreen: React.FC = () => {
   const handleSubmit = async () => {
     if (submitting) return;
     const priceValue = parseInt(formData.price, 10);
-    const contactName = formData.clientName.trim() || currentUser?.name?.trim() || 'Annonceur';
+    const contactName = formData.clientName.trim() || currentUser?.name?.trim() || t('publish_advertiser');
     const contactPhone = formData.clientPhone.trim() || currentUser?.phone?.trim() || '';
     const contactEmail = formData.clientEmail.trim() || currentUser?.email?.trim() || '';
     if (
@@ -294,19 +291,19 @@ const PublishScreen: React.FC = () => {
       !formData.city.trim() ||
       !contactPhone
     ) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires.');
+      Alert.alert(t('error'), t('publish_required_error'));
       return;
     }
 
     if (draftImages.length === 0) {
-      Alert.alert('Erreur', 'Ajoutez au moins une photo.');
+      Alert.alert(t('error'), t('publish_photo_required_error'));
       return;
     }
 
     if (!currentUser) {
       const { data } = await supabase.auth.getUser();
       if (!data.user) {
-        Alert.alert('Connexion requise', 'Veuillez vous connecter pour publier une annonce.');
+        Alert.alert(t('loginRequired'), t('publish_login_required'));
         navigation.navigate('MainTabs', { screen: 'Profile' });
         return;
       }
@@ -357,23 +354,25 @@ const PublishScreen: React.FC = () => {
         addMyPropertyId(created.id);
       }
 
-      Alert.alert(
-        isEditing ? 'Annonce renvoyée' : 'Annonce envoyée',
-        "Votre annonce est en attente de validation par l'administration."
-      );
+      Alert.alert(t('publish_success_title'), t('publish_success_message'));
       resetForm();
       navigation.goBack();
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Erreur inconnue';
-      Alert.alert('Erreur', message);
+      const message = e instanceof Error ? e.message : t('publish_unknown_error');
+      Alert.alert(t('error'), message);
     } finally {
       setSubmitting(false);
     }
   };
 
   const stepLabel = useMemo(() => {
-    return ['Infos', 'Photos', 'Localisation', 'Contact', 'Aperçu'][step] || 'Annonce';
-  }, [step]);
+    return [
+      t('publish_step_info'),
+      t('publish_step_photos'),
+      t('publish_step_location'),
+      t('publish_step_contact'),
+    ][step] || t('publish_step_listing');
+  }, [step, t]);
 
   const canContinue = useMemo(() => {
     if (step === 0) {
@@ -404,12 +403,7 @@ const PublishScreen: React.FC = () => {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{isEditing ? 'Modifier l’annonce' : 'Publier une annonce'}</Text>
-        {hasDraftContent(formData, draftImages) && (
-          <TouchableOpacity style={styles.clearDraftButton} onPress={clearDraft}>
-            <Ionicons name="trash-outline" size={19} color={COLORS.error} />
-          </TouchableOpacity>
-        )}
+        <Text style={styles.headerTitle}>{t('publish_title')}</Text>
       </View>
 
       <ScrollView
@@ -420,10 +414,7 @@ const PublishScreen: React.FC = () => {
         contentContainerStyle={styles.contentContainer}
       >
         <View style={styles.stepHeader}>
-          <Text style={styles.stepTitle}>Étape {step + 1}/5  |  {stepLabel}</Text>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${((step + 1) / 5) * 100}%` }]} />
-          </View>
+          <Text style={styles.stepTitle}>{t('publish_step').replace('{{step}}', String(step + 1))}  |  {stepLabel}</Text>
           <View style={styles.stepDots}>
             {[0, 1, 2, 3, 4].map(i => (
               <View key={i} style={[styles.stepDot, step >= i && styles.stepDotActive]} />
@@ -433,27 +424,27 @@ const PublishScreen: React.FC = () => {
 
         {step === 0 && (
           <>
-            <Text style={styles.inputLabel}>Titre *</Text>
+            <Text style={styles.inputLabel}>{t('publish_title_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.title}
               onChangeText={text => setFormData({ ...formData, title: text })}
-              placeholder="Ex: Villa moderne Kara"
+              placeholder={t('publish_title_placeholder')}
             />
 
-            <Text style={styles.inputLabel}>Description</Text>
+            <Text style={styles.inputLabel}>{t('publish_description_label')}</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
               value={formData.description}
               onChangeText={text => setFormData({ ...formData, description: text })}
-              placeholder="Décrivez le bien..."
+              placeholder={t('publish_description_placeholder')}
               multiline
               numberOfLines={4}
             />
 
-            <Text style={styles.inputLabel}>Type de bien</Text>
+            <Text style={styles.inputLabel}>{t('publish_type_label')}</Text>
             <View style={styles.typeSelector}>
-              {Object.entries(PROPERTY_TYPE_LABELS).map(([type, label]) => (
+              {(['house', 'apartment', 'land', 'shop'] as PropertyType[]).map(type => (
                 <TouchableOpacity
                   key={type}
                   style={[
@@ -463,18 +454,18 @@ const PublishScreen: React.FC = () => {
                   onPress={() => setFormData({ ...formData, type: type as PropertyType })}
                 >
                   <Text style={[styles.typeOptionText, formData.type === type && { color: '#fff' }]}>
-                    {label}
+                    {tType(type)}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Text style={styles.inputLabel}>Prix (FCFA) *</Text>
+            <Text style={styles.inputLabel}>{t('publish_price_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.price}
-              onChangeText={text => setFormData({ ...formData, price: numericInput(text) })}
-              placeholder="Ex: 50000000"
+              onChangeText={text => setFormData({ ...formData, price: text })}
+              placeholder={t('publish_price_placeholder')}
               keyboardType="numeric"
             />
           </>
@@ -482,16 +473,18 @@ const PublishScreen: React.FC = () => {
 
         {step === 1 && (
           <>
-            <Text style={styles.inputLabel}>Photos *</Text>
-            <Text style={styles.photoHint}>Ajoutez jusqu'à {MAX_IMAGES} photos ({draftImages.length}/{MAX_IMAGES}).</Text>
+            <Text style={styles.inputLabel}>{t('publish_photo_label')}</Text>
+            <Text style={styles.photoHint}>
+              {t('publish_photo_hint').replace(/\{\{max\}\}/g, String(MAX_IMAGES)).replace('{{count}}', String(draftImages.length))}
+            </Text>
             <View style={styles.photoActions}>
               <TouchableOpacity style={styles.photoButton} onPress={addImageFromCamera}>
                 <Ionicons name="camera" size={18} color={COLORS.primary} />
-                <Text style={styles.photoButtonText}>Caméra</Text>
+                <Text style={styles.photoButtonText}>{t('publish_camera')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.photoButton} onPress={addImageFromLibrary}>
                 <Ionicons name="images" size={18} color={COLORS.primary} />
-                <Text style={styles.photoButtonText}>Galerie</Text>
+                <Text style={styles.photoButtonText}>{t('publish_gallery')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -536,17 +529,17 @@ const PublishScreen: React.FC = () => {
 
         {step === 2 && (
           <>
-            <Text style={styles.inputLabel}>Localité (Ville) *</Text>
+            <Text style={styles.inputLabel}>{t('publish_city_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.city}
               onChangeText={text => setFormData({ ...formData, city: text })}
-              placeholder="Ex: Kara"
+              placeholder={t('publish_city_placeholder')}
             />
 
             {neighborhoods.length > 0 && (
               <View style={styles.neighborhoodPicker}>
-                <Text style={styles.neighborhoodPickerLabel}>Choisir un quartier</Text>
+                <Text style={styles.neighborhoodPickerLabel}>{t('publish_choose_neighborhood')}</Text>
                 <View style={styles.neighborhoodPickerList}>
                   {neighborhoods.map(name => (
                     <TouchableOpacity
@@ -571,142 +564,104 @@ const PublishScreen: React.FC = () => {
               </View>
             )}
 
-            <Text style={styles.inputLabel}>Quartier ou zone (facultatif)</Text>
-            <Text style={styles.locationPrivacyHint}>
-              Indiquez seulement une zone générale. Ne renseignez jamais l&apos;adresse exacte ni les coordonnées GPS.
-            </Text>
+            <Text style={styles.inputLabel}>{t('publish_neighborhood_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.location}
               onChangeText={text => setFormData({ ...formData, location: text })}
-              placeholder="Ex: Kpoda"
+              placeholder={t('publish_neighborhood_placeholder')}
             />
 
-            <Text style={styles.inputLabel}>Surface (m2)</Text>
+            <Text style={styles.inputLabel}>{t('publish_area_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.area}
-              onChangeText={text => setFormData({ ...formData, area: numericInput(text) })}
-              placeholder="Ex: 200"
+              onChangeText={text => setFormData({ ...formData, area: text })}
+              placeholder={t('publish_area_placeholder')}
               keyboardType="numeric"
             />
 
-            <Text style={styles.inputLabel}>Chambres</Text>
+            <Text style={styles.inputLabel}>{t('publish_bedrooms_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.bedrooms}
-              onChangeText={text => setFormData({ ...formData, bedrooms: numericInput(text) })}
-              placeholder="Nombre de chambres"
+              onChangeText={text => setFormData({ ...formData, bedrooms: text })}
+              placeholder={t('publish_bedrooms_placeholder')}
               keyboardType="numeric"
             />
 
-            <Text style={styles.inputLabel}>Salles de bain</Text>
+            <Text style={styles.inputLabel}>{t('publish_bathrooms_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.bathrooms}
-              onChangeText={text => setFormData({ ...formData, bathrooms: numericInput(text) })}
-              placeholder="Nombre de salles de bain"
+              onChangeText={text => setFormData({ ...formData, bathrooms: text })}
+              placeholder={t('publish_bathrooms_placeholder')}
               keyboardType="numeric"
             />
 
-            <Text style={styles.inputLabel}>Équipements (séparés par des virgules)</Text>
+            <Text style={styles.inputLabel}>{t('publish_amenities_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.amenities}
               onChangeText={text => setFormData({ ...formData, amenities: text })}
-              placeholder="Ex: Piscine, Jardin, Garage"
+              placeholder={t('publish_amenities_placeholder')}
             />
           </>
         )}
 
         {step === 3 && (
           <>
-            <Text style={styles.inputLabel}>Téléphone du propriétaire *</Text>
+            <Text style={styles.inputLabel}>{t('publish_owner_phone_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.clientPhone}
               onChangeText={text => setFormData({ ...formData, clientPhone: text })}
-              placeholder="Ex: +228 90 12 34 56"
+              placeholder={t('publish_owner_phone_placeholder')}
               keyboardType="phone-pad"
             />
 
-            <Text style={styles.inputLabel}>Nom du propriétaire</Text>
+            <Text style={styles.inputLabel}>{t('publish_owner_name_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.clientName}
               onChangeText={text => setFormData({ ...formData, clientName: text })}
-              placeholder="Ex: Koffi Mensah"
+              placeholder={t('publish_owner_name_placeholder')}
             />
 
-            <Text style={styles.inputLabel}>Email du propriétaire</Text>
+            <Text style={styles.inputLabel}>{t('publish_owner_email_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.clientEmail}
               onChangeText={text => setFormData({ ...formData, clientEmail: text })}
-              placeholder="Ex: contact@example.com"
+              placeholder={t('publish_owner_email_placeholder')}
               keyboardType="email-address"
               autoCapitalize="none"
             />
 
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Résumé</Text>
-              <Text style={styles.summaryText}>{formData.title || 'Annonce sans titre'}</Text>
+              <Text style={styles.summaryTitle}>{t('publish_summary')}</Text>
+              <Text style={styles.summaryText}>{formData.title || t('publish_untitled')}</Text>
               <Text style={styles.summarySub}>
-                {[formData.location, formData.city].filter(Boolean).join(' · ') || 'Localisation générale'}
+                {formData.location || t('publish_neighborhood_fallback')}  |  {formData.city || t('publish_city_fallback')}
               </Text>
               <Text style={styles.summaryPrice}>
-                {formData.price ? `${formData.price} FCFA` : 'Prix à définir'}
+                {formData.price ? `${formData.price} FCFA` : t('publish_price_to_define')}
               </Text>
             </View>
           </>
         )}
 
-        {step === 4 && (
-          <View style={styles.previewCard}>
-            <Text style={styles.previewTitle}>Vérifiez votre annonce</Text>
-            <Text style={styles.previewHint}>
-              Elle sera envoyée à l&apos;administration pour validation.
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.previewImages}>
-              {draftImages.map(uri => (
-                <Image key={uri} source={{ uri }} style={styles.previewImage} />
-              ))}
-            </ScrollView>
-            <Text style={styles.previewPropertyTitle}>{formData.title || 'Annonce sans titre'}</Text>
-            <Text style={styles.previewPrice}>
-              {formData.price ? `${formData.price} FCFA` : 'Prix à définir'}
-            </Text>
-            <Text style={styles.previewMeta}>
-              {[PROPERTY_TYPE_LABELS[formData.type], formData.location, formData.city].filter(Boolean).join(' · ')}
-            </Text>
-            {formData.description.trim() ? (
-              <Text style={styles.previewDescription}>{formData.description.trim()}</Text>
-            ) : null}
-            <View style={styles.previewDetails}>
-              {formData.area ? <Text style={styles.previewDetail}>Superficie : {formData.area} m²</Text> : null}
-              {formData.bedrooms ? <Text style={styles.previewDetail}>Chambres : {formData.bedrooms}</Text> : null}
-              {formData.bathrooms ? <Text style={styles.previewDetail}>Salles de bain : {formData.bathrooms}</Text> : null}
-            </View>
-            <View style={styles.previewContact}>
-              <Text style={styles.previewContactTitle}>Contact</Text>
-              <Text style={styles.previewDetail}>{formData.clientName || currentUser?.name || 'Annonceur'}</Text>
-              <Text style={styles.previewDetail}>{formData.clientPhone}</Text>
-              {formData.clientEmail ? <Text style={styles.previewDetail}>{formData.clientEmail}</Text> : null}
-            </View>
-          </View>
-        )}
-
-        <View style={styles.bottomPadding} />
+        <View style={[styles.bottomPadding, { height: 120 + insets.bottom }]} />
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) + 16 }]}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
         <View style={styles.footerActions}>
           <TouchableOpacity
             style={[styles.secondaryButton, step === 0 && styles.secondaryDisabled]}
             onPress={() => goStep(Math.max(step - 1, 0))}
             disabled={step === 0}
           >
-            <Text style={styles.secondaryText}>Retour</Text>
+            <Text style={styles.secondaryText}>{t('publish_back')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.submitButton, (!canContinue || submitting) && styles.submitDisabled]}
@@ -723,7 +678,7 @@ const PublishScreen: React.FC = () => {
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.submitText}>{step < 4 ? 'Continuer' : "Envoyer pour validation"}</Text>
+              <Text style={styles.submitText}>{step < 3 ? t('publish_continue') : t('publish_submit')}</Text>
             )}
           </TouchableOpacity>
         </View>

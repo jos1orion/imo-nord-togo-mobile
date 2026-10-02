@@ -47,6 +47,18 @@ Avant toute mise en production, exécuter dans l’éditeur SQL de Supabase dans
 
 Ne pas exécuter `docs/supabase-bootstrap-production.sql` sur un projet existant. La migration produit le rôle `USER` par défaut, le trigger de création de profil, les politiques RLS restrictives et la planification d’expiration des annonces.
 
+## Rôles
+
+- **ADMIN** : accès complet.
+- **AGENT** : tableau de bord et ses propres annonces uniquement. Il peut créer,
+  corriger ou supprimer ses annonces `pending`/`rejected`, mais ne peut pas les
+  approuver, les mettre en vedette, ni consulter les données locataires ou financières.
+- **ACCOUNTANT** : consultation des locataires et contrats, gestion des paiements.
+
+Ces limites d’interface sont doublées par les politiques RLS de
+`docs/supabase-production-migration.sql` : ne pas remplacer cette migration par
+le schéma de démonstration seul en production.
+
 ## Build production
 
 ```bash
@@ -59,9 +71,10 @@ Sans variables d’environnement valides, le build Next peut réussir ; l’API 
 
 ## Pages publiques pour Google Play
 
-Le site expose les pages l?gales sans connexion, m?me si le reste du back-office est prot?g? :
+Le site expose les pages légales sans connexion, même si le reste du back-office est protégé :
 
-- Politique de confidentialit? : `/privacy`
-- Conditions d?utilisation : `/terms`
+- Politique de confidentialité : `/privacy`
+- Conditions d’utilisation : `/terms`
+- Demande de suppression de compte : `/delete-account`
 
-Apr?s le d?ploiement Vercel, utiliser l?URL publique compl?te de `/privacy` dans la fiche Google Play et dans la section S?curit? des donn?es. Tout changement doit ?tre pouss? sur Git pour d?clencher le d?ploiement Vercel connect? au d?p?t.
+Après le déploiement Vercel, utiliser l’URL publique complète de `/privacy` dans la fiche Google Play et dans la section Sécurité des données. Tout changement doit être poussé sur Git pour déclencher le déploiement Vercel connecté au dépôt.

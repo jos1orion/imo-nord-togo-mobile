@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Image, StyleProp, StyleSheet, View, ImageResizeMode, ViewStyle } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  StyleProp,
+  StyleSheet,
+  View,
+  ImageResizeMode,
+  ViewStyle,
+} from 'react-native';
 import COLORS from '../theme/colors';
 
 type LazyImageProps = {
@@ -8,7 +16,11 @@ type LazyImageProps = {
   resizeMode?: ImageResizeMode;
 };
 
-const LazyImage: React.FC<LazyImageProps> = ({ uri, style, resizeMode = 'cover' }) => {
+const LazyImage: React.FC<LazyImageProps> = ({
+  uri,
+  style,
+  resizeMode = 'cover',
+}) => {
   const [loaded, setLoaded] = useState(false);
 
   return (
@@ -19,6 +31,7 @@ const LazyImage: React.FC<LazyImageProps> = ({ uri, style, resizeMode = 'cover' 
         resizeMode={resizeMode}
         onLoadEnd={() => setLoaded(true)}
       />
+
       {!loaded && (
         <View style={styles.placeholder}>
           <ActivityIndicator color={COLORS.primary} />
@@ -32,8 +45,9 @@ const styles = StyleSheet.create({
   wrapper: {
     backgroundColor: COLORS.background,
   },
+
   placeholder: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },

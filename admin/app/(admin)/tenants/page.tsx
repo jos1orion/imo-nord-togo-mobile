@@ -60,11 +60,10 @@ export default function TenantsPage() {
           const path = `${data.id}/${Date.now()}-${file.name}`;
           const { error: uploadError } = await supabase.storage.from('tenant-documents').upload(path, file);
           if (uploadError) return;
-          const { data: publicUrl } = supabase.storage.from('tenant-documents').getPublicUrl(path);
           await supabase.from('tenant_documents').insert({
             tenant_id: data.id,
             type: docType,
-            url: publicUrl.publicUrl,
+            url: path,
           });
         });
         await Promise.all(uploads);

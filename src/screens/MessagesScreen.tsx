@@ -1,5 +1,14 @@
 import React from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, InteractionManager } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  InteractionManager,
+  Linking,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +18,7 @@ import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import EmptyState from '../components/ui/EmptyState';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getContactEmail, getWhatsAppUrl } from '../constants/appConfig';
 
 type MessagesScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Messages'>;
 
@@ -30,6 +40,14 @@ const MessagesScreen = () => {
     InteractionManager.runAfterInteractions(() => {
       navigation.navigate('Chat', { chatId: chat.id, otherUserId });
     });
+  };
+
+  const openSupportLink = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(t('error'), t('support_contact_error'));
+    }
   };
 
   const renderChatItem = ({ item }: { item: typeof userChats[0] }) => {
@@ -71,40 +89,90 @@ const MessagesScreen = () => {
     );
   };
 
+  const supportHeader = (
+    <View style={styles.content}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 12 }]}>
+        <Text style={styles.title}>{t('support_title')}</Text>
+        <View style={styles.availability}>
+          <View style={styles.availabilityDot} />
+          <Text style={styles.availabilityText}>{t('support_contact')}</Text>
+        </View>
+      </View>
+
+      <View style={styles.hero}>
+        <View style={styles.heroIcon}>
+          <Ionicons name="headset" size={26} color={COLORS.primary} />
+        </View>
+        <Text style={styles.heroTitle}>{t('support_heading')}</Text>
+        <Text style={styles.heroDescription}>{t('support_description')}</Text>
+      </View>
+
+      <Text style={styles.sectionTitle}>{t('support_choose_contact')}</Text>
+      <TouchableOpacity
+        style={styles.contactCard}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        onPress={() => void openSupportLink(`mailto:${getContactEmail()}`)}
+      >
+        <View style={[styles.contactIcon, styles.emailIcon]}>
+          <Ionicons name="mail-outline" size={22} color={COLORS.primary} />
+        </View>
+        <View style={styles.contactInfo}>
+          <Text style={styles.contactTitle}>{t('contact_email')}</Text>
+          <Text style={styles.contactDescription}>{t('support_email_description')}</Text>
+          <Text style={styles.contactDetail}>{getContactEmail()}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.contactCard}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        onPress={() => void openSupportLink(getWhatsAppUrl())}
+      >
+        <View style={[styles.contactIcon, styles.whatsappIcon]}>
+          <Ionicons name="logo-whatsapp" size={22} color="#15803D" />
+        </View>
+        <View style={styles.contactInfo}>
+          <Text style={styles.contactTitle}>{t('contact_whatsapp')}</Text>
+          <Text style={styles.contactDescription}>{t('support_whatsapp_description')}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+      </TouchableOpacity>
+
+      <Text style={[styles.sectionTitle, styles.conversationsTitle]}>
+        {t('support_conversations')}
+      </Text>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 12 }]}>
-        <Text style={styles.title}>{t('messages')}</Text>
-        {currentUser && (
-          <TouchableOpacity
-            style={styles.newMessage}
-            onPress={() => navigation.navigate('Chat', { chatId: 'support', otherUserId: 'support' })}
-          >
-            <Ionicons name="chatbubbles" size={16} color="#fff" />
-            <Text style={styles.newMessageText}>{t('support_contact')}</Text>
-          </TouchableOpacity>
+      <FlatList
+        data={userChats.sort((a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         )}
-      </View>
-      {userChats.length === 0 ? (
-        <EmptyState
-          icon="chatbubble-outline"
-          title={t('noMessages')}
-          actionLabel={!currentUser ? t('home_connect_title') : undefined}
-          onAction={
-            !currentUser ? () => navigation.navigate('MainTabs', { screen: 'Profile' }) : undefined
-          }
-        />
-      ) : (
-        <FlatList
-          data={userChats.sort((a, b) =>
-            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-          )}
-          renderItem={renderChatItem}
-          keyExtractor={item => item.id}
-          style={styles.chatList}
-          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 16 }}
-        />
-      )}
+        renderItem={renderChatItem}
+        keyExtractor={item => item.id}
+        ListHeaderComponent={supportHeader}
+        ListEmptyComponent={
+          <EmptyState
+            icon="chatbubble-ellipses-outline"
+            title={t('support_empty_title')}
+            description={t('support_empty_description')}
+            actionLabel={!currentUser ? t('home_connect_title') : undefined}
+            onAction={
+              !currentUser ? () => navigation.navigate('MainTabs', { screen: 'Profile' }) : undefined
+            }
+            style={styles.emptyConversations}
+          />
+        }
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 16 },
+        ]}
+      />
     </View>
   );
 };
@@ -114,8 +182,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  content: {
+    paddingHorizontal: 18,
+  },
   header: {
-    padding: 20,
+    paddingBottom: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -125,19 +196,115 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.text,
   },
-  newMessage: {
+  availability: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 7,
+    backgroundColor: COLORS.successBg,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 999,
   },
-  newMessageText: {
-    color: '#fff',
+  availabilityDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#16A34A',
+  },
+  availabilityText: {
+    color: '#166534',
     fontSize: 12,
+    fontWeight: '600',
+  },
+  hero: {
+    backgroundColor: COLORS.infoBg,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  heroIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.card,
+    marginBottom: 16,
+  },
+  heroTitle: {
+    color: COLORS.text,
+    fontSize: 21,
     fontWeight: '700',
+    marginBottom: 7,
+  },
+  heroDescription: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  sectionTitle: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  contactCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 15,
+    marginBottom: 10,
+  },
+  contactIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 13,
+  },
+  emailIcon: {
+    backgroundColor: COLORS.infoBg,
+  },
+  whatsappIcon: {
+    backgroundColor: '#DCFCE7',
+  },
+  contactInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  contactTitle: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 3,
+  },
+  contactDescription: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  contactDetail: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 5,
+  },
+  conversationsTitle: {
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  listContent: {
+    flexGrow: 1,
+  },
+  emptyConversations: {
+    paddingTop: 14,
+    paddingBottom: 18,
   },
   chatList: {
     flex: 1,

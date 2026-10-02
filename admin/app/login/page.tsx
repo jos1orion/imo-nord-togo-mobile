@@ -12,15 +12,17 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
-  const staffError = useMemo(
-    () => searchParams.get('error') === 'staff',
-    [searchParams]
-  );
-  const profileError = useMemo(
-    () => searchParams.get('error') === 'profile',
-    [searchParams]
-  );
+  const queryError = searchParams.get('error');
+
+  const preset = useMemo(() => {
+    if (queryError === 'staff') return "Ce compte n'a pas accès au back-office.";
+    if (queryError === 'suspended') return 'Compte suspendu. Contactez un administrateur.';
+    return null;
+  }, [queryError]);
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -29,6 +31,7 @@ function LoginForm() {
     }
     setLoading(true);
     setError(null);
+    setInfo(null);
     const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -41,25 +44,27 @@ function LoginForm() {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, account_status')
       .eq('id', data.user.id)
       .maybeSingle();
 
-    if (profileError) {
+    if (profile?.account_status === 'suspended') {
       await supabase.auth.signOut();
       setLoading(false);
-      setError(`Connexion réussie, mais le profil admin est illisible: ${profileError.message}`);
+      setError('Compte suspendu. Contactez un administrateur.');
       return;
     }
 
-    if (!isAdminRole(profile?.role)) {
+    if (!isStaffRole(profile?.role)) {
       await supabase.auth.signOut();
       setLoading(false);
-      setError(
-        profile
-          ? `Le rôle du compte est « ${profile.role ?? 'non défini'} », mais « ADMIN » est requis.`
-          : "Aucun profil correspondant à ce compte n'a été trouvé."
-      );
+      setError("Ce compte n'a pas accès au back-office. Le rôle est attribué uniquement par un administrateur.");
+      return;
+    }
+
+    if (profile.role === 'ADMIN') {
+      setLoading(false);
+      router.replace('/login/mfa');
       return;
     }
 
@@ -67,56 +72,55 @@ function LoginForm() {
     router.replace('/');
   };
 
+  const handleReset = async () => {
+    const trimmed = email.trim();
+    if (!/\S+@\S+\.\S+/.test(trimmed)) {
+      setError('Entrez votre e-mail pour recevoir le lien de récupération.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed, {
+      redirectTo: `${origin}/auth/reset`,
+    });
+    setLoading(false);
+    if (resetError) {
+      setError(resetError.message);
+      return;
+    }
+    setInfo('Un lien de récupération a été envoyé par e-mail.');
+  };
+
   return (
     <div className="login-shell">
       <div className="login-card">
         <div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 600 }}>
-            Connexion Admin
+            Connexion staff
           </div>
           <div style={{ color: 'var(--muted)', marginTop: 6 }}>
-            Accès réservé exclusivement au rôle Admin.
+            E-mail et mot de passe gérés par Supabase Auth. Session conservée. Un USER ne peut pas s&apos;attribuer AGENT.
           </div>
         </div>
 
         <div className="form-field">
           <label>Adresse email</label>
-          <input
-            type="email"
-            placeholder="admin@imonord.tg"
-            value={email}
-            onChange={event => setEmail(event.target.value)}
-          />
+          <input type="email" value={email} onChange={event => setEmail(event.target.value)} />
         </div>
-
         <div className="form-field">
           <label>Mot de passe</label>
-          <input
-            type="password"
-            placeholder="********"
-            value={password}
-            onChange={event => setPassword(event.target.value)}
-          />
+          <input type="password" value={password} onChange={event => setPassword(event.target.value)} />
         </div>
 
-        {staffError && !error ? (
-          <div className="alert">Ce compte n&apos;a pas accès au back-office.</div>
-        ) : null}
-        {profileError && !error ? (
-          <div className="alert">
-            Le profil Supabase est inaccessible. Vérifiez les variables Supabase du back-office et les politiques RLS.
-          </div>
-        ) : null}
+        {preset && !error ? <div className="alert">{preset}</div> : null}
         {error ? <div className="alert">{error}</div> : null}
+        {info ? <div className="success">{info}</div> : null}
 
         <button className="primary-button" onClick={handleLogin} disabled={loading}>
           {loading ? 'Connexion...' : 'Se connecter'}
         </button>
-        <button
-          className="ghost-button"
-          onClick={() => supabase.auth.resetPasswordForEmail(email || 'admin@imonord.tg')}
-        >
-          Mot de passe oublie
+        <button className="ghost-button" onClick={handleReset} disabled={loading}>
+          Mot de passe oublié ?
         </button>
       </div>
     </div>

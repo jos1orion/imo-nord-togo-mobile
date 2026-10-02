@@ -11,7 +11,7 @@ export type Profile = {
   full_name: string | null;
   phone: string | null;
   role: AppRole;
-  agent_status: 'none' | 'pending' | 'approved' | 'rejected';
+  account_status?: 'active' | 'suspended' | 'pending';
   created_at: string;
 };
 

@@ -1,48 +1,39 @@
-﻿import { NextResponse } from 'next/server';
-import { recordAdminAction, requireAdmin } from '../../../../lib/adminApiAuth';
+import { NextResponse } from 'next/server';
+import { requireAdminApi } from '../../../../lib/requireAdminApi';
 
 export async function POST(request: Request) {
-  const guard = await requireAdmin(request);
-  if ('error' in guard) return guard.error;
-  const { supabaseAdmin, authUserId } = guard;
+  const guard = await requireAdminApi(request);
+  if ('response' in guard) return guard.response;
+  const { supabaseAdmin } = guard;
 
-  let payload: Record<string, unknown>;
+  let payload: unknown;
   try {
-    const parsed = await request.json();
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return NextResponse.json({ error: 'Corps de requête invalide.' }, { status: 400 });
-    }
-    payload = parsed as Record<string, unknown>;
+    payload = await request.json();
   } catch {
-    return NextResponse.json({ error: 'Corps de requête JSON invalide.' }, { status: 400 });
+    return NextResponse.json({ error: 'Corps JSON invalide.' }, { status: 400 });
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return NextResponse.json({ error: 'Corps JSON invalide.' }, { status: 400 });
   }
 
-  const { email, password, full_name, role, phone } = payload ?? {};
+  const body = payload as Record<string, unknown>;
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const password = body.password;
+  const full_name = body.full_name;
+  const role = body.role;
+  const phone = body.phone;
 
-  if (
-    typeof email !== 'string' ||
-    typeof password !== 'string' ||
-    typeof role !== 'string' ||
-    !email.trim() ||
-    !password ||
-    !role
-  ) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof password !== 'string' || password.length < 6 || password.length > 256) {
     return NextResponse.json({ error: 'Champs requis manquants.' }, { status: 400 });
   }
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
-    return NextResponse.json({ error: 'Adresse email invalide.' }, { status: 400 });
-  }
-  if (password.length < 6 || password.length > 128) {
-    return NextResponse.json({ error: 'Mot de passe invalide (6 à 128 caractères).' }, { status: 400 });
-  }
-  if (!['ADMIN', 'AGENT', 'ACCOUNTANT'].includes(role)) {
+  if (typeof role !== 'string' || !['ADMIN', 'AGENT', 'ACCOUNTANT'].includes(role)) {
     return NextResponse.json({ error: 'Rôle invalide.' }, { status: 400 });
   }
-  if (full_name !== undefined && (typeof full_name !== 'string' || full_name.length > 200)) {
+  if (full_name !== undefined && full_name !== null && (typeof full_name !== 'string' || full_name.length > 120)) {
     return NextResponse.json({ error: 'Nom invalide.' }, { status: 400 });
   }
-  if (phone !== undefined && (typeof phone !== 'string' || phone.length > 40)) {
+  if (phone !== undefined && phone !== null && (typeof phone !== 'string' || phone.length > 40)) {
     return NextResponse.json({ error: 'Téléphone invalide.' }, { status: 400 });
   }
 
@@ -60,21 +51,28 @@ export async function POST(request: Request) {
   // Upsert keeps account creation idempotent and applies the role selected by the admin.
   const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
     id: data.user.id,
-    full_name: full_name ?? null,
-    phone: phone ?? null,
+    full_name: typeof full_name === 'string' ? full_name.trim() || null : null,
+    phone: typeof phone === 'string' ? phone.trim() || null : null,
     role,
     agent_status: role === 'AGENT' ? 'approved' : 'none',
   }, { onConflict: 'id' });
 
   if (profileError) {
-    const { error: cleanupError } = await supabaseAdmin.auth.admin.deleteUser(data.user.id);
-    if (cleanupError) {
-      console.error('Admin user cleanup failed after profile creation error', {
-        userId: data.user.id,
-        error: cleanupError.message,
-      });
+    let cleanupError: string | null = null;
+    try {
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(data.user.id);
+      cleanupError = error?.message ?? null;
+    } catch (error) {
+      cleanupError = error instanceof Error ? error.message : 'Erreur inconnue';
     }
-    return NextResponse.json({ error: 'Profil utilisateur impossible à enregistrer.' }, { status: 400 });
+    if (cleanupError) {
+      console.error('Failed to clean up the auth user after profile creation failed.', cleanupError);
+    }
+    return NextResponse.json({
+      error: cleanupError
+        ? `Profil non créé (${profileError.message}); suppression du compte auth impossible (${cleanupError}).`
+        : `Profil non créé (${profileError.message}); compte auth annulé.`,
+    }, { status: 500 });
   }
 
   await recordAdminAction(supabaseAdmin, authUserId, 'create_user', 'user', data.user.id);

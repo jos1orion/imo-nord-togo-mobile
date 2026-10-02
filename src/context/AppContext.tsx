@@ -32,7 +32,7 @@ import {
   MortgageCalculator,
   AppNotification,
 } from '../types';
-import { Language, TranslationKey, translate, translateStatus, translateType } from '../i18n';
+import { Language, TranslationKey, setCurrentLanguage, translate, translateStatus, translateType } from '../i18n';
 import { isExpiredProperty, isPublicProperty } from '../utils/propertyVisibility';
 
 interface AppContextType {
@@ -96,8 +96,8 @@ interface AppContextType {
   verifyUser: (id: string, value: boolean) => Promise<void>;
   reviewAgentRequest: (id: string, approved: boolean, reason?: string) => Promise<void>;
   updateUser: (id: string, updates: Partial<Pick<User, 'name' | 'email' | 'phone'>>) => void;
-  addReport: (data: { propertyId: string; reason: ReportReason; message: string }) => void;
-  resolveReport: (id: string) => void;
+  addReport: (data: { propertyId: string; reason: ReportReason; message: string }) => Promise<Report>;
+  resolveReport: (id: string) => Promise<void>;
   trackPropertyView: (id: string) => void;
   trackContact: (id: string) => void;
   trackShare: (id: string) => void;
@@ -132,7 +132,7 @@ interface AppContextType {
   getChatMessages: (chatId: string) => Message[];
   markMessagesAsRead: (chatId: string, userId: string) => void;
   // Review functions
-  addReview: (propertyId: string, rating: number, comment: string) => Review;
+  addReview: (propertyId: string, rating: number, comment: string) => Promise<Review>;
   getPropertyReviews: (propertyId: string) => Review[];
   getAverageRating: (propertyId: string) => number;
   // Agent profile functions
@@ -243,9 +243,10 @@ const extractMissingPropertiesColumn = (message?: string): string | null => {
     latitude: row.latitude ?? undefined,
     longitude: row.longitude ?? undefined,
     images,
-    status: row.status ?? 'available',
-    listingStatus: row.listing_status ?? 'pending',
-    rejectionReason: row.rejection_reason ?? null,
+    status: row.status === 'occupied' ? 'occupied' : 'available',
+    listingStatus: ['pending', 'approved', 'rejected', 'archived'].includes(row.listing_status)
+      ? row.listing_status
+      : 'pending',
     amenities: Array.isArray(row.amenities) ? row.amenities : [],
     bedrooms: row.bedrooms ?? undefined,
     bathrooms: row.bathrooms ?? undefined,
@@ -295,6 +296,27 @@ const mapMessageRow = (row: any): Message => ({
   timestamp: row.created_at ?? new Date().toISOString(),
   read: row.read ?? false,
   type: (row.type as Message['type']) ?? 'text',
+});
+
+const mapReviewRow = (row: any): Review => ({
+  id: row.id,
+  propertyId: row.property_id,
+  reviewerId: row.user_id ?? '',
+  // The public review policy deliberately does not expose profile contact data.
+  reviewerName: row.reviewer_name ?? 'Utilisateur',
+  rating: Number(row.rating ?? 0),
+  comment: row.comment ?? '',
+  createdAt: row.created_at ?? new Date().toISOString(),
+  verified: row.verified ?? false,
+});
+
+const mapReportRow = (row: any): Report => ({
+  id: row.id,
+  propertyId: row.property_id,
+  reason: row.reason as ReportReason,
+  message: row.message ?? '',
+  status: row.status === 'RESOLVED' ? 'RESOLVED' : 'OPEN',
+  createdAt: row.created_at ?? new Date().toISOString(),
 });
 
 const buildChatsFromMessages = (items: Message[]): Chat[] => {
@@ -375,6 +397,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     hideListings: false,
   });
   const [language, setLanguage] = useState<Language>('fr');
+  useEffect(() => {
+    setCurrentLanguage(language);
+  }, [language]);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const unsupportedPropertyColumnsRef = useRef<Set<string>>(new Set());
   // New state variables for enhanced features
@@ -621,11 +646,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // The database role is the source of truth. Never grant admin access from an email hard-coded in the APK.
   const mapAuthUser = useCallback((user: any, role: User['role'] = 'USER', agentStatus: User['agentStatus'] = 'none', agentRejectionReason?: string | null): User => {
     const email = String(user.email || '').trim();
+    const metadata = user.user_metadata ?? {};
+    const name = [
+      metadata.name,
+      metadata.full_name,
+      metadata.display_name,
+      metadata.username,
+      metadata.user_name,
+    ].find(value => typeof value === 'string' && value.trim())?.trim() ?? '';
     return ({
       id: user.id,
-      name: user.user_metadata?.name || '',
+      name,
       email,
-      phone: user.user_metadata?.phone || '',
+      phone: String(metadata.phone || '').trim(),
       verified: user.email_confirmed_at ? true : false,
       isAdmin: role === 'ADMIN',
       role,
@@ -831,6 +864,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [currentUser]);
 
+  const loadReviewsFromSupabase = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('reviews')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.warn('Reviews fetch error', error.message);
+      return;
+    }
+    setReviews((data ?? []).map(mapReviewRow));
+  }, []);
+
+  const loadReportsFromSupabase = useCallback(async () => {
+    if (!currentUser) {
+      setReports([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('reports')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.warn('Reports fetch error', error.message);
+      return;
+    }
+    setReports((data ?? []).map(mapReportRow));
+  }, [currentUser]);
+
     const fetchData = useCallback(async () => {
       if (!hydrated) return;
       setSyncError(null);
@@ -851,28 +912,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
         }
         await reloadProperties();
-        if (currentUser?.isAdmin) {
-          const { data: profileRows, error: profileError } = await supabase
-            .from('profiles')
-            .select('id,full_name,phone,role,agent_status,agent_rejection_reason,created_at')
-            .order('created_at', { ascending: false });
-          if (profileError) {
-            console.warn('Profiles fetch error', profileError.message);
-          } else if (profileRows) {
-            setUsers(profileRows.map(profile => ({
-              id: profile.id,
-              name: profile.full_name ?? '',
-              email: '',
-              phone: profile.phone ?? '',
-              verified: (profile.role === 'AGENT' && profile.agent_status === 'approved') || profile.role === 'ADMIN',
-              isAdmin: profile.role === 'ADMIN',
-              role: profile.role,
-              agentStatus: profile.agent_status ?? 'none',
-              agentRejectionReason: profile.agent_rejection_reason ?? null,
-              createdAt: profile.created_at,
-            })));
-          }
-        }
+        await loadReviewsFromSupabase();
+        await loadReportsFromSupabase();
         if (currentUser) {
           await loadFavoritesFromSupabase();
           await loadMessagesFromSupabase();
@@ -948,14 +989,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         console.error('Failed to fetch from Supabase', e);
         setSyncError('Une erreur est survenue. Veuillez réessayer.');
       }
-    }, [
-      hydrated,
-      reloadProperties,
-      currentUser,
-      loadFavoritesFromSupabase,
-      loadMessagesFromSupabase,
-      loadNotificationsFromSupabase,
-    ]);
+    }, [hydrated, reloadProperties, loadReviewsFromSupabase, loadReportsFromSupabase, currentUser, loadFavoritesFromSupabase, loadMessagesFromSupabase]);
 
     const retrySync = useCallback(() => {
       fetchData();
@@ -1385,15 +1419,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [omitUnsupportedPropertyColumns]);
 
-    const updatePropertyStatus = useCallback(async (id: string, status: PropertyStatus) => {
-    const { error } = await supabase.from('properties').update({ status }).eq('id', id);
+  const updatePropertyStatus = useCallback(async (id: string, status: PropertyStatus) => {
+    const { data, error } = await supabase.rpc('set_property_occupancy', {
+      p_property_id: id,
+      p_status: status,
+    });
     if (error) throw error;
+    const lifecycle = Array.isArray(data) ? data[0] : data;
     setProperties(prev =>
       prev.map(p =>
         p.id === id
           ? {
               ...p,
               status,
+              soldAt: lifecycle?.sold_at ?? (status === 'occupied' ? new Date().toISOString() : null),
+              rentedAt: lifecycle?.rented_at ?? null,
               updatedAt: new Date().toISOString(),
             }
           : p
@@ -1402,45 +1442,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const markPropertySold = useCallback(async (id: string) => {
-    const soldAt = new Date().toISOString();
-    const { error } = await supabase
-      .from('properties')
-      .update({ status: 'occupied', sold_at: soldAt })
-      .eq('id', id);
-    if (error) throw error;
-    setProperties(prev =>
-      prev.map(p =>
-        p.id === id
-          ? {
-              ...p,
-              status: 'occupied',
-              soldAt,
-              updatedAt: new Date().toISOString(),
-            }
-          : p
-      )
-    );
-  }, []);
+    await updatePropertyStatus(id, 'occupied');
+  }, [updatePropertyStatus]);
 
-    const clearSoldStatus = useCallback(async (id: string) => {
-    const { error } = await supabase
-      .from('properties')
-      .update({ status: 'available', sold_at: null })
-      .eq('id', id);
-    if (error) throw error;
-    setProperties(prev =>
-      prev.map(p =>
-        p.id === id
-          ? {
-              ...p,
-              status: 'available',
-              soldAt: null,
-              updatedAt: new Date().toISOString(),
-            }
-          : p
-      )
-    );
-  }, []);
+  const clearSoldStatus = useCallback(async (id: string) => {
+    await updatePropertyStatus(id, 'available');
+  }, [updatePropertyStatus]);
 
   const deleteProperty = useCallback(async (id: string) => {
     const { error } = await supabase.from('properties').delete().eq('id', id);
@@ -1870,21 +1877,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   }, [properties, hydrated]);
 
-  const addReport = (data: { propertyId: string; reason: ReportReason; message: string }) => {
-    const report: Report = {
-      id: Date.now().toString(),
-      propertyId: data.propertyId,
-      reason: data.reason,
-      message: data.message,
-      status: 'OPEN',
-      createdAt: new Date().toISOString(),
-    };
-    setReports(prev => [report, ...prev]);
-  };
+  const addReport = useCallback(async (data: { propertyId: string; reason: ReportReason; message: string }): Promise<Report> => {
+    const reporterId = await resolveAuthUserId();
+    const { data: row, error } = await supabase
+      .from('reports')
+      .insert({ property_id: data.propertyId, reporter_id: reporterId, reason: data.reason, message: data.message })
+      .select()
+      .single();
+    if (error) throw error;
+    const report = mapReportRow(row);
+    setReports(prev => [report, ...prev.filter(item => item.id !== report.id)]);
+    return report;
+  }, [resolveAuthUserId]);
 
-  const resolveReport = (id: string) => {
-    setReports(prev => prev.map(r => (r.id === id ? { ...r, status: 'RESOLVED' } : r)));
-  };
+  const resolveReport = useCallback(async (id: string): Promise<void> => {
+    const { error } = await supabase.from('reports').update({ status: 'RESOLVED' }).eq('id', id);
+    if (error) throw error;
+    setReports(prev => prev.map(report => (report.id === id ? { ...report, status: 'RESOLVED' } : report)));
+  }, []);
 
   const bumpStat = useCallback((id: string, key: keyof PropertyStats) => {
     setPropertyStats(prev => {
@@ -2059,21 +2069,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [chats]);
 
   // Review functions
-  const addReview = useCallback((propertyId: string, rating: number, comment: string): Review => {
+  const addReview = useCallback(async (propertyId: string, rating: number, comment: string): Promise<Review> => {
     if (!currentUser) throw new Error('User not logged in');
-
-    const review: Review = {
-      id: Date.now().toString(),
-      propertyId,
-      reviewerId: currentUser.id,
-      reviewerName: currentUser.name,
-      rating,
-      comment,
-      createdAt: new Date().toISOString(),
-      verified: false, // Could be set based on transaction history
-    };
-
-    setReviews(prev => [...prev, review]);
+    const { data, error } = await supabase
+      .from('reviews')
+      .insert({ property_id: propertyId, user_id: currentUser.id, rating, comment })
+      .select()
+      .single();
+    if (error) throw error;
+    const review = mapReviewRow(data);
+    setReviews(prev => [review, ...prev.filter(item => item.id !== review.id)]);
     return review;
   }, [currentUser]);
 

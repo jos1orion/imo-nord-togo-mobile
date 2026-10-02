@@ -10,6 +10,7 @@ import {
   StatusBar,
   TextInput,
   Alert,
+  Modal,
   InteractionManager,
   LayoutAnimation,
   Platform,
@@ -18,9 +19,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PropertyCard from '../components/PropertyCard';
 import SearchBar from '../components/SearchBar';
-import TypeFilter from '../components/TypeFilter';
 import OfflineBanner from '../components/ui/OfflineBanner';
 import EmptyState from '../components/ui/EmptyState';
 import { useApp } from '../context/AppContext';
@@ -134,10 +135,16 @@ const HomeScreen: React.FC = () => {
     (sum, stats) => sum + (stats.likes ?? 0),
     0
   );
-  const [listSectionY, setListSectionY] = useState(0);
   const listSectionYRef = useRef(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const scrollRef = useRef<FlatList<Property>>(null);
+  const [visibleCount, setVisibleCount] = useState(12);
+
+  // Reset the progressive list when the result set changes.
+  useEffect(() => {
+    setVisibleCount(12);
+  }, [filterType, searchQuery, filters, selectedNeighborhood]);
   const suggestionBase = useMemo(() => {
     const cityCandidates = Array.from(
       new Set(
@@ -219,33 +226,40 @@ const HomeScreen: React.FC = () => {
 
   const handleCategoryPress = (type: PropertyType) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSearchQuery('');
+    resetFilters();
+    setSelectedNeighborhood(null);
+    setFiltersOpen(false);
+    setNeighborhoodOpen(false);
+    setNeighborhoodQuery('');
     setFilterType(type);
-    if (listSectionYRef.current > 0) {
-      scrollRef.current?.scrollTo({ y: listSectionYRef.current - 10, animated: true });
-    }
+    setCategoryPickerOpen(false);
+    requestAnimationFrame(() => scrollRef.current?.scrollToOffset({ offset: 0, animated: true }));
+  };
+
+  const handleCategoryBack = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setFilterType('ALL');
+    setSearchQuery('');
+    resetFilters();
+    setSelectedNeighborhood(null);
+    setFiltersOpen(false);
+    setNeighborhoodOpen(false);
+    setNeighborhoodQuery('');
+    requestAnimationFrame(() => scrollRef.current?.scrollToOffset({ offset: 0, animated: true }));
   };
 
   const handleSearchSubmit = () => {
     if (listSectionYRef.current > 0) {
-      scrollRef.current?.scrollTo({ y: listSectionYRef.current - 10, animated: true });
+      scrollRef.current?.scrollToOffset({ offset: listSectionYRef.current - 10, animated: true });
       return;
     }
     setTimeout(() => {
       if (listSectionYRef.current > 0) {
-        scrollRef.current?.scrollTo({ y: listSectionYRef.current - 10, animated: true });
+        scrollRef.current?.scrollToOffset({ offset: listSectionYRef.current - 10, animated: true });
       }
     }, 300);
   };
-
-  const handlePublishPress = () => {
-    if (!currentUser) {
-      Alert.alert(t('loginRequired'), t('login_required_publish_body'));
-      navigation.navigate('MainTabs', { screen: 'Profile' });
-      return;
-    }
-    navigation.navigate('Publish');
-  };
-
 
   const handleFilterChange = (
     key: 'minPrice' | 'maxPrice' | 'minBedrooms' | 'minBathrooms' | 'minArea',
@@ -278,11 +292,12 @@ const HomeScreen: React.FC = () => {
     Alert.alert(t('save_search_done_title'), t('save_search_done_message'));
   };
 
-  const visibleProperties = filterType === 'ALL'
-    ? sortedProperties.slice(0, 6)
-    : sortedProperties;
+  const visibleProperties = filteredByNeighborhood.slice(0, visibleCount);
+  const hasMoreProperties = visibleProperties.length < filteredByNeighborhood.length;
+  const loadMoreProperties = () => {
+    if (hasMoreProperties) setVisibleCount(count => count + 12);
+  };
   const isLoading = !hydrated;
-  const showTopQuickActions = Boolean(currentUser);
 
   const renderSkeletonCard = (key: string, compact = false) => (
     <View key={key} style={[styles.skeletonCard, compact && styles.skeletonCardCompact]}>
@@ -304,22 +319,53 @@ const HomeScreen: React.FC = () => {
     <>
       <StatusBar barStyle="dark-content" />
       <OfflineBanner />
-      <ScrollView
+      {filterType !== 'ALL' && (
+        <View style={[styles.categoryNavigationBar, { paddingTop: insets.top + 12 }]}>
+          <TouchableOpacity
+            style={styles.categoryBackButton}
+            onPress={handleCategoryBack}
+            accessibilityRole="button"
+            accessibilityLabel={t('back')}
+            accessibilityHint={t('home_category_back_hint')}
+            hitSlop={8}
+          >
+            <Ionicons name="arrow-back" size={19} color={COLORS.primary} />
+            <Text style={styles.categoryBackText}>{t('back')}</Text>
+          </TouchableOpacity>
+          <View style={styles.categoryNavigationDetails}>
+            <Text style={styles.categoryResultsTitle}>{tType(filterType)}</Text>
+            <Text style={styles.categoryResultsSubtitle}>
+              {t('home_category_results_subtitle')}
+            </Text>
+          </View>
+          <View style={styles.categoryResultsCount}>
+            <Text style={styles.categoryResultsCountText}>{filteredByNeighborhood.length}</Text>
+          </View>
+        </View>
+      )}
+      <FlatList
         ref={scrollRef}
         style={styles.container}
         contentContainerStyle={{ paddingTop: insets.top }}
         showsVerticalScrollIndicator={false}
-        // Keep the filter bar sticky. Using a constant index avoids UI glitches when
-        // conditional blocks above change (user login, sync error).
-        stickyHeaderIndices={[1]}
-      >
+        data={isLoading ? [] : visibleProperties}
+        keyExtractor={property => property.id}
+        renderItem={({ item }) => (
+          <View style={styles.propertyListItem}>
+            <PropertyCard property={item} onPress={() => handlePropertyPress(item)} />
+          </View>
+        )}
+        onEndReached={loadMoreProperties}
+        onEndReachedThreshold={0.45}
+        ListHeaderComponent={<>
 
+      {filterType === 'ALL' && (
+      <>
       <View>
         {/* Header */}
-        <View style={styles.headerBlock}>
+        <View style={[styles.headerBlock, { paddingTop: insets.top + 18 }]}>
           <Text style={styles.headerTitle}>{t('home_hero_line1')}</Text>
           <Text style={styles.headerTitleEm}>{t('home_hero_line2')}</Text>
-          <Text style={styles.headerSubtitle}>{t('home_hero_subtitle')}</Text>
 
           <View style={styles.searchCard}>
             <View style={styles.searchHeader}>
@@ -376,7 +422,6 @@ const HomeScreen: React.FC = () => {
                 label: t('home_filter_price'),
                 active: Boolean(filters.minPrice || filters.maxPrice),
               },
-              { key: 'type', label: t('home_filter_type'), active: filterType !== 'ALL' },
               {
                 key: 'hood',
                 label: t('home_filter_neighborhood'),
@@ -401,27 +446,6 @@ const HomeScreen: React.FC = () => {
             ))}
           </ScrollView>
         </View>
-
-        {showTopQuickActions && (
-          <View style={styles.quickActions}>
-            <TouchableOpacity
-              style={[styles.quickActionCard, styles.quickActionPrimary]}
-              onPress={handlePublishPress}
-            >
-              <View style={styles.quickActionIcon}>
-                <Ionicons name="add" size={18} color="#fff" />
-              </View>
-              <View style={styles.quickActionText}>
-                <Text style={[styles.quickActionTitle, styles.quickActionTitleOnPrimary]}>
-                  {t('home_publish_card_title')}
-                </Text>
-                <Text style={[styles.quickActionSub, styles.quickActionSubOnPrimary]}>
-                  {t('home_publish_card_sub')}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        )}
 
         {syncError && (
           <View style={styles.syncErrorCard}>
@@ -450,7 +474,6 @@ const HomeScreen: React.FC = () => {
             </View>
           </View>
         )}
-        <TypeFilter selectedType={filterType} onSelectType={setFilterType} />
         <View style={styles.filterHeader}>
           <Text style={styles.filterTitle}>{t('filters_title')}</Text>
           <View style={styles.filterActions}>
@@ -553,7 +576,7 @@ const HomeScreen: React.FC = () => {
                     setNeighborhoodOpen(false);
                   }}
                 >
-                  <Text style={styles.dropdownItemText}>Tous les quartiers</Text>
+                  <Text style={styles.dropdownItemText}>{t('home_all_neighborhoods')}</Text>
                 </TouchableOpacity>
                 {filteredNeighborhoods.map(name => (
                   <TouchableOpacity
@@ -578,7 +601,7 @@ const HomeScreen: React.FC = () => {
                   </TouchableOpacity>
                 ))}
                 {filteredNeighborhoods.length === 0 && (
-                  <Text style={styles.dropdownEmpty}>Aucun quartier</Text>
+                  <Text style={styles.dropdownEmpty}>{t('home_no_neighborhoods')}</Text>
                 )}
               </ScrollView>
             </View>
@@ -656,34 +679,17 @@ const HomeScreen: React.FC = () => {
       {/* Quick Categories */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('categories_title')}</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
-          {[
-            { type: 'house' as PropertyType, icon: 'home', color: '#22C55E' },
-            { type: 'apartment' as PropertyType, icon: 'business', color: COLORS.primary },
-            { type: 'land' as PropertyType, icon: 'map', color: '#F59E0B' },
-            { type: 'shop' as PropertyType, icon: 'storefront', color: '#0EA5A4' },
-          ].map(item => (
-            <TouchableOpacity
-              key={item.type}
-              style={[
-                styles.categoryCard,
-                { borderColor: item.color },
-                filterType === item.type && styles.categoryCardActive,
-              ]}
-              onPress={() => {
-                handleCategoryPress(item.type);
-              }}
-            >
-              <View style={[styles.categoryIcon, { backgroundColor: `${item.color}15` }]}>
-                <Ionicons name={item.icon as any} size={24} color={item.color} />
-              </View>
-              <Text style={styles.categoryText}>{tType(item.type)}</Text>
-              <Text style={styles.categoryCount}>
-                {propertiesByType.find(p => p.type === item.type)?.count || 0}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <TouchableOpacity
+          style={styles.chooseCategoryButton}
+          onPress={() => setCategoryPickerOpen(true)}
+          accessibilityRole="button"
+        >
+          <View style={styles.chooseCategoryIcon}>
+            <Ionicons name="grid-outline" size={20} color={COLORS.primary} />
+          </View>
+          <Text style={styles.chooseCategoryText}>{t('home_choose_category')}</Text>
+          <Ionicons name="chevron-forward" size={19} color="#64748B" />
+        </TouchableOpacity>
       </View>
 
       {/* Featured Properties */}
@@ -767,7 +773,7 @@ const HomeScreen: React.FC = () => {
                   LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                   setSelectedNeighborhood(name);
                   if (listSectionYRef.current > 0) {
-                    scrollRef.current?.scrollTo({ y: listSectionYRef.current - 10, animated: true });
+                    scrollRef.current?.scrollToOffset({ offset: listSectionYRef.current - 10, animated: true });
                   }
                 }}
               >
@@ -784,64 +790,39 @@ const HomeScreen: React.FC = () => {
           </ScrollView>
         </View>
       )}
+      </>
+      )}
 
-      {/* All Properties */}
-      <View
-        style={styles.section}
-        onLayout={event => {
-          setListSectionY(event.nativeEvent.layout.y);
-          listSectionYRef.current = event.nativeEvent.layout.y;
-        }}
-      >
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>
-            {filterType === 'ALL' ? t('all_properties') : tType(filterType)}
-          </Text>
-          <Text style={styles.count}>{sortedProperties.length} {t('properties_count')}</Text>
-        </View>
-        {isLoading ? (
-          <View style={styles.propertiesGrid}>
-            {Array.from({ length: 6 }).map((_, idx) => renderSkeletonCard(`grid-skel-${idx}`))}
+      {filterType === 'ALL' && (
+        <View
+          style={styles.section}
+          onLayout={event => {
+            listSectionYRef.current = event.nativeEvent.layout.y;
+          }}
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t('all_properties')}</Text>
+            <Text style={styles.count}>{filteredByNeighborhood.length} {t('properties_count')}</Text>
           </View>
-        ) : visibleProperties.length === 0 ? (
-          <EmptyState
-            icon="search-outline"
-            title={t('empty_category')}
-            actionLabel={t('home_empty_reset')}
-            onAction={resetAllFilters}
-            style={styles.emptyStateWrap}
-          />
-        ) : (
-          <FlatList
-            data={visibleProperties}
-            keyExtractor={item => item.id}
-            renderItem={({ item }) => (
-              <PropertyCard
-                property={item}
-                onPress={() => handlePropertyPress(item)}
-              />
-            )}
-            scrollEnabled={false}
-            removeClippedSubviews
-            initialNumToRender={4}
-            maxToRenderPerBatch={4}
-            updateCellsBatchingPeriod={40}
-            windowSize={5}
-            contentContainerStyle={styles.propertiesList}
-          />
-        )}
-      </View>
-
-      {/* CTA Banner */}
-      {!!currentUser && (
-        <View style={styles.ctaBanner}>
-          <Text style={styles.ctaTitle}>{t('cta_title')}</Text>
-          <Text style={styles.ctaText}>{t('cta_text')}</Text>
-          <TouchableOpacity style={styles.ctaButton} onPress={() => navigation.navigate('Publish')}>
-            <Text style={styles.ctaButtonText}>{t('cta_button')}</Text>
-          </TouchableOpacity>
         </View>
       )}
+        </>}
+        ListEmptyComponent={
+          isLoading ? (
+            <View style={styles.propertiesGrid}>
+              {Array.from({ length: 6 }).map((_, idx) => renderSkeletonCard(`grid-skel-${idx}`))}
+            </View>
+          ) : (
+            <EmptyState
+              icon="search-outline"
+              title={t('empty_category')}
+              actionLabel={filterType === 'ALL' ? t('home_empty_reset') : t('back')}
+              onAction={filterType === 'ALL' ? resetFilters : handleCategoryBack}
+              style={styles.emptyStateWrap}
+            />
+          )
+        }
+        ListFooterComponent={filterType === 'ALL' ? <>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('reviews_title')}</Text>
@@ -887,7 +868,62 @@ const HomeScreen: React.FC = () => {
         <Text style={styles.footerText}>{t('footer_rights')}</Text>
         <Text style={styles.footerSubtext}>{t('footer_location')}</Text>
       </View>
-      </ScrollView>
+      {hasMoreProperties && !isLoading && (
+        <TouchableOpacity style={styles.loadMoreButton} onPress={loadMoreProperties}>
+          <Text style={styles.loadMoreText}>{t('home_load_more')}</Text>
+        </TouchableOpacity>
+      )}
+      </> : null}
+      />
+      <Modal
+        visible={categoryPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCategoryPickerOpen(false)}
+      >
+        <View style={styles.categoryModalBackdrop}>
+          <View style={styles.categoryModal}>
+            <View style={styles.categoryModalHeader}>
+              <View style={styles.categoryModalTitleWrap}>
+                <Text style={styles.categoryModalTitle}>{t('home_choose_category')}</Text>
+                <Text style={styles.categoryModalSubtitle}>
+                  {t('home_choose_category_subtitle')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.categoryModalClose}
+                onPress={() => setCategoryPickerOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel={t('close')}
+              >
+                <Ionicons name="close" size={20} color="#475569" />
+              </TouchableOpacity>
+            </View>
+            {[
+              { type: 'house' as PropertyType, icon: 'home', color: '#22C55E' },
+              { type: 'apartment' as PropertyType, icon: 'business', color: COLORS.primary },
+              { type: 'land' as PropertyType, icon: 'map', color: '#F59E0B' },
+              { type: 'shop' as PropertyType, icon: 'storefront', color: '#0EA5A4' },
+            ].map(item => (
+              <TouchableOpacity
+                key={item.type}
+                style={styles.categoryOption}
+                onPress={() => handleCategoryPress(item.type)}
+                accessibilityRole="button"
+              >
+                <View style={[styles.categoryOptionIcon, { backgroundColor: `${item.color}18` }]}>
+                  <Ionicons name={item.icon as any} size={21} color={item.color} />
+                </View>
+                <Text style={styles.categoryOptionText}>{tType(item.type)}</Text>
+                <Text style={styles.categoryOptionCount}>
+                  {propertiesByType.find(propertyType => propertyType.type === item.type)?.count ?? 0}
+                </Text>
+                <Ionicons name="chevron-forward" size={17} color="#94A3B8" />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
     </>
   );
 };
@@ -898,38 +934,36 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   headerBlock: {
-    paddingTop: 32,
+    paddingTop: 18,
     paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingBottom: 16,
     backgroundColor: COLORS.background,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 24,
+    lineHeight: 31,
+    fontWeight: '700',
     color: COLORS.text,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   headerTitleEm: {
-    fontSize: 22,
+    fontSize: 24,
+    lineHeight: 31,
     fontWeight: '800',
-    color: COLORS.text,
-    textAlign: 'center',
-    marginTop: 2,
+    color: COLORS.primary,
+    textAlign: 'left',
+    marginTop: 0,
   },
   headerSubtitle: {
-    marginTop: 8,
+    marginTop: 9,
     fontSize: 13,
+    lineHeight: 19,
     color: COLORS.textMuted,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   section: {
     marginTop: 20,
     paddingHorizontal: 16,
-  },
-  quickActions: {
-    marginTop: 12,
-    paddingHorizontal: 16,
-    gap: 12,
   },
   bottomCta: {
     marginTop: 8,
@@ -1419,51 +1453,177 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
   },
-  categoriesScroll: {
-    marginTop: 12,
-    marginHorizontal: -16,
-    paddingHorizontal: 16,
-  },
-  categoryCard: {
-    width: 100,
-    height: 100,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 12,
+  chooseCategoryButton: {
+    minHeight: 62,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    borderWidth: 2,
+    gap: 12,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginTop: 12,
+    borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  categoryCardActive: {
+  chooseCategoryIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: '#EFF6FF',
-  },
-  categoryIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
   },
-  categoryText: {
+  chooseCategoryText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  categoryNavigationBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  categoryBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 11,
+  },
+  categoryBackText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  categoryNavigationDetails: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 12,
+  },
+  categoryResultsTitle: {
+    color: '#0F172A',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  categoryResultsSubtitle: {
+    color: '#64748B',
     fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
+    marginTop: 3,
   },
-  categoryCount: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 2,
+  categoryResultsCount: {
+    minWidth: 34,
+    height: 34,
+    paddingHorizontal: 8,
+    borderRadius: 17,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryResultsCountText: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  categoryModalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(15, 23, 42, 0.48)',
+  },
+  categoryModal: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  categoryModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  categoryModalTitleWrap: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  categoryModalTitle: {
+    color: '#0F172A',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  categoryModalSubtitle: {
+    color: '#64748B',
+    fontSize: 13,
+    marginTop: 5,
+  },
+  categoryModalClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryOption: {
+    minHeight: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  categoryOptionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryOptionText: {
+    flex: 1,
+    color: '#1E293B',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  categoryOptionCount: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '600',
   },
   propertiesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: -8,
   },
-  propertiesList: {
-    paddingBottom: 4,
+  propertyListItem: {
+    paddingHorizontal: 16,
+  },
+  loadMoreButton: {
+    alignSelf: 'center',
+    marginTop: 8,
+    marginBottom: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+  },
+  loadMoreText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '700',
   },
   skeletonCard: {
     backgroundColor: '#fff',
@@ -1575,36 +1735,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.primary,
   },
-  ctaBanner: {
-    margin: 16,
-    marginTop: 24,
-    padding: 24,
-    backgroundColor: '#0F172A',
-    borderRadius: 20,
-    alignItems: 'center',
-  },
-  ctaTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 6,
-  },
-  ctaText: {
-    fontSize: 14,
-    color: '#E2E8F0',
-    marginBottom: 16,
-  },
-  ctaButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 25,
-  },
-  ctaButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
-  },
   footer: {
     alignItems: 'center',
     padding: 24,
@@ -1623,5 +1753,3 @@ const styles = StyleSheet.create({
 });
 
 export default HomeScreen;
-
-

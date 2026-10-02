@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { createNavigationContainerRef, NavigationContainer, NavigatorScreenParams } from '@react-navigation/native';
@@ -13,6 +13,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import { AppProvider, useApp } from './src/context/AppContext';
 import HomeScreen from './src/screens/HomeScreen';
+import ListingsScreen from './src/screens/ListingsScreen';
 import PropertyDetailScreen from './src/screens/PropertyDetailScreen';
 import AdminScreen from './src/screens/AdminScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -35,8 +36,9 @@ const ONBOARDING_KEY = 'imo:onboardingComplete';
 
 type TabParamList = {
   Home: undefined;
+  Publish: undefined;
   Messages: undefined;
-  Profile: undefined;
+  Profile: { authMode?: 'login' | 'register' } | undefined;
 };
 
 export type RootStackParamList = {
@@ -64,7 +66,7 @@ LogBox.ignoreLogs([
 ]);
 
 const TabNavigator = () => {
-  const { t, language } = useApp();
+  const { t, language, currentUser } = useApp();
   const paper = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -77,7 +79,9 @@ const TabNavigator = () => {
           if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'Messages') {
-            iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
+            iconName = focused ? 'headset' : 'headset-outline';
+          } else if (route.name === 'Publish') {
+            iconName = focused ? 'add-circle' : 'add-circle-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
@@ -138,7 +142,26 @@ const TabNavigator = () => {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: t('tab_home') }} />
-      <Tab.Screen name="Messages" component={MessagesScreen} options={{ tabBarLabel: t('messages') }} />
+      <Tab.Screen
+        name="Publish"
+        component={ListingsScreen}
+        options={{ tabBarLabel: t('publish_tab') }}
+        listeners={({ navigation }) => ({
+          tabPress: event => {
+            if (!currentUser) {
+              event.preventDefault();
+              Alert.alert(t('loginRequired'), t('login_required_publish_body'), [
+                { text: t('cancel'), style: 'cancel' },
+                {
+                  text: t('profile_register'),
+                  onPress: () => navigation.navigate('Profile', { authMode: 'register' }),
+                },
+              ]);
+            }
+          },
+        })}
+      />
+      <Tab.Screen name="Messages" component={MessagesScreen} options={{ tabBarLabel: t('support_title') }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('tab_profile') }} />
     </Tab.Navigator>
   );

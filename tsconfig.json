@@ -5,5 +5,5 @@
     "module": "ESNext",
     "moduleResolution": "bundler"
   },
-  "exclude": ["admin"]
+  "exclude": ["admin", "dist", "imo-nord-togo", "node_modules"]
 }

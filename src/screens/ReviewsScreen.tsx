@@ -21,7 +21,7 @@ type ReviewsScreenRouteProp = RouteProp<RootStackParamList, 'Reviews'>;
 type ReviewsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Reviews'>;
 
 const ReviewsScreen = () => {
-  const { getPropertyReviews, addReview, getAverageRating, properties, currentUser, t } = useApp();
+  const { getPropertyReviews, addReview, getAverageRating, properties, currentUser, language, t } = useApp();
   const route = useRoute<ReviewsScreenRouteProp>();
   const navigation = useNavigation<ReviewsScreenNavigationProp>();
   const { propertyId } = route.params;
@@ -34,7 +34,7 @@ const ReviewsScreen = () => {
   const reviews = getPropertyReviews(propertyId);
   const averageRating = getAverageRating(propertyId);
 
-  const handleSubmitReview = () => {
+  const handleSubmitReview = async () => {
     if (!currentUser) {
       Alert.alert(t('error'), t('loginRequired'));
       return;
@@ -50,11 +50,15 @@ const ReviewsScreen = () => {
       return;
     }
 
-    addReview(propertyId, rating, comment.trim());
-    setRating(0);
-    setComment('');
-    setShowAddReview(false);
-    Alert.alert(t('success'), t('reviewAdded'));
+    try {
+      await addReview(propertyId, rating, comment.trim());
+      setRating(0);
+      setComment('');
+      setShowAddReview(false);
+      Alert.alert(t('success'), t('reviewAdded'));
+    } catch {
+      Alert.alert(t('error'), t('review_save_error'));
+    }
   };
 
   const renderStars = (currentRating: number, interactive = false, onRate?: (rating: number) => void) => {
@@ -87,7 +91,7 @@ const ReviewsScreen = () => {
       </View>
       <Text style={styles.reviewComment}>{review.comment}</Text>
       <Text style={styles.reviewDate}>
-        {new Date(review.createdAt).toLocaleDateString('fr-FR')}
+        {new Date(review.createdAt).toLocaleDateString(language === 'en' ? 'en-US' : 'fr-FR')}
         {review.verified && (
           <Text style={styles.verified}> • {t('verified')}</Text>
         )}

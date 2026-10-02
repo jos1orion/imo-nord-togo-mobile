@@ -34,6 +34,8 @@ create table if not exists public.profiles (
   full_name text,
   phone text,
   role public.user_role not null default 'USER',
+  account_status text not null default 'active'
+    constraint profiles_account_status_check check (account_status in ('active', 'suspended', 'pending')),
   created_at timestamptz not null default now()
 );
 
@@ -129,10 +131,20 @@ create table if not exists public.user_push_tokens (
 );
 
 create or replace function public.is_admin() returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.profiles where id = auth.uid() and role = 'ADMIN');
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid()
+      and role = 'ADMIN'
+      and coalesce(account_status, 'active') <> 'suspended'
+  );
 $$;
 create or replace function public.is_staff() returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.profiles where id = auth.uid() and role in ('ADMIN', 'AGENT', 'ACCOUNTANT'));
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid()
+      and role in ('ADMIN', 'AGENT', 'ACCOUNTANT')
+      and coalesce(account_status, 'active') <> 'suspended'
+  );
 $$;
 
 create or replace function public.set_updated_at() returns trigger language plpgsql as $$
