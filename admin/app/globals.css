@@ -1844,10 +1844,3 @@ button {
   font-size: 13px;
   margin-top: 12px;
 }
-
-.qr-box img {
-  width: 180px;
-  height: 180px;
-  background: #fff;
-  border-radius: 8px;
-}

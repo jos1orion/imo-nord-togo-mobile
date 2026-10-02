@@ -68,12 +68,6 @@ function LoginForm() {
       return;
     }
 
-    if (profile.role === 'ADMIN') {
-      setLoading(false);
-      router.replace('/login/mfa');
-      return;
-    }
-
     setLoading(false);
     router.replace('/');
   };

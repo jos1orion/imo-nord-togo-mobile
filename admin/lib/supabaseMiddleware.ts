@@ -5,7 +5,6 @@ import { fetchStaffProfileAccess } from './profileAccess';
 
 const PUBLIC_PATHS = [
   '/login',
-  '/login/mfa',
   '/auth/reset',
   '/delete-account',
   '/privacy',
@@ -19,6 +18,12 @@ function isPublicPath(path: string) {
 
 export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  if (path === '/login/mfa' || path.startsWith('/login/mfa/')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    return NextResponse.redirect(url);
+  }
+
   const isPublicDocument =
     path === '/delete-account' ||
     path.startsWith('/delete-account/') ||
@@ -58,7 +63,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser();
-  if (authError) {
+  if (authError && authError.name !== 'AuthSessionMissingError') {
     return new NextResponse('Unable to connect to Supabase Auth.', { status: 503 });
   }
 
@@ -89,24 +94,10 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    if (profile.role === 'ADMIN' && !isPublicPath(path)) {
-      const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (aalError || aal?.currentLevel !== 'aal2') {
-        const url = request.nextUrl.clone();
-        url.pathname = '/login/mfa';
-        return NextResponse.redirect(url);
-      }
-    }
-
     if (path === '/login') {
       const url = request.nextUrl.clone();
       url.search = '';
-      if (profile.role === 'ADMIN') {
-        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-        url.pathname = aal?.currentLevel === 'aal2' ? '/' : '/login/mfa';
-      } else {
-        url.pathname = '/';
-      }
+      url.pathname = '/';
       return NextResponse.redirect(url);
     }
   }

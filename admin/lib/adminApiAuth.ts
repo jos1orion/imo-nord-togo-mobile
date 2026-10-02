@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseAdmin } from './supabaseAdmin';
+import { fetchStaffProfileAccess } from './profileAccess';
 
 type AdminGuardResult =
   | { supabaseAdmin: SupabaseClient; authUserId: string }
@@ -30,14 +31,25 @@ export async function requireAdmin(request: Request): Promise<AdminGuardResult> 
     return { error: NextResponse.json({ error: 'Session invalide.' }, { status: 401 }) };
   }
 
-  const { data: profile, error: profileError } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', authData.user.id)
-    .maybeSingle();
+  const { data: profile, error: profileError } = await fetchStaffProfileAccess(
+    supabaseAdmin,
+    authData.user.id
+  );
 
-  if (profileError || profile?.role !== 'ADMIN') {
+  if (profileError) {
+    console.error('Admin profile lookup failed', profileError.message);
+    return {
+      error: NextResponse.json(
+        { error: 'Impossible de vérifier les droits admin.' },
+        { status: 500 }
+      ),
+    };
+  }
+  if (!profile || profile.role !== 'ADMIN') {
     return { error: NextResponse.json({ error: 'Accès refusé.' }, { status: 403 }) };
+  }
+  if (profile.account_status === 'suspended') {
+    return { error: NextResponse.json({ error: 'Compte suspendu.' }, { status: 403 }) };
   }
 
   return { supabaseAdmin, authUserId: authData.user.id };

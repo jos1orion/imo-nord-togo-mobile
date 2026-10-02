@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseAdmin } from './supabaseAdmin';
+import { fetchStaffProfileAccess } from './profileAccess';
 
 type AdminApiContext = {
   supabaseAdmin: SupabaseClient;
@@ -29,22 +30,16 @@ export async function requireAdminApi(request: Request): Promise<AdminApiGuardRe
     return { response: NextResponse.json({ error: 'Session invalide.' }, { status: 401 }) };
   }
 
-  const { data: profile, error: profileError } = await supabaseAdmin
-    .from('profiles')
-    .select('role, account_status')
-    .eq('id', authData.user.id)
-    .maybeSingle();
+  const { data: profile, error: profileError } = await fetchStaffProfileAccess(
+    supabaseAdmin,
+    authData.user.id
+  );
 
   if (profileError) {
     return { response: NextResponse.json({ error: 'Impossible de vérifier les droits admin.' }, { status: 500 }) };
   }
   if (!profile || profile.role !== 'ADMIN' || profile.account_status === 'suspended') {
     return { response: NextResponse.json({ error: 'Accès refusé.' }, { status: 403 }) };
-  }
-
-  const { data: claimsData, error: claimsError } = await supabaseAdmin.auth.getClaims(token);
-  if (claimsError || !claimsData || claimsData.claims.aal !== 'aal2') {
-    return { response: NextResponse.json({ error: 'Une authentification MFA est requise.' }, { status: 403 }) };
   }
 
   return { supabaseAdmin, userId: authData.user.id };
