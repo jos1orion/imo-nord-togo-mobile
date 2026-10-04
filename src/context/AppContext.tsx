@@ -1,9 +1,15 @@
 ﻿import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
-import { Alert, Image } from 'react-native';
+import { Alert, Image, Linking } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as SecureStore from 'expo-secure-store';
-import { supabase, supabaseAnonKey, supabaseUrl } from '../lib/supabase';
+import {
+  authCallbackUrl,
+  exchangeAuthCallback,
+  supabase,
+  supabaseAnonKey,
+  supabaseUrl,
+} from '../lib/supabase';
 import { safeRegisterExpoPushToken, safeScheduleLocalNotification } from '../lib/expoNotificationsSafe';
 import {
   Property,
@@ -90,7 +96,7 @@ interface AppContextType {
   clearSearchHistory: () => void;
   toggleNeighborhoodAlert: (name: string) => void;
   setPrivacySetting: (key: 'hideContact' | 'hideListings', value: boolean) => void;
-  registerUser: (data: { name: string; email: string; phone: string; password: string; wantsAgentAccess: boolean }) => Promise<{ ok: true } | { ok: false; code: string }>;
+  registerUser: (data: { name: string; email: string; phone: string; password: string; wantsAgentAccess: boolean }) => Promise<{ ok: true; confirmationRequired: boolean } | { ok: false; code: string }>;
   loginUser: (email: string, password: string) => Promise<{ ok: true } | { ok: false; code: string }>;
   requestAgentAccess: () => Promise<void>;
   logoutUser: () => Promise<void>;
@@ -786,6 +792,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       subscription.unsubscribe();
     };
   }, [hydrateAuthenticatedUser]);
+
+  useEffect(() => {
+    const completeAuthCallback = async (url: string | null) => {
+      if (!url?.startsWith(authCallbackUrl)) return;
+      try {
+        const result = await exchangeAuthCallback(url);
+        if (result?.error) {
+          console.error('Unable to complete the mobile auth callback.', result.error.message);
+          Alert.alert(
+            translate(language, 'error'),
+            translate(language, 'profile_auth_callback_failed')
+          );
+        }
+      } catch (error) {
+        console.error('Unable to complete the mobile auth callback.', error);
+        Alert.alert(
+          translate(language, 'error'),
+          translate(language, 'profile_auth_callback_failed')
+        );
+      }
+    };
+
+    void Linking.getInitialURL()
+      .then(completeAuthCallback)
+      .catch(error => console.error('Unable to read the initial auth callback URL.', error));
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      void completeAuthCallback(url);
+    });
+    return () => subscription.remove();
+  }, [language]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -1774,6 +1810,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       email,
       password: data.password,
       options: {
+        emailRedirectTo: authCallbackUrl,
         data: {
           name: data.name,
           phone: data.phone,
@@ -1784,7 +1821,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (error) {
       return { ok: false, code: error.message } as { ok: false; code: string };
     }
-    return { ok: true } as { ok: true };
+    return { ok: true as const, confirmationRequired: !authData.session };
   }, []);
 
   const loginUser = useCallback(async (email: string, password: string) => {

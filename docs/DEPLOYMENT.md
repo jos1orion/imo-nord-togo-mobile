@@ -63,7 +63,9 @@ Dans **Authentication → URL Configuration → Redirect URLs** de Supabase, aut
 imonordtogo://auth/callback
 ```
 
-L’application utilise ce callback pour terminer la connexion Google sur Android et iOS. Le fournisseur Google doit aussi être activé dans le projet Supabase utilisé par les environnements mobile.
+Ce callback est utilisé pour la connexion Google et le retour après confirmation de l’inscription. Le manifeste Android déclare le schéma `imonordtogo`; après toute modification du schéma ou des icônes, régénérer le projet natif avec `npx expo prebuild --platform android`.
+
+Le fournisseur Google doit être activé dans le projet Supabase utilisé par les environnements mobiles, et les identifiants OAuth du fournisseur doivent être valides dans Google Cloud Console.
 
 Pour la réinitialisation du mot de passe mobile, ajouter également cette URL aux **Redirect URLs** :
 

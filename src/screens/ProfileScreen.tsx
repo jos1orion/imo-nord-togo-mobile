@@ -25,7 +25,7 @@ import LegalScreen from './SettingsScreen';
 import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { supabase } from '../lib/supabase';
+import { authCallbackUrl, exchangeAuthCallback, supabase } from '../lib/supabase';
 import { getContactEmail } from '../constants/appConfig';
 import PropertyCard from '../components/PropertyCard';
 import COLORS from '../theme/colors';
@@ -77,6 +77,7 @@ const ProfileScreen: React.FC = () => {
   const [wantsAgentAccess, setWantsAgentAccess] = useState(false);
   const [authPassword, setAuthPassword] = useState('');
   const [authError, setAuthError] = useState('');
+  const [authNotice, setAuthNotice] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -85,6 +86,7 @@ const ProfileScreen: React.FC = () => {
     if (route.params?.authMode) {
       setAuthMode(route.params.authMode);
       setAuthError('');
+      setAuthNotice('');
     }
   }, [route.params?.authMode]);
 
@@ -168,10 +170,11 @@ const ProfileScreen: React.FC = () => {
     if (message.includes('password') && (message.includes('short') || message.includes('6'))) {
       return t('profile_auth_password_short');
     }
-    return t('profile_auth_invalid');
+    return t('profile_auth_request_failed');
   };
 
   const handleAuth = async () => {
+    setAuthNotice('');
     if (!emailValid) {
       setAuthError(t('profile_auth_email_invalid'));
       return;
@@ -209,10 +212,14 @@ const ProfileScreen: React.FC = () => {
       return;
     }
     setAuthName('');
-    setAuthEmail('');
     setAuthPhone('');
     setAuthPassword('');
     setWantsAgentAccess(false);
+    setAuthNotice(
+      result.confirmationRequired
+        ? t('profile_auth_registration_confirm_email')
+        : t('profile_auth_registration_success')
+    );
     setAuthLoading(false);
   };
 
@@ -241,11 +248,10 @@ const ProfileScreen: React.FC = () => {
     setAuthError('');
     setAuthLoading(true);
     try {
-      const redirectTo = 'imonordtogo://auth/callback';
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo,
+          redirectTo: authCallbackUrl,
           skipBrowserRedirect: Platform.OS !== 'web',
         },
       });
@@ -253,10 +259,10 @@ const ProfileScreen: React.FC = () => {
       if (Platform.OS === 'web') return;
       if (!data.url) throw new Error('Missing Google OAuth URL.');
 
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      const result = await WebBrowser.openAuthSessionAsync(data.url, authCallbackUrl);
       if (result.type === 'success') {
-        const { error: sessionError } = await supabase.auth.exchangeCodeForSession(result.url);
-        if (sessionError) throw sessionError;
+        const sessionResult = await exchangeAuthCallback(result.url);
+        if (sessionResult?.error) throw sessionResult.error;
       }
     } catch {
       setAuthError(t('profile_auth_google_failed'));
@@ -376,6 +382,7 @@ const ProfileScreen: React.FC = () => {
               onPress={() => {
                 setAuthMode('login');
                 setAuthError('');
+                setAuthNotice('');
               }}
             >
               <Text style={[styles.authTabText, authMode === 'login' && styles.authTabTextActive]}>
@@ -387,6 +394,7 @@ const ProfileScreen: React.FC = () => {
               onPress={() => {
                 setAuthMode('register');
                 setAuthError('');
+                setAuthNotice('');
               }}
             >
               <Text style={[styles.authTabText, authMode === 'register' && styles.authTabTextActive]}>
@@ -491,6 +499,9 @@ const ProfileScreen: React.FC = () => {
 
           {authError.length > 0 && (
             <Text style={styles.authError}>{authError}</Text>
+          )}
+          {authNotice.length > 0 && (
+            <Text style={styles.authNotice}>{authNotice}</Text>
           )}
 
           {authMode === 'login' && (
@@ -1133,6 +1144,15 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 9,
   },
+  authNotice: {
+    fontSize: 12,
+    color: '#166534',
+    marginBottom: 10,
+    backgroundColor: COLORS.successBg,
+    borderRadius: 9,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+  },
   accountCard: {
     backgroundColor: '#fff',
     marginHorizontal: 16,
@@ -1699,7 +1719,3 @@ const baseStyles = StyleSheet.create({
 });
 
 export default ProfileScreen;
-
-
-
-

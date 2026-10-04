@@ -98,6 +98,11 @@ const STRINGS = {
     profile_auth_or: 'ou',
     profile_auth_google: 'Continuer avec Google',
     profile_auth_google_failed: 'La connexion Google a échoué. Réessayez.',
+    profile_auth_registration_confirm_email:
+      'Compte créé. Vérifiez votre e-mail pour confirmer l’inscription, puis connectez-vous.',
+    profile_auth_registration_success: 'Votre compte a été créé avec succès.',
+    profile_auth_request_failed: 'La demande a échoué. Vérifiez votre connexion et réessayez.',
+    profile_auth_callback_failed: 'La confirmation a échoué. Réessayez de vous connecter.',
     profile_agent_signup: 'Je suis agent immobilier et je souhaite publier des annonces.',
     profile_agent_signup_note: 'Mon compte devra être validé par un administrateur avant publication.',
     profile_name: 'Nom complet',
@@ -559,6 +564,11 @@ const STRINGS = {
     profile_auth_or: 'or',
     profile_auth_google: 'Continue with Google',
     profile_auth_google_failed: 'Google sign-in failed. Please try again.',
+    profile_auth_registration_confirm_email:
+      'Account created. Check your email to confirm your registration, then sign in.',
+    profile_auth_registration_success: 'Your account was created successfully.',
+    profile_auth_request_failed: 'The request failed. Check your connection and try again.',
+    profile_auth_callback_failed: 'Confirmation failed. Please try signing in again.',
     profile_agent_signup: 'I am a real estate agent and want to publish listings.',
     profile_agent_signup_note: 'An administrator must approve my account before I can publish.',
     profile_name: 'Full name',

@@ -12,6 +12,8 @@ export const supabaseAnonKey =
   process.env.SUPABASE_ANON_KEY ??
   '';
 
+export const authCallbackUrl = 'imonordtogo://auth/callback';
+
 const isValidHttpUrl = (value: string) => {
   if (!value) return false;
   const trimmed = value.trim();
@@ -138,6 +140,25 @@ export const supabase: SupabaseClient = isSupabaseConfigured
       },
     })
   : createNoopSupabase();
+
+const authCodeExchanges = new Map<
+  string,
+  Promise<{ error: Error | null }>
+>();
+
+export const exchangeAuthCallback = async (url: string) => {
+  const code = new URL(url).searchParams.get('code');
+  if (!code) return null;
+
+  const existingExchange = authCodeExchanges.get(code);
+  if (existingExchange) return existingExchange;
+
+  const exchange = supabase.auth.exchangeCodeForSession(code).then(({ error }) => ({
+    error: error ?? null,
+  }));
+  authCodeExchanges.set(code, exchange);
+  return exchange;
+};
 
 if (!isSupabaseConfigured) {
   console.warn(
