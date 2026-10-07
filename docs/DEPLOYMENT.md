@@ -45,7 +45,7 @@ Variables d’environnement attendues :
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` (serveur uniquement : routes API Next)
+- `SUPABASE_SERVICE_ROLE_KEY` (clé API secrète `sb_secret_` ou ancien JWT `service_role`, serveur uniquement : routes API Next)
 
 Voir `admin/README.md` et `admin/.env.local.example`.
 
@@ -83,7 +83,7 @@ L’application ouvre cette URL depuis l’email de récupération et permet ens
 4. Ajouter les variables d’environnement (par environnement si besoin : Preview/Production) :
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY` (serveur uniquement)
+   - `SUPABASE_SERVICE_ROLE_KEY` (clé API secrète `sb_secret_` ou ancien JWT `service_role`, serveur uniquement)
 5. Déployer : chaque push crée une Preview, et la branche de prod (souvent `main`) crée la Production.
 
 Après déploiement, la ressource Web publique de demande de suppression pour Google

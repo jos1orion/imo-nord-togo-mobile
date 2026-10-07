@@ -10,11 +10,11 @@ Application Next.js pour la gestion (biens, locataires, contrats, etc.), connect
 ## Configuration
 
 1. Copier `admin/.env.example` vers `admin/.env.local`.
-2. Renseigner `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` (cette dernière sert uniquement aux routes serveur de création, modification et suppression des utilisateurs).
+2. Renseigner `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` avec une clé API secrète Supabase (`sb_secret_`) ou un ancien JWT `service_role`. Cette dernière sert uniquement aux routes serveur de création, modification et suppression des utilisateurs.
 
 ### Sécurité
 
-- `SUPABASE_SERVICE_ROLE_KEY` doit rester **côté serveur uniquement** (routes API Next.js). Ne jamais l’exposer au navigateur.
+- `SUPABASE_SERVICE_ROLE_KEY` doit rester **côté serveur uniquement** (routes API Next.js). Il peut s’agir d’une clé secrète API (`sb_secret_`) ou d’un ancien JWT `service_role`; ne jamais l’exposer au navigateur.
 - Les accès “admin” sont contrôlés par middleware Next.js, AuthGate, RBAC et RLS Supabase.
 - Les inscriptions mobiles reçoivent le rôle `USER`. Un administrateur doit promouvoir le staff.
 
@@ -32,11 +32,11 @@ Depuis la racine du dépôt, la commande équivalente est :
 npm run admin:dev
 ```
 
-Ouvrir [http://localhost:3000](http://localhost:3000), se connecter avec un compte ayant une ligne dans `profiles` et le rôle `ADMIN`. Les comptes `USER`, `AGENT` et `ACCOUNTANT` sont refusés.
+Ouvrir [http://localhost:3000](http://localhost:3000), puis se connecter avec un compte présent dans `profiles` ayant un rôle staff (`ADMIN`, `AGENT` ou `ACCOUNTANT`). Les comptes `USER` sont refusés ; chaque rôle staff ne voit et n’utilise que les fonctions autorisées par le RBAC.
 
 ## Rôles et menu
 
-Le back-office est réservé au rôle `ADMIN`. Les rôles `USER`, `AGENT` et `ACCOUNTANT` n’y ont pas accès (voir `lib/rbac.ts` et `lib/supabaseMiddleware.ts`).
+Le back-office est réservé aux rôles staff `ADMIN`, `AGENT` et `ACCOUNTANT`. Les rôles `USER` n’y ont pas accès. Les pages et actions sont ensuite filtrées selon les permissions du rôle (voir `lib/rbac.ts`, `components/RouteGuard.tsx` et `lib/supabaseMiddleware.ts`).
 
 ## Base Supabase et production
 

@@ -25,7 +25,7 @@ import LegalScreen from './SettingsScreen';
 import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { authCallbackUrl, exchangeAuthCallback, supabase } from '../lib/supabase';
+import { authCallbackUrl, exchangeAuthCallback, resetPasswordCallbackUrl, supabase } from '../lib/supabase';
 import { getContactEmail } from '../constants/appConfig';
 import PropertyCard from '../components/PropertyCard';
 import COLORS from '../theme/colors';
@@ -231,7 +231,7 @@ const ProfileScreen: React.FC = () => {
     }
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.toLowerCase(), {
-        redirectTo: 'imonordtogo://reset-password',
+        redirectTo: resetPasswordCallbackUrl,
       });
       if (error) {
         setAuthError(t('profile_auth_reset_failed'));
@@ -247,6 +247,7 @@ const ProfileScreen: React.FC = () => {
   const handleGoogleAuth = async () => {
     setAuthError('');
     setAuthLoading(true);
+    let authStage = 'requesting Google authorization';
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -259,12 +260,23 @@ const ProfileScreen: React.FC = () => {
       if (Platform.OS === 'web') return;
       if (!data.url) throw new Error('Missing Google OAuth URL.');
 
+      authStage = 'opening the Google sign-in page';
       const result = await WebBrowser.openAuthSessionAsync(data.url, authCallbackUrl);
       if (result.type === 'success') {
+        authStage = 'completing the Supabase session';
         const sessionResult = await exchangeAuthCallback(result.url);
+        if (!sessionResult) throw new Error('Google returned no authorization code.');
         if (sessionResult?.error) throw sessionResult.error;
+      } else if (result.type !== 'cancel' && result.type !== 'dismiss') {
+        console.warn('Google sign-in ended without completing authentication.', {
+          resultType: result.type,
+        });
       }
-    } catch {
+    } catch (error) {
+      const errorDetails = error instanceof Error
+        ? { name: error.name, message: error.message }
+        : { message: String(error) };
+      console.error(`Google sign-in failed while ${authStage}.`, errorDetails);
       setAuthError(t('profile_auth_google_failed'));
     } finally {
       setAuthLoading(false);

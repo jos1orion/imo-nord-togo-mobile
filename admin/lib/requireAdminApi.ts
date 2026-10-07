@@ -36,7 +36,12 @@ export async function requireAdminApi(request: Request): Promise<AdminApiGuardRe
   );
 
   if (profileError) {
-    return { response: NextResponse.json({ error: 'Impossible de vérifier les droits admin.' }, { status: 500 }) };
+    return {
+      response: NextResponse.json(
+        { error: 'Impossible de vérifier les droits admin.' },
+        { status: 500 }
+      ),
+    };
   }
   if (!profile || profile.role !== 'ADMIN' || profile.account_status === 'suspended') {
     return { response: NextResponse.json({ error: 'Accès refusé.' }, { status: 403 }) };

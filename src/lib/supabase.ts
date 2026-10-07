@@ -13,6 +13,7 @@ export const supabaseAnonKey =
   '';
 
 export const authCallbackUrl = 'imonordtogo://auth/callback';
+export const resetPasswordCallbackUrl = 'imonordtogo://reset-password';
 
 const isValidHttpUrl = (value: string) => {
   if (!value) return false;
@@ -147,7 +148,17 @@ const authCodeExchanges = new Map<
 >();
 
 export const exchangeAuthCallback = async (url: string) => {
-  const code = new URL(url).searchParams.get('code');
+  const callbackUrl = new URL(url);
+  const oauthError = callbackUrl.searchParams.get('error');
+  if (oauthError) {
+    const description =
+      callbackUrl.searchParams.get('error_description') ||
+      callbackUrl.searchParams.get('error_code') ||
+      oauthError;
+    return { error: new Error(description) };
+  }
+
+  const code = callbackUrl.searchParams.get('code');
   if (!code) return null;
 
   const existingExchange = authCodeExchanges.get(code);

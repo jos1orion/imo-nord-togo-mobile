@@ -11,12 +11,13 @@ export async function requireAdmin(request: Request): Promise<AdminGuardResult> 
   let supabaseAdmin: SupabaseClient;
   try {
     supabaseAdmin = getSupabaseAdmin();
-  } catch {
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Configuration serveur incomplète : SUPABASE_SERVICE_ROLE_KEY est requise pour créer ou modifier des utilisateurs.';
     return {
-      error: NextResponse.json(
-        { error: 'Configuration serveur incomplète : SUPABASE_SERVICE_ROLE_KEY est requise pour créer ou modifier des utilisateurs.' },
-        { status: 503 }
-      ),
+      error: NextResponse.json({ error: message }, { status: 503 }),
     };
   }
 
@@ -56,7 +57,7 @@ export async function requireAdmin(request: Request): Promise<AdminGuardResult> 
 }
 
 export function isValidUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value);
 }
 
 export async function recordAdminAction(
