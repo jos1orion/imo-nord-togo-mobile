@@ -91,7 +91,7 @@ export default function DashboardPage() {
   ].filter(item => profile?.role === 'AGENT' ? item.href.startsWith('/properties') || item.href.startsWith('/publications') : true);
 
   return (
-    <div className="grid">
+    <div className="grid dashboard">
       <SectionHeader
         title="Tableau de bord"
         subtitle={profile?.role === 'AGENT' ? 'Vos annonces et publications.' : "Aujourd'hui : activité, validations et alertes."}
@@ -107,22 +107,34 @@ export default function DashboardPage() {
 
       {loading ? <div className="card">Chargement des données...</div> : null}
 
-      <h3 className="section-kicker">Aujourd&apos;hui</h3>
-      <div className="grid grid-cols-4">
+      <div className="dashboard-section-heading">
+        <div>
+          <h2>Aperçu de l&apos;activité</h2>
+          <p>Les chiffres clés de votre portefeuille immobilier.</p>
+        </div>
+        <span className="dashboard-period">Vue d&apos;ensemble</span>
+      </div>
+      <div className="grid grid-cols-4 dashboard-primary-stats">
         <StatCard label="Biens actifs" value={`${stats.active}`} delta="Approuvés et disponibles" />
         <StatCard label="En attente" value={`${stats.pending}`} delta="Validation requise" />
         <StatCard label="Approuvés" value={`${stats.approved}`} delta={`${stats.rejected} rejetés`} />
         <StatCard label="Featured" value={`${stats.featured}`} delta={`${stats.expiringSoon} expirent sous 3 jours`} />
       </div>
-      <div className="grid grid-cols-3">
+      <div className="grid grid-cols-3 dashboard-secondary-stats">
         <StatCard label="Expirations proches" value={`${stats.expiringSoon}`} delta="Moins de 3 jours" />
         <StatCard label="Signalements ouverts" value={`${reportsOpen}`} delta="Modération" />
         <StatCard label="Occupés" value={`${stats.occupied}`} delta={`${stats.sold} vendus · ${stats.rented} loués`} />
       </div>
 
-      <div className="grid grid-cols-2">
-        <div className="card">
-          <div style={{ fontWeight: 600 }}>Publications</div>
+      <div className="grid grid-cols-2 dashboard-panels">
+        <div className="card dashboard-panel">
+          <div className="dashboard-panel-heading">
+            <div className="dashboard-panel-icon">⌂</div>
+            <div>
+              <h3>Publications</h3>
+              <p>Répartition de vos annonces</p>
+            </div>
+          </div>
           <div className="stat-lines">
             <div><span>Actives</span><strong>{stats.active}</strong></div>
             <div><span>En attente</span><strong>{stats.pending}</strong></div>
@@ -131,11 +143,16 @@ export default function DashboardPage() {
             <div><span>Louées</span><strong>{stats.rented}</strong></div>
           </div>
         </div>
-        <div className="card">
+        <div className="card dashboard-panel">
           <div className="split">
             <div>
-              <div style={{ fontWeight: 600 }}>Actions à effectuer</div>
-              <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4 }}>Priorités du jour</div>
+              <div className="dashboard-panel-heading">
+                <div className="dashboard-panel-icon dashboard-panel-icon-alert">!</div>
+                <div>
+                  <h3>Actions à effectuer</h3>
+                  <p>Les priorités du jour</p>
+                </div>
+              </div>
             </div>
           </div>
           <div className="action-list">
@@ -153,8 +170,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="card">
-        <div style={{ fontWeight: 600 }}>Activité récente</div>
+      <div className="card dashboard-panel dashboard-activity-panel">
+        <div className="dashboard-panel-heading">
+          <div className="dashboard-panel-icon dashboard-panel-icon-activity">↗</div>
+          <div>
+            <h3>Activité récente</h3>
+            <p>Les dernières opérations effectuées sur la plateforme.</p>
+          </div>
+        </div>
         <div style={{ marginTop: 16 }}>
           <ActivityFeed
             items={

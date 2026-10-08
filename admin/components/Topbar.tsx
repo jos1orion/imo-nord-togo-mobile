@@ -10,6 +10,13 @@ export default function Topbar() {
   const { profile, user } = useSession();
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const displayName = profile?.full_name || user?.email || 'Admin';
+  const initials = displayName
+    .split(/[\s@._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part.charAt(0).toUpperCase())
+    .join('');
 
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -32,20 +39,23 @@ export default function Topbar() {
         />
       </form>
       <div className="topbar-actions">
-        <div className="topbar-chip">Temps réel</div>
+        <div className="topbar-chip"><span className="online-indicator" /> Temps réel</div>
         <div className="user-chip">
-          <div className="user-name">{profile?.full_name || user?.email || 'Admin'}</div>
-          <div className="user-role">{profile?.role ? roleLabels[profile.role] : 'Compte'}</div>
+          <div className="user-avatar" aria-hidden="true">{initials || 'A'}</div>
+          <div className="user-details">
+            <div className="user-name">{displayName}</div>
+            <div className="user-role">{profile?.role ? roleLabels[profile.role] : 'Compte'}</div>
+          </div>
         </div>
         <button
           type="button"
-          className="ghost-button"
+          className="ghost-button topbar-logout"
           onClick={async () => {
             await supabase.auth.signOut();
             router.replace('/login');
           }}
         >
-          Déconnexion
+          <span>Déconnexion</span>
         </button>
       </div>
     </div>
