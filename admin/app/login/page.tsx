@@ -94,23 +94,40 @@ function LoginForm() {
 
   return (
     <div className="login-shell">
+      <section className="login-showcase" aria-label="Imo Nord Togo, immobilier dans le Nord du Togo">
+        <div className="login-showcase-brand">
+          <span className="login-showcase-mark" aria-hidden="true">IN</span>
+          <span>IMO NORD <strong>TOGO</strong></span>
+        </div>
+        <div className="login-showcase-copy">
+          <div className="login-showcase-eyebrow">L&apos;immobilier, autrement</div>
+          <h1>Le Nord-Togo<br />prend de la <em>hauteur.</em></h1>
+          <p>Un espace privilégié pour piloter les biens, accompagner les agents et faire grandir chaque projet immobilier.</p>
+        </div>
+        <div className="login-showcase-footer">
+          <span className="login-showcase-live" />
+          <span>Kara · Togo</span>
+          <span className="login-showcase-divider" />
+          <span>Votre espace de gestion</span>
+        </div>
+        <div className="login-showcase-orbit" aria-hidden="true">
+          <span>IN</span>
+        </div>
+      </section>
       <div className="login-card">
-        <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 600 }}>
-            Connexion staff
-          </div>
-          <div style={{ color: 'var(--muted)', marginTop: 6 }}>
-            E-mail et mot de passe gérés par Supabase Auth. Session conservée. Un USER ne peut pas s&apos;attribuer AGENT.
-          </div>
+        <div className="login-card-heading">
+          <div className="login-card-eyebrow">ACCÈS SÉCURISÉ</div>
+          <h2>Heureux de vous retrouver.</h2>
+          <p>Connectez-vous à votre espace professionnel.</p>
         </div>
 
         <div className="form-field">
-          <label>Adresse email</label>
-          <input type="email" value={email} onChange={event => setEmail(event.target.value)} />
+          <label htmlFor="staff-email">Adresse e-mail</label>
+          <input id="staff-email" type="email" value={email} onChange={event => setEmail(event.target.value)} />
         </div>
         <div className="form-field">
-          <label>Mot de passe</label>
-          <input type="password" value={password} onChange={event => setPassword(event.target.value)} />
+          <label htmlFor="staff-password">Mot de passe</label>
+          <input id="staff-password" type="password" value={password} onChange={event => setPassword(event.target.value)} />
         </div>
 
         {preset && !error ? <div className="alert">{preset}</div> : null}
