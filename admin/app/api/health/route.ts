@@ -19,7 +19,28 @@ export async function GET() {
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  const [profileCheck, propertyCheck] = await Promise.all([
+  const [authCheck, profileCheck, propertyCheck] = await Promise.all([
+    fetch(`${supabaseUrl.replace(/\/+$/, '')}/auth/v1/health`, {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    })
+      .then(response =>
+        response.ok
+          ? 'ok'
+          : response.status === 401 || response.status === 403
+            ? 'invalid_api_key'
+            : 'unavailable'
+      )
+      .catch(error => {
+        console.error('Supabase Auth health check failed.', {
+          name: error instanceof Error ? error.name : 'UnknownError',
+        });
+        return 'unreachable';
+      }),
     supabase.from('profiles').select('id, role, account_status').limit(0),
     supabase
       .from('properties')
@@ -27,14 +48,19 @@ export async function GET() {
       .limit(0),
   ]);
 
-  if (profileCheck.error || propertyCheck.error) {
+  if (authCheck !== 'ok' || profileCheck.error || propertyCheck.error) {
     const schemaIncomplete =
       isSchemaError(profileCheck.error?.code) || isSchemaError(propertyCheck.error?.code);
     return NextResponse.json(
       {
         status: 'degraded',
         supabase: 'reachable',
-        schema: schemaIncomplete ? 'incomplete' : 'unknown',
+        auth: authCheck,
+        schema: schemaIncomplete
+          ? 'incomplete'
+          : profileCheck.error || propertyCheck.error
+            ? 'unknown'
+            : 'ready',
         checks: {
           profiles: profileCheck.error
             ? isSchemaError(profileCheck.error.code)
@@ -55,6 +81,7 @@ export async function GET() {
   return NextResponse.json({
     status: 'ok',
     supabase: 'connected',
+    auth: 'connected',
     schema: 'ready',
     timestamp: new Date().toISOString(),
   });

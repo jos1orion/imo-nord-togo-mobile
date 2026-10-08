@@ -64,6 +64,32 @@ export async function updateSession(request: NextRequest) {
     error: authError,
   } = await supabase.auth.getUser();
   if (authError && authError.name !== 'AuthSessionMissingError') {
+    if (authError.status === 400 || authError.status === 401) {
+      console.warn('Supabase Auth rejected the current session.', {
+        status: authError.status,
+        code: authError.code,
+      });
+      const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
+      if (signOutError) {
+        console.error('Unable to clear the rejected Supabase Auth session.', {
+          name: signOutError.name,
+          status: signOutError.status,
+        });
+      }
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.search = '';
+      url.searchParams.set('error', 'session');
+      const response = NextResponse.redirect(url);
+      supabaseResponse.cookies.getAll().forEach(cookie => response.cookies.set(cookie));
+      return response;
+    }
+
+    console.error('Supabase Auth session verification failed.', {
+      name: authError.name,
+      status: authError.status,
+      code: authError.code,
+    });
     return new NextResponse('Unable to connect to Supabase Auth.', { status: 503 });
   }
 

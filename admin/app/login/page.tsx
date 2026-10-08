@@ -20,6 +20,7 @@ function LoginForm() {
   const preset = useMemo(() => {
     if (queryError === 'staff') return "Ce compte n'a pas accès au back-office.";
     if (queryError === 'suspended') return 'Compte suspendu. Contactez un administrateur.';
+    if (queryError === 'session') return 'Votre session a expiré. Veuillez vous reconnecter.';
     return null;
   }, [queryError]);
 
