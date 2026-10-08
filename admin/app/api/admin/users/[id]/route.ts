@@ -21,10 +21,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Corps JSON invalide.' }, { status: 400 });
   }
   const body = payload as Record<string, unknown>;
-  const { role, full_name, phone, password } = body;
+  const { role, full_name, phone, password, account_status, verified } = body;
 
   if (role !== undefined && (typeof role !== 'string' || !['USER', 'ADMIN', 'AGENT', 'ACCOUNTANT'].includes(role))) {
     return NextResponse.json({ error: 'Rôle invalide.' }, { status: 400 });
+  }
+  if (account_status !== undefined && !['active', 'suspended', 'pending'].includes(String(account_status))) {
+    return NextResponse.json({ error: 'Statut de compte invalide.' }, { status: 400 });
+  }
+  if (verified !== undefined && typeof verified !== 'boolean') {
+    return NextResponse.json({ error: 'État de vérification invalide.' }, { status: 400 });
+  }
+  if (userId === guard.userId && account_status === 'suspended') {
+    return NextResponse.json({ error: 'Impossible de suspendre votre propre compte.' }, { status: 400 });
   }
   if (full_name !== undefined && full_name !== null && (typeof full_name !== 'string' || full_name.length > 120)) {
     return NextResponse.json({ error: 'Nom invalide.' }, { status: 400 });
@@ -33,8 +42,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Téléphone invalide.' }, { status: 400 });
   }
 
-  const updates: { role?: string; full_name?: string | null; phone?: string | null } = {};
+  const updates: {
+    role?: string;
+    account_status?: 'active' | 'suspended' | 'pending';
+    full_name?: string | null;
+    phone?: string | null;
+  } = {};
   if (role !== undefined) updates.role = role;
+  if (account_status !== undefined) {
+    updates.account_status = account_status as 'active' | 'suspended' | 'pending';
+  }
   if (full_name !== undefined) updates.full_name = typeof full_name === 'string' ? full_name.trim() || null : null;
   if (phone !== undefined) updates.phone = typeof phone === 'string' ? phone.trim() || null : null;
 
@@ -45,7 +62,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
   }
 
-  if (!Object.keys(updates).length && passwordValue === undefined) {
+  if (!Object.keys(updates).length && passwordValue === undefined && verified === undefined) {
     return NextResponse.json({ error: 'Aucune modification.' }, { status: 400 });
   }
 
@@ -64,6 +81,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (passwordValue !== undefined) {
     const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: passwordValue });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+  }
+
+  if (verified !== undefined) {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      email_confirm: verified,
+    });
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

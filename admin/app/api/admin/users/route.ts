@@ -11,35 +11,52 @@ export async function GET(request: Request) {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const [{ data: profiles, error: profilesError }, { data: authData, error: authError }] =
-    await Promise.all([
-      supabaseAdmin
-        .from('profiles')
-        .select('id,full_name,phone,role,agent_status,created_at')
-        .order('created_at', { ascending: false })
-        .range(from, to),
-      supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
-    ]);
+  const [{ data: profiles, error: profilesError }, { count, error: countError }] = await Promise.all([
+    supabaseAdmin
+      .from('profiles')
+      .select('id,full_name,phone,role,account_status,agent_status,agent_rejection_reason,created_at')
+      .order('created_at', { ascending: false })
+      .range(from, to),
+    supabaseAdmin
+      .from('profiles')
+      .select('id', { count: 'exact', head: true }),
+  ]);
 
-  if (profilesError || authError) {
+  if (profilesError || countError) {
     console.error('Admin users list failed', {
       profilesError: profilesError?.message,
-      authError: authError?.message,
+      countError: countError?.message,
     });
     return NextResponse.json({ error: 'Liste des utilisateurs impossible à charger.' }, { status: 500 });
   }
 
-  const emails = new Map((authData.users ?? []).map(user => [user.id, user.email ?? null]));
-  const { count, error: countError } = await supabaseAdmin
-    .from('profiles')
-    .select('id', { count: 'exact', head: true });
-  if (countError) {
-    return NextResponse.json({ error: 'Liste des utilisateurs impossible à charger.' }, { status: 500 });
+  const authUsers: { id: string; email?: string; email_confirmed_at?: string | null }[] = [];
+  for (let authPage = 1; ; authPage += 1) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+      page: authPage,
+      perPage: 1000,
+    });
+    if (error) {
+      console.error('Admin users auth lookup failed', error.message);
+      return NextResponse.json({ error: 'Liste des utilisateurs impossible à charger.' }, { status: 500 });
+    }
+    const pageUsers = data.users ?? [];
+    authUsers.push(...pageUsers);
+    if (pageUsers.length < 1000) break;
   }
+
+  const authUsersById = new Map(authUsers.map(user => [
+    user.id,
+    {
+      email: user.email ?? null,
+      verified: Boolean(user.email_confirmed_at),
+    },
+  ]));
   return NextResponse.json({
     users: (profiles ?? []).map(profile => ({
       ...profile,
-      email: emails.get(profile.id) ?? null,
+      email: authUsersById.get(profile.id)?.email ?? null,
+      verified: authUsersById.get(profile.id)?.verified ?? false,
     })),
     total: count ?? 0,
     page,
