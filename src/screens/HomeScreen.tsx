@@ -15,6 +15,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -36,6 +37,7 @@ import { translate } from '../i18n';
 import { isFeaturedProperty, isPublicProperty } from '../utils/propertyVisibility';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import heroBackground from '../../assets/branding/hero-case-chaume.jpg';
 
 const { width } = Dimensions.get('window');
 
@@ -52,6 +54,7 @@ const HomeScreen: React.FC = () => {
     searchQuery,
     setSearchQuery,
     properties,
+    users,
     currentUser,
     neighborhoods,
     getFilteredProperties,
@@ -149,6 +152,13 @@ const HomeScreen: React.FC = () => {
     if (!exists) setSelectedNeighborhood(null);
   }, [availableNeighborhoods, selectedNeighborhood]);
   const activeListings = properties.filter(isPublicProperty).length;
+  const verifiedOwnerIds = new Set(users.filter(user => user.verified).map(user => user.id));
+  const verifiedOwnerCount = new Set(
+    properties
+      .filter(isPublicProperty)
+      .map(property => property.ownerId)
+      .filter((ownerId): ownerId is string => Boolean(ownerId && verifiedOwnerIds.has(ownerId)))
+  ).size;
   const totalLikes = Object.values(propertyStats).reduce(
     (sum, stats) => sum + (stats.likes ?? 0),
     0
@@ -321,6 +331,63 @@ const HomeScreen: React.FC = () => {
     if (hasMoreProperties) setVisibleCount(count => count + 12);
   };
   const isLoading = !hydrated;
+  const homeCategoryItems: {
+    type?: PropertyType;
+    label: string;
+    icon: keyof typeof Ionicons.glyphMap;
+    color: string;
+    container: string;
+    count?: number;
+    onPress?: () => void;
+  }[] = [
+    {
+      label: t('all_types'),
+      icon: 'apps-outline',
+      color: themeColors.onSurfaceMuted,
+      container: themeColors.surfaceAlt,
+      count: activeListings,
+      onPress: showAllProperties,
+    },
+    {
+      type: 'house',
+      label: tType('house'),
+      icon: 'home-outline',
+      color: themeColors.primary,
+      container: themeColors.primaryContainer,
+      count: propertiesByType.find(item => item.type === 'house')?.count ?? 0,
+    },
+    {
+      type: 'apartment',
+      label: tType('apartment'),
+      icon: 'business-outline',
+      color: themeColors.info,
+      container: themeColors.infoContainer,
+      count: propertiesByType.find(item => item.type === 'apartment')?.count ?? 0,
+    },
+    {
+      type: 'land',
+      label: tType('land'),
+      icon: 'map-outline',
+      color: themeColors.success,
+      container: themeColors.successContainer,
+      count: propertiesByType.find(item => item.type === 'land')?.count ?? 0,
+    },
+    {
+      type: 'shop',
+      label: tType('shop'),
+      icon: 'storefront-outline',
+      color: themeColors.warning,
+      container: themeColors.warningContainer,
+      count: propertiesByType.find(item => item.type === 'shop')?.count ?? 0,
+    },
+    {
+      label: t('home_more_categories'),
+      icon: 'grid-outline',
+      color: themeColors.accent,
+      container: themeColors.successContainer,
+      onPress: () => setCategoryPickerOpen(true),
+    },
+  ];
 
   const renderSkeletonCard = (key: string, compact = false) => (
     <View key={key} style={[styles.skeletonCard, compact && styles.skeletonCardCompact]}>
@@ -391,12 +458,23 @@ const HomeScreen: React.FC = () => {
       <>
       <View>
         {/* Header */}
-        <LinearGradient
-          colors={[themeColors.brand, themeColors.primaryDark]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.headerBlock, { paddingTop: insets.top + 18 }]}
-        >
+        <View style={[styles.headerBlock, { paddingTop: insets.top + 18 }]}>
+          <Image
+            source={heroBackground}
+            style={styles.heroImage}
+            resizeMode="cover"
+          />
+          <LinearGradient
+            colors={[
+              themeColors.heroScrimTop,
+              themeColors.heroScrimMid,
+              themeColors.heroScrimBottom,
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0.55, y: 1 }}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
           <View style={styles.heroDecorLg} pointerEvents="none" />
           <View style={styles.heroDecorSm} pointerEvents="none" />
           <View style={styles.locationPill}>
@@ -405,7 +483,33 @@ const HomeScreen: React.FC = () => {
           </View>
           <Text style={styles.headerTitle}>{t('home_hero_line1')}</Text>
           <Text style={styles.headerTitleEm}>{t('home_hero_line2')}</Text>
-        </LinearGradient>
+        </View>
+
+        <View style={styles.trustStatsCard}>
+          <View style={styles.trustStat}>
+            <View style={[styles.trustStatIcon, { backgroundColor: themeColors.primaryContainer }]}>
+              <Ionicons name="home-outline" size={16} color={themeColors.primary} />
+            </View>
+            <Text style={styles.trustStatValue}>{activeListings}</Text>
+            <Text style={styles.trustStatLabel}>{t('home_visible_properties')}</Text>
+          </View>
+          <View style={styles.trustStatDivider} />
+          <View style={styles.trustStat}>
+            <View style={[styles.trustStatIcon, { backgroundColor: themeColors.successContainer }]}>
+              <Ionicons name="shield-checkmark-outline" size={16} color={themeColors.success} />
+            </View>
+            <Text style={styles.trustStatValue}>{verifiedOwnerCount}</Text>
+            <Text style={styles.trustStatLabel}>{t('home_verified_owners')}</Text>
+          </View>
+          <View style={styles.trustStatDivider} />
+          <View style={styles.trustStat}>
+            <View style={[styles.trustStatIcon, { backgroundColor: themeColors.infoContainer }]}>
+              <Ionicons name="chatbubble-ellipses-outline" size={16} color={themeColors.info} />
+            </View>
+            <Text style={styles.trustStatValue}>{t('home_direct_contact_value')}</Text>
+            <Text style={styles.trustStatLabel}>{t('home_direct_contact')}</Text>
+          </View>
+        </View>
 
         <View style={styles.searchCardOverlap}>
           <View style={styles.searchCard}>
@@ -726,17 +830,25 @@ const HomeScreen: React.FC = () => {
       {/* Quick Categories */}
       <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
         <Text style={styles.sectionTitle}>{t('categories_title')}</Text>
-        <TouchableOpacity
-          style={styles.chooseCategoryButton}
-          onPress={() => setCategoryPickerOpen(true)}
-          accessibilityRole="button"
-        >
-          <View style={styles.chooseCategoryIcon}>
-            <Ionicons name="grid-outline" size={20} color={themeColors.primary} />
-          </View>
-          <Text style={styles.chooseCategoryText}>{t('home_choose_category')}</Text>
-          <Ionicons name="chevron-forward" size={19} color={themeColors.onSurfaceMuted} />
-        </TouchableOpacity>
+        <View style={styles.categoryGrid}>
+          {homeCategoryItems.map(item => (
+            <TouchableOpacity
+              key={item.type ?? item.label}
+              style={styles.categoryTile}
+              onPress={item.onPress ?? (() => item.type && handleCategoryPress(item.type))}
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+            >
+              <View style={[styles.categoryTileIcon, { backgroundColor: item.container }]}>
+                <Ionicons name={item.icon} size={21} color={item.color} />
+              </View>
+              <Text style={styles.categoryTileLabel} numberOfLines={1}>{item.label}</Text>
+              {item.count !== undefined && (
+                <Text style={styles.categoryTileCount}>{item.count} {t('properties_count')}</Text>
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
       </Animated.View>
 
       {(isLoading || featuredProperties.length > 0) && (
@@ -949,10 +1061,10 @@ const HomeScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
             {[
-              { type: 'house' as PropertyType, icon: 'home', color: themeColors.accent },
-              { type: 'apartment' as PropertyType, icon: 'business', color: themeColors.primary },
-              { type: 'land' as PropertyType, icon: 'map', color: themeColors.gold },
-              { type: 'shop' as PropertyType, icon: 'storefront', color: themeColors.cyan },
+              { type: 'house' as PropertyType, icon: 'home' as const, color: themeColors.accent },
+              { type: 'apartment' as PropertyType, icon: 'business' as const, color: themeColors.primary },
+              { type: 'land' as PropertyType, icon: 'map' as const, color: themeColors.gold },
+              { type: 'shop' as PropertyType, icon: 'storefront' as const, color: themeColors.cyan },
             ].map(item => (
               <TouchableOpacity
                 key={item.type}
@@ -961,7 +1073,7 @@ const HomeScreen: React.FC = () => {
                 accessibilityRole="button"
               >
                 <View style={[styles.categoryOptionIcon, { backgroundColor: `${item.color}18` }]}>
-                  <Ionicons name={item.icon as any} size={21} color={item.color} />
+                  <Ionicons name={item.icon} size={21} color={item.color} />
                 </View>
                 <Text style={styles.categoryOptionText}>{tType(item.type)}</Text>
                 <Text style={styles.categoryOptionCount}>
@@ -991,12 +1103,19 @@ const baseStyles = StyleSheet.create({
     borderBottomRightRadius: 28,
     overflow: 'hidden',
   },
+  heroImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   heroDecorLg: {
     position: 'absolute',
     width: 220,
     height: 220,
     borderRadius: 110,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: COLORS.overlayWhite07,
     top: -80,
     right: -60,
   },
@@ -1005,7 +1124,7 @@ const baseStyles = StyleSheet.create({
     width: 130,
     height: 130,
     borderRadius: 65,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: COLORS.overlayWhite05,
     bottom: 10,
     left: -50,
   },
@@ -1017,7 +1136,7 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: COLORS.overlayWhite14,
     marginBottom: 14,
   },
   locationPillText: {
@@ -1026,8 +1145,55 @@ const baseStyles = StyleSheet.create({
     color: COLORS.white,
     letterSpacing: 0.3,
   },
+  trustStatsCard: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginHorizontal: SPACING.lg,
+    marginTop: -28,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+    zIndex: 1,
+  },
+  trustStat: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  trustStatIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: RADIUS.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  trustStatValue: {
+    ...typography.subtitle,
+    color: COLORS.onSurface,
+  },
+  trustStatLabel: {
+    ...typography.caption,
+    color: COLORS.onSurfaceMuted,
+    textAlign: 'center',
+  },
+  trustStatDivider: {
+    width: 1,
+    alignSelf: 'center',
+    height: '64%',
+    backgroundColor: COLORS.border,
+  },
   searchCardOverlap: {
-    marginTop: -40,
+    marginTop: SPACING.md,
     paddingHorizontal: 20,
     zIndex: 2,
     elevation: 2,
@@ -1084,7 +1250,7 @@ const baseStyles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: COLORS.overlayWhite20,
   },
   quickActionIconLight: {
     backgroundColor: COLORS.infoContainer,
@@ -1553,32 +1719,42 @@ const baseStyles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.onSurfaceMuted,
   },
-  chooseCategoryButton: {
-    minHeight: 62,
+  categoryGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  categoryTile: {
+    width: '31%',
+    minHeight: 112,
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: SPACING.sm,
     backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    marginTop: 12,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  chooseCategoryIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: COLORS.infoContainer,
+  categoryTileIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: RADIUS.full,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: SPACING.xs,
   },
-  chooseCategoryText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.surface,
+  categoryTileLabel: {
+    ...typography.button,
+    color: COLORS.onSurface,
+    textAlign: 'center',
+  },
+  categoryTileCount: {
+    ...typography.caption,
+    color: COLORS.onSurfaceMuted,
+    marginTop: 2,
   },
   categoryNavigationBar: {
     flexDirection: 'row',
@@ -1637,7 +1813,7 @@ const baseStyles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 20,
-    backgroundColor: 'rgba(15, 23, 42, 0.48)',
+    backgroundColor: COLORS.overlayNavy48,
   },
   categoryModal: {
     backgroundColor: COLORS.surface,

@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -168,7 +169,12 @@ const ListingsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}>
+      <LinearGradient
+        colors={[themeColors.brand, themeColors.primaryDark]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}
+      >
         <View>
           <Text style={styles.title}>{t('publish_tab')}</Text>
           <Text style={styles.subtitle}>{t('home_publish_card_sub')}</Text>
@@ -194,6 +200,19 @@ const ListingsScreen: React.FC = () => {
                       : t('listing_agent_access_request')}
           </Text>
         </TouchableOpacity>
+      </LinearGradient>
+      <View style={styles.heroFloatingCard}>
+        <View style={styles.heroFloatingMetric}>
+          <Ionicons name="home-outline" size={17} color={themeColors.primary} />
+          <Text style={styles.heroFloatingValue}>{myProperties.length}</Text>
+          <Text style={styles.heroFloatingLabel}>{t('my_listings')}</Text>
+        </View>
+        <View style={styles.heroFloatingDivider} />
+        <View style={styles.heroFloatingMetric}>
+          <Ionicons name="heart-outline" size={17} color={themeColors.danger} />
+          <Text style={styles.heroFloatingValue}>{favoriteCount}</Text>
+          <Text style={styles.heroFloatingLabel}>{t('favorites')}</Text>
+        </View>
       </View>
 
       <FlatList
@@ -466,16 +485,19 @@ const baseStyles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
     paddingHorizontal: 18,
-    paddingBottom: 14,
+    paddingBottom: 38,
+    backgroundColor: COLORS.brand,
+    borderBottomLeftRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
   },
   title: {
     ...typography.heroTitle,
     fontSize: 24,
     fontWeight: 'bold',
-    color: COLORS.onSurface,
+    color: COLORS.white,
   },
   subtitle: {
-    color: COLORS.onSurfaceMuted,
+    color: COLORS.onBrandMuted,
     fontSize: 13,
     marginTop: 4,
   },
@@ -488,6 +510,41 @@ const baseStyles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  heroFloatingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: SPACING.lg,
+    marginTop: -24,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+    zIndex: 1,
+  },
+  heroFloatingMetric: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 3,
+  },
+  heroFloatingValue: {
+    ...typography.subtitle,
+    color: COLORS.onSurface,
+  },
+  heroFloatingLabel: {
+    ...typography.caption,
+    color: COLORS.onSurfaceMuted,
+  },
+  heroFloatingDivider: {
+    width: 1,
+    height: 48,
+    backgroundColor: COLORS.border,
   },
   publishButtonText: {
     color: COLORS.white,

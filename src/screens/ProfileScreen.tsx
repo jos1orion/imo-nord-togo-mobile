@@ -19,6 +19,7 @@ import {
 import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -612,6 +613,12 @@ const ProfileScreen: React.FC = () => {
       currentUser.agentStatus === 'pending' ||
       currentUser.agentStatus === 'rejected');
   const agentProperties = isAgent ? getMyProperties() : [];
+  const profileProperties = getMyProperties();
+  const unreadMessageCount = currentUser
+    ? chats
+        .filter(chat => chat.participants.includes(currentUser.id))
+        .reduce((total, chat) => total + (chat.unreadCount[currentUser.id] ?? 0), 0)
+    : 0;
   const activeAgentListings = agentProperties.filter(
     property => property.listingStatus === 'approved' && property.status === 'available'
   ).length;
@@ -633,10 +640,34 @@ const ProfileScreen: React.FC = () => {
         keyboardDismissMode="none"
       >
         {/* Header */}
-        <View style={styles.profileHeader}>
+        <LinearGradient
+          colors={[themeColors.brand, themeColors.primaryDark]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.profileHeader}
+        >
           <TouchableOpacity style={styles.profileBrand} onPress={handleSecretTap} activeOpacity={1}>
             <View style={styles.profileLogo}>
               <Text style={styles.profileLogoText}>IMO</Text>
+            </View>
+            <View style={styles.profileHeroCard}>
+              <View style={styles.profileHeroMetric}>
+                <Ionicons name="home-outline" size={17} color={themeColors.primary} />
+                <Text style={styles.profileHeroValue}>{profileProperties.length}</Text>
+                <Text style={styles.profileHeroLabel}>{t('my_listings')}</Text>
+              </View>
+              <View style={styles.profileHeroDivider} />
+              <View style={styles.profileHeroMetric}>
+                <Ionicons name="bookmark-outline" size={17} color={themeColors.info} />
+                <Text style={styles.profileHeroValue}>{savedSearches.length}</Text>
+                <Text style={styles.profileHeroLabel}>{t('saved_searches')}</Text>
+              </View>
+              <View style={styles.profileHeroDivider} />
+              <View style={styles.profileHeroMetric}>
+                <Ionicons name="chatbubble-ellipses-outline" size={17} color={themeColors.success} />
+                <Text style={styles.profileHeroValue}>{unreadMessageCount}</Text>
+                <Text style={styles.profileHeroLabel}>{t('profile_messages_shortcut')}</Text>
+              </View>
             </View>
             <View style={styles.profileBrandCopy}>
               <Text style={[styles.profileHeading, theme === 'dark' && styles.textLight]}>
@@ -657,7 +688,7 @@ const ProfileScreen: React.FC = () => {
               </Text>
             </View>
           </TouchableOpacity>
-        </View>
+        </LinearGradient>
 
         {canRequestAgentAccess && (
           <View style={[styles.agentAccessCard, theme === 'dark' && styles.agentAccessCardDark]}>
@@ -1200,9 +1231,9 @@ const baseStyles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(244, 199, 107, 0.14)',
+    backgroundColor: COLORS.overlayGold14,
     borderWidth: 1,
-    borderColor: 'rgba(244, 199, 107, 0.32)',
+    borderColor: COLORS.overlayGold32,
   },
   authWelcomeCopy: {
     flex: 1,
@@ -1245,14 +1276,52 @@ const baseStyles = StyleSheet.create({
     marginHorizontal: 16,
     paddingHorizontal: 16,
     paddingTop: 14,
-    paddingBottom: 14,
-    backgroundColor: COLORS.brand,
+    paddingBottom: 36,
     borderRadius: 22,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.14,
     shadowRadius: 12,
     elevation: 3,
+  },
+  profileHeroCard: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginHorizontal: SPACING.lg,
+    marginTop: -22,
+    marginBottom: SPACING.md,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+    zIndex: 1,
+  },
+  profileHeroMetric: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+  },
+  profileHeroValue: {
+    ...typography.subtitle,
+    color: COLORS.onSurface,
+  },
+  profileHeroLabel: {
+    ...typography.caption,
+    color: COLORS.onSurfaceMuted,
+    textAlign: 'center',
+  },
+  profileHeroDivider: {
+    width: 1,
+    alignSelf: 'center',
+    height: '64%',
+    backgroundColor: COLORS.border,
   },
   profileBrand: {
     flexDirection: 'row',
@@ -1284,9 +1353,9 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: COLORS.overlayWhite12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: COLORS.overlayWhite16,
   },
   profileRoleBadgeText: {
     color: COLORS.white,

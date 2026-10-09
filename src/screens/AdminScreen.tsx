@@ -41,6 +41,9 @@ import {
 } from '../types';
 import { formatPrice } from '../utils/format';
 import { THEME_PALETTES } from '../theme/colors';
+import Skeleton from '../components/ui/Skeleton';
+import { typography } from '../theme/typography';
+import { RADIUS, SPACING } from '../theme/spacing';
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -108,6 +111,7 @@ type AdminTheme = {
   badgeBg: string;
   badgeText: string;
   shadow: string;
+  scrimStrong: string;
 };
 
 const createAdminTheme = (name: AdminTheme['name']): AdminTheme => {
@@ -141,6 +145,7 @@ const createAdminTheme = (name: AdminTheme['name']): AdminTheme => {
     badgeBg: colors.primaryContainer,
     badgeText: colors.onSurface,
     shadow: colors.shadow,
+    scrimStrong: colors.scrimStrong,
   };
 };
 
@@ -155,6 +160,7 @@ const AdminScreen: React.FC = () => {
     properties,
     clients,
     currentUser,
+    hydrated,
     language,
     tType,
     neighborhoods,
@@ -2127,74 +2133,67 @@ const AdminScreen: React.FC = () => {
     );
 
       return (
-        <ScrollView
+        <FlatList
           style={styles.tabContent}
+          data={sortedNeighborhoods}
+          keyExtractor={name => name}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="none"
-        >
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>{tAdmin("Quartiers")}</Text>
-            <Text style={styles.sectionSubtitle}>{tAdmin("Zones principales de publication.")}</Text>
-          </View>
-          <View style={styles.sectionCount}>
-            <Text style={styles.sectionCountText}>{filteredNeighborhoods.length}</Text>
-          </View>
-        </View>
-        <View style={styles.neighborhoodInputRow}>
-          <TextInput
-            style={[styles.input, styles.neighborhoodInput]}
-            value={newNeighborhood}
-            onChangeText={setNewNeighborhood}
-            placeholder={tAdmin("Ajouter un quartier")}
-            placeholderTextColor={theme.textSoft}
-          />
-          <TouchableOpacity style={styles.neighborhoodAddButton} onPress={handleAddNeighborhood}>
-            <Ionicons name="add" size={18} color={theme.onBrand} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.neighborhoodList}>
-          {sortedNeighborhoods.length === 0 && (
-            <Text style={styles.emptyText}>{tAdmin("Aucun quartier pour le moment.")}</Text>
-          )}
-            {sortedNeighborhoods.map(name => {
-              const count = properties.filter(
-                p => (p.neighborhood ?? '').toLowerCase() === name.toLowerCase()
-              ).length;
-              return (
-                <View key={name} style={styles.neighborhoodChipRow}>
-                  <TouchableOpacity
-                    style={styles.neighborhoodChip}
-                    onPress={() => openEditNeighborhood(name)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.neighborhoodChipText}>{name}</Text>
-                    <View style={styles.neighborhoodCount}>
-                      <Text style={styles.neighborhoodCountText}>{count}</Text>
-                    </View>
-                  </TouchableOpacity>
-                  <View style={styles.neighborhoodActions}>
-                    <TouchableOpacity
-                      style={styles.neighborhoodEdit}
-                      onPress={() => openEditNeighborhood(name)}
-                    >
-                      <Ionicons name="create-outline" size={16} color={theme.accent} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.neighborhoodDelete}
-                      onPress={() => handleRemoveNeighborhood(name)}
-                    >
-                      <Ionicons name="trash" size={16} color={theme.danger} />
-                    </TouchableOpacity>
-                  </View>
+          ListHeaderComponent={
+            <>
+              <View style={styles.sectionHeaderRow}>
+                <View>
+                  <Text style={styles.sectionTitle}>{tAdmin("Quartiers")}</Text>
+                  <Text style={styles.sectionSubtitle}>{tAdmin("Zones principales de publication.")}</Text>
                 </View>
-              );
-            })}
-
-        </View>
-      </ScrollView>
-    );
+                <View style={styles.sectionCount}>
+                  <Text style={styles.sectionCountText}>{filteredNeighborhoods.length}</Text>
+                </View>
+              </View>
+              <View style={styles.neighborhoodInputRow}>
+                <TextInput
+                  style={[styles.input, styles.neighborhoodInput]}
+                  value={newNeighborhood}
+                  onChangeText={setNewNeighborhood}
+                  placeholder={tAdmin("Ajouter un quartier")}
+                  placeholderTextColor={theme.textSoft}
+                />
+                <TouchableOpacity style={styles.neighborhoodAddButton} onPress={handleAddNeighborhood}>
+                  <Ionicons name="add" size={18} color={theme.onBrand} />
+                </TouchableOpacity>
+              </View>
+            </>
+          }
+          ListEmptyComponent={<Text style={styles.emptyText}>{tAdmin("Aucun quartier pour le moment.")}</Text>}
+          renderItem={({ item: name }) => {
+            const count = properties.filter(
+              property => (property.neighborhood ?? '').toLowerCase() === name.toLowerCase()
+            ).length;
+            return (
+              <View style={styles.neighborhoodChipRow}>
+                <TouchableOpacity
+                  style={styles.neighborhoodChip}
+                  onPress={() => openEditNeighborhood(name)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.neighborhoodChipText}>{name}</Text>
+                  <View style={styles.neighborhoodCount}>
+                    <Text style={styles.neighborhoodCountText}>{count}</Text>
+                  </View>
+                </TouchableOpacity>
+                <View style={styles.neighborhoodActions}>
+                  <TouchableOpacity style={styles.neighborhoodEdit} onPress={() => openEditNeighborhood(name)}>
+                    <Ionicons name="create-outline" size={16} color={theme.accent} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.neighborhoodDelete} onPress={() => handleRemoveNeighborhood(name)}>
+                    <Ionicons name="trash" size={16} color={theme.danger} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          }}
+        />
+      );
   };
 
   const renderReports = () => {
@@ -2214,68 +2213,62 @@ const AdminScreen: React.FC = () => {
     const hasMoreReports = filteredReports.length > listLimits.reports;
 
     return (
-      <ScrollView style={styles.tabContent}>
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>{tAdmin("Signalements")}</Text>
-            <Text style={styles.sectionSubtitle}>{tAdmin("Moderation et alertes fraude.")}</Text>
+      <FlatList
+        style={styles.tabContent}
+        data={visibleReports}
+        keyExtractor={report => report.id}
+        ListHeaderComponent={
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionTitle}>{tAdmin("Signalements")}</Text>
+              <Text style={styles.sectionSubtitle}>{tAdmin("Moderation et alertes fraude.")}</Text>
+            </View>
+            <View style={styles.sectionCount}>
+              <Text style={styles.sectionCountText}>{filteredReports.length}</Text>
+            </View>
           </View>
-          <View style={styles.sectionCount}>
-            <Text style={styles.sectionCountText}>{filteredReports.length}</Text>
-          </View>
-        </View>
-        {filteredReports.length === 0 ? (
-          <Text style={styles.emptyText}>{tAdmin("Aucun signalement pour le moment.")}</Text>
-        ) : (
-          visibleReports.map(report => {
-            const property = properties.find(p => p.id === report.propertyId);
-            return (
-              <View key={report.id} style={styles.reportCard}>
-                <View style={styles.reportHeader}>
-                  <Text style={styles.reportTitle}>{property?.title || tAdmin("Annonce supprimee")}</Text>
-                  <View
-                    style={[
-                      styles.reportStatus,
-                      report.status === 'OPEN' ? styles.reportOpen : styles.reportResolved,
-                    ]}
-                  >
-                    <Text style={styles.reportStatusText}>
-                      {report.status === 'OPEN' ? tAdmin("Ouvert") : tAdmin("Resolue")}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.reportMeta}>
-                  {[property?.neighborhood, property?.location].filter(Boolean).join(' | ') || tAdmin("Localité inconnue")}
-                </Text>
-                <Text style={styles.reportReason}>
-                  {tAdmin("Raison:")} {report.reason === 'FRAUD'
-                    ? tAdmin("Fraude")
-                    : report.reason === 'DUPLICATE'
-                    ? tAdmin("Doublon")
-                    : report.reason === 'INAPPROPRIATE'
-                    ? tAdmin("Inapproprie")
-                    : tAdmin("Autre")}
-                </Text>
-                {report.message ? <Text style={styles.reportMessage}>{report.message}</Text> : null}
-                {report.status === 'OPEN' && (
-                  <TouchableOpacity
-                    style={styles.reportResolve}
-                    onPress={() => resolveReport(report.id)}
-                  >
-                    <Ionicons name="checkmark" size={16} color={theme.accent} />
-                    <Text style={styles.reportResolveText}>{tAdmin("Marquer comme resolu")}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          })
-        )}
-        {hasMoreReports && (
+        }
+        ListEmptyComponent={<Text style={styles.emptyText}>{tAdmin("Aucun signalement pour le moment.")}</Text>}
+        ListFooterComponent={hasMoreReports ? (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('reports')}>
             <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
-        )}
-      </ScrollView>
+        ) : null}
+        renderItem={({ item: report }) => {
+          const property = properties.find(p => p.id === report.propertyId);
+          return (
+            <View style={styles.reportCard}>
+              <View style={styles.reportHeader}>
+                <Text style={styles.reportTitle}>{property?.title || tAdmin("Annonce supprimee")}</Text>
+                <View style={[styles.reportStatus, report.status === 'OPEN' ? styles.reportOpen : styles.reportResolved]}>
+                  <Text style={styles.reportStatusText}>
+                    {report.status === 'OPEN' ? tAdmin("Ouvert") : tAdmin("Resolue")}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.reportMeta}>
+                {[property?.neighborhood, property?.location].filter(Boolean).join(' | ') || tAdmin("Localité inconnue")}
+              </Text>
+              <Text style={styles.reportReason}>
+                {tAdmin("Raison:")} {report.reason === 'FRAUD'
+                  ? tAdmin("Fraude")
+                  : report.reason === 'DUPLICATE'
+                  ? tAdmin("Doublon")
+                  : report.reason === 'INAPPROPRIATE'
+                  ? tAdmin("Inapproprie")
+                  : tAdmin("Autre")}
+              </Text>
+              {report.message ? <Text style={styles.reportMessage}>{report.message}</Text> : null}
+              {report.status === 'OPEN' && (
+                <TouchableOpacity style={styles.reportResolve} onPress={() => resolveReport(report.id)}>
+                  <Ionicons name="checkmark" size={16} color={theme.accent} />
+                  <Text style={styles.reportResolveText}>{tAdmin("Marquer comme resolu")}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        }}
+      />
     );
   };
 
@@ -2292,54 +2285,54 @@ const AdminScreen: React.FC = () => {
     const hasMoreMessages = filteredMessages.length > listLimits.messages;
 
     return (
-      <ScrollView style={styles.tabContent}>
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>{tAdmin("Messages")}</Text>
-            <Text style={styles.sectionSubtitle}>{tAdmin("Suivi des conversations en cours.")}</Text>
-          </View>
-          <View style={styles.sectionCount}>
-            <Text style={styles.sectionCountText}>{filteredMessages.length}</Text>
-          </View>
-        </View>
-        {filteredMessages.length === 0 ? (
-          <Text style={styles.emptyText}>{tAdmin("Aucun message pour le moment.")}</Text>
-        ) : (
-          visibleMessages.map(message => (
-            <View key={message.id} style={styles.infoCard}>
-              <View style={styles.infoHeader}>
-                <Text style={styles.infoTitle} numberOfLines={1}>{message.content}</Text>
-                <View style={[styles.badge, message.read ? styles.badgeMuted : styles.badgeAccent]}>
-                  <Text style={[styles.badgeText, message.read ? styles.badgeTextMuted : styles.badgeTextAccent]}>
-                    {message.read ? tAdmin("Lu") : tAdmin("Non lu")}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.infoRow}>
-                <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>{tAdmin("De:")} {message.senderId}</Text>
-                </View>
-                <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>{tAdmin("A:")} {message.receiverId}</Text>
-                </View>
-                {message.propertyId ? (
-                  <View style={styles.metaChip}>
-                    <Text style={styles.metaChipText}>{tAdmin("Bien:")} {message.propertyId}</Text>
-                  </View>
-                ) : null}
-              </View>
-              <Text style={styles.infoMeta}>
-                {formatAdminDateTime(message.timestamp)}
-              </Text>
+      <FlatList
+        style={styles.tabContent}
+        data={visibleMessages}
+        keyExtractor={message => message.id}
+        ListHeaderComponent={
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionTitle}>{tAdmin("Messages")}</Text>
+              <Text style={styles.sectionSubtitle}>{tAdmin("Suivi des conversations en cours.")}</Text>
             </View>
-          ))
-        )}
-        {hasMoreMessages && (
+            <View style={styles.sectionCount}>
+              <Text style={styles.sectionCountText}>{filteredMessages.length}</Text>
+            </View>
+          </View>
+        }
+        ListEmptyComponent={<Text style={styles.emptyText}>{tAdmin("Aucun message pour le moment.")}</Text>}
+        ListFooterComponent={hasMoreMessages ? (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('messages')}>
             <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
+        ) : null}
+        renderItem={({ item: message }) => (
+          <View style={styles.infoCard}>
+            <View style={styles.infoHeader}>
+              <Text style={styles.infoTitle} numberOfLines={1}>{message.content}</Text>
+              <View style={[styles.badge, message.read ? styles.badgeMuted : styles.badgeAccent]}>
+                <Text style={[styles.badgeText, message.read ? styles.badgeTextMuted : styles.badgeTextAccent]}>
+                  {message.read ? tAdmin("Lu") : tAdmin("Non lu")}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.infoRow}>
+              <View style={styles.metaChip}>
+                <Text style={styles.metaChipText}>{tAdmin("De:")} {message.senderId}</Text>
+              </View>
+              <View style={styles.metaChip}>
+                <Text style={styles.metaChipText}>{tAdmin("A:")} {message.receiverId}</Text>
+              </View>
+              {message.propertyId ? (
+                <View style={styles.metaChip}>
+                  <Text style={styles.metaChipText}>{tAdmin("Bien:")} {message.propertyId}</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.infoMeta}>{formatAdminDateTime(message.timestamp)}</Text>
+          </View>
         )}
-      </ScrollView>
+      />
     );
   };
   const renderReviews = () => {
@@ -2354,51 +2347,51 @@ const AdminScreen: React.FC = () => {
     const hasMoreReviews = filteredReviews.length > listLimits.reviews;
 
     return (
-      <ScrollView style={styles.tabContent}>
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>{tAdmin("Avis")}</Text>
-            <Text style={styles.sectionSubtitle}>{tAdmin("Qualite, confiance et moderation.")}</Text>
-          </View>
-          <View style={styles.sectionCount}>
-            <Text style={styles.sectionCountText}>{filteredReviews.length}</Text>
-          </View>
-        </View>
-        {filteredReviews.length === 0 ? (
-          <Text style={styles.emptyText}>{tAdmin("Aucun avis pour le moment.")}</Text>
-        ) : (
-          visibleReviews.map(review => (
-            <View key={review.id} style={styles.infoCard}>
-              <View style={styles.infoHeader}>
-                <Text style={styles.infoTitle}>{tAdmin("Note:")} {review.rating}/5</Text>
-                <View style={[styles.badge, review.verified ? styles.badgeSuccess : styles.badgeWarning]}>
-                  <Text style={[styles.badgeText, review.verified ? styles.badgeTextSuccess : styles.badgeTextWarning]}>
-                    {review.verified ? tAdmin("Vérifié") : tAdmin("À vérifier")}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.infoMeta}>{tAdmin("Bien:")} {review.propertyId}</Text>
-              {review.comment ? <Text style={styles.reportMessage}>{review.comment}</Text> : null}
-              <Text style={styles.infoMeta}>
-                {formatAdminDateTime(review.createdAt)}
-              </Text>
-              <View style={styles.quickActionsRow}>
-                <QuickAction
-                  label={review.verified ? tAdmin("Retirer") : tAdmin("Verifier")}
-                  icon="shield-checkmark-outline"
-                  tone="primary"
-                  onPress={() => void handleVerifyReview(review.id, !review.verified)}
-                />
-              </View>
+      <FlatList
+        style={styles.tabContent}
+        data={visibleReviews}
+        keyExtractor={review => review.id}
+        ListHeaderComponent={
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionTitle}>{tAdmin("Avis")}</Text>
+              <Text style={styles.sectionSubtitle}>{tAdmin("Qualite, confiance et moderation.")}</Text>
             </View>
-          ))
-        )}
-        {hasMoreReviews && (
+            <View style={styles.sectionCount}>
+              <Text style={styles.sectionCountText}>{filteredReviews.length}</Text>
+            </View>
+          </View>
+        }
+        ListEmptyComponent={<Text style={styles.emptyText}>{tAdmin("Aucun avis pour le moment.")}</Text>}
+        ListFooterComponent={hasMoreReviews ? (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('reviews')}>
             <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
+        ) : null}
+        renderItem={({ item: review }) => (
+          <View style={styles.infoCard}>
+            <View style={styles.infoHeader}>
+              <Text style={styles.infoTitle}>{tAdmin("Note:")} {review.rating}/5</Text>
+              <View style={[styles.badge, review.verified ? styles.badgeSuccess : styles.badgeWarning]}>
+                <Text style={[styles.badgeText, review.verified ? styles.badgeTextSuccess : styles.badgeTextWarning]}>
+                  {review.verified ? tAdmin("Vérifié") : tAdmin("À vérifier")}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.infoMeta}>{tAdmin("Bien:")} {review.propertyId}</Text>
+            {review.comment ? <Text style={styles.reportMessage}>{review.comment}</Text> : null}
+            <Text style={styles.infoMeta}>{formatAdminDateTime(review.createdAt)}</Text>
+            <View style={styles.quickActionsRow}>
+              <QuickAction
+                label={review.verified ? tAdmin("Retirer") : tAdmin("Verifier")}
+                icon="shield-checkmark-outline"
+                tone="primary"
+                onPress={() => void handleVerifyReview(review.id, !review.verified)}
+              />
+            </View>
+          </View>
         )}
-      </ScrollView>
+      />
     );
   };
   const renderAgents = () => {
@@ -2416,66 +2409,68 @@ const AdminScreen: React.FC = () => {
     const hasMoreAgents = filteredAgents.length > listLimits.agents;
 
     return (
-      <ScrollView
+      <FlatList
         style={styles.tabContent}
+        data={visibleAgents}
+        keyExtractor={user => user.id}
         refreshControl={<RefreshControl refreshing={refreshing || accountsLoading} onRefresh={onRefresh} />}
-      >
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>{tAdmin("Profils agents")}</Text>
-            <Text style={styles.sectionSubtitle}>{tAdmin("Comptes agents et statut de validation.")}</Text>
+        ListHeaderComponent={
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionTitle}>{tAdmin("Profils agents")}</Text>
+              <Text style={styles.sectionSubtitle}>{tAdmin("Comptes agents et statut de validation.")}</Text>
+            </View>
+            <View style={styles.sectionCount}>
+              <Text style={styles.sectionCountText}>{filteredAgents.length}</Text>
+            </View>
           </View>
-          <View style={styles.sectionCount}>
-            <Text style={styles.sectionCountText}>{filteredAgents.length}</Text>
-          </View>
-        </View>
-        {accountsLoading && !adminAccounts.length ? (
-          <View style={styles.accountsLoading}>
-            <ActivityIndicator color={theme.accent} />
-            <Text style={styles.accountMeta}>{tAdmin("Chargement des comptes...")}</Text>
-          </View>
-        ) : accountsError ? (
-          <Text style={styles.accountsError}>{accountsError}</Text>
-        ) : filteredAgents.length === 0 ? (
-          <Text style={styles.emptyText}>{tAdmin("Aucun profil d'agent pour le moment.")}</Text>
-        ) : (
-          visibleAgents.map(user => {
-            const agentProperties = properties.filter(property => property.ownerId === user.id);
-            const activeProperties = agentProperties.filter(property =>
-              property.listingStatus === 'approved' && property.status === 'available'
-            ).length;
-            const soldProperties = agentProperties.filter(property => property.soldAt).length;
-            const archivedProperties = agentProperties.filter(property =>
-              property.listingStatus === 'archived'
-            ).length;
-            return (
-              <View key={user.id} style={styles.clientItem}>
-                <View style={styles.clientAvatar}>
-                  <Text style={styles.clientInitials}>
-                    {user.name.charAt(0).toUpperCase() || '?'}
-                  </Text>
-                </View>
-                <View style={styles.clientInfo}>
-                  <Text style={styles.clientName}>{user.name || tAdmin("Utilisateur inconnu")}</Text>
-                  <Text style={styles.clientEmail}>{user.email}</Text>
-                  <Text style={styles.clientPhone}>{user.phone}</Text>
-                  <Text style={styles.clientPhone}>{tAdmin(user.agentStatus === 'approved'
-                    ? "Approuvé"
-                    : user.agentStatus === 'rejected' ? "Refusé" : "Demande agent en attente")}</Text>
-                  <Text style={styles.clientPhone}>
-                    {tAdmin("Biens:")} {agentProperties.length} · {tAdmin("Actifs:")} {activeProperties} · {tAdmin("Vendus:")} {soldProperties} · {tAdmin("Archivés:")} {archivedProperties}
-                  </Text>
-                </View>
-              </View>
-            );
-          })
-        )}
-        {hasMoreAgents && (
+        }
+        ListEmptyComponent={
+          accountsLoading && !adminAccounts.length ? (
+            <View style={styles.accountsLoading}>
+              <ActivityIndicator color={theme.accent} />
+              <Text style={styles.accountMeta}>{tAdmin("Chargement des comptes...")}</Text>
+            </View>
+          ) : accountsError ? (
+            <Text style={styles.accountsError}>{accountsError}</Text>
+          ) : (
+            <Text style={styles.emptyText}>{tAdmin("Aucun profil d'agent pour le moment.")}</Text>
+          )
+        }
+        ListFooterComponent={hasMoreAgents ? (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('agents')}>
             <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
-        )}
-      </ScrollView>
+        ) : null}
+        renderItem={({ item: user }) => {
+          const agentProperties = properties.filter(property => property.ownerId === user.id);
+          const activeProperties = agentProperties.filter(property =>
+            property.listingStatus === 'approved' && property.status === 'available'
+          ).length;
+          const soldProperties = agentProperties.filter(property => property.soldAt).length;
+          const archivedProperties = agentProperties.filter(property =>
+            property.listingStatus === 'archived'
+          ).length;
+          return (
+            <View style={styles.clientItem}>
+              <View style={styles.clientAvatar}>
+                <Text style={styles.clientInitials}>{user.name.charAt(0).toUpperCase() || '?'}</Text>
+              </View>
+              <View style={styles.clientInfo}>
+                <Text style={styles.clientName}>{user.name || tAdmin("Utilisateur inconnu")}</Text>
+                <Text style={styles.clientEmail}>{user.email}</Text>
+                <Text style={styles.clientPhone}>{user.phone}</Text>
+                <Text style={styles.clientPhone}>{tAdmin(user.agentStatus === 'approved'
+                  ? "Approuvé"
+                  : user.agentStatus === 'rejected' ? "Refusé" : "Demande agent en attente")}</Text>
+                <Text style={styles.clientPhone}>
+                  {tAdmin("Biens:")} {agentProperties.length} · {tAdmin("Actifs:")} {activeProperties} · {tAdmin("Vendus:")} {soldProperties} · {tAdmin("Archivés:")} {archivedProperties}
+                </Text>
+              </View>
+            </View>
+          );
+        }}
+      />
     );
   };
   const renderPremium = () => {
@@ -2489,53 +2484,55 @@ const AdminScreen: React.FC = () => {
     const hasMorePremium = filteredPremium.length > listLimits.premium;
 
     return (
-      <ScrollView style={styles.tabContent}>
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>{tAdmin("Annonces premium")}</Text>
-            <Text style={styles.sectionSubtitle}>{tAdmin("Mise en avant et dates actives.")}</Text>
-          </View>
-          <View style={styles.sectionCount}>
-            <Text style={styles.sectionCountText}>{filteredPremium.length}</Text>
-          </View>
-        </View>
-        {filteredPremium.length === 0 ? (
-          <Text style={styles.emptyText}>{tAdmin("Aucune annonce premium pour le moment.")}</Text>
-        ) : (
-          visiblePremium.map(premium => (
-            <View key={premium.propertyId} style={styles.infoCard}>
-              <View style={styles.infoHeader}>
-                <Text style={styles.infoTitle}>{tAdmin("Bien:")} {premium.propertyId}</Text>
-                <View style={[styles.badge, styles.badgeAccent]}>
-                  <Text style={[styles.badgeText, styles.badgeTextAccent]}>{premium.plan}</Text>
-                </View>
-              </View>
-              <Text style={styles.infoMeta}>
-                {tAdmin("Du {start} au {end}")
-                  .replace('{start}', formatAdminDate(premium.startDate))
-                  .replace('{end}', formatAdminDate(premium.endDate))}
-              </Text>
-              <View style={styles.quickActionsRow}>
-                <QuickAction
-                  label={tAdmin("Detail")}
-                  icon="open-outline"
-                  onPress={() => Alert.alert(
-                    tAdmin("Premium"),
-                    tAdmin("Plan {plan} actif jusqu'au {date}")
-                      .replace('{plan}', premium.plan)
-                      .replace('{date}', formatAdminDate(premium.endDate))
-                  )}
-                />
-              </View>
+      <FlatList
+        style={styles.tabContent}
+        data={visiblePremium}
+        keyExtractor={premium => premium.propertyId}
+        ListHeaderComponent={
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionTitle}>{tAdmin("Annonces premium")}</Text>
+              <Text style={styles.sectionSubtitle}>{tAdmin("Mise en avant et dates actives.")}</Text>
             </View>
-          ))
-        )}
-        {hasMorePremium && (
+            <View style={styles.sectionCount}>
+              <Text style={styles.sectionCountText}>{filteredPremium.length}</Text>
+            </View>
+          </View>
+        }
+        ListEmptyComponent={<Text style={styles.emptyText}>{tAdmin("Aucune annonce premium pour le moment.")}</Text>}
+        ListFooterComponent={hasMorePremium ? (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('premium')}>
             <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
+        ) : null}
+        renderItem={({ item: premium }) => (
+          <View style={styles.infoCard}>
+            <View style={styles.infoHeader}>
+              <Text style={styles.infoTitle}>{tAdmin("Bien:")} {premium.propertyId}</Text>
+              <View style={[styles.badge, styles.badgeAccent]}>
+                <Text style={[styles.badgeText, styles.badgeTextAccent]}>{premium.plan}</Text>
+              </View>
+            </View>
+            <Text style={styles.infoMeta}>
+              {tAdmin("Du {start} au {end}")
+                .replace('{start}', formatAdminDate(premium.startDate))
+                .replace('{end}', formatAdminDate(premium.endDate))}
+            </Text>
+            <View style={styles.quickActionsRow}>
+              <QuickAction
+                label={tAdmin("Detail")}
+                icon="open-outline"
+                onPress={() => Alert.alert(
+                  tAdmin("Premium"),
+                  tAdmin("Plan {plan} actif jusqu'au {date}")
+                    .replace('{plan}', premium.plan)
+                    .replace('{date}', formatAdminDate(premium.endDate))
+                )}
+              />
+            </View>
+          </View>
         )}
-      </ScrollView>
+      />
     );
   };
   const renderCommissions = () => {
@@ -2552,68 +2549,70 @@ const AdminScreen: React.FC = () => {
     const hasMoreCommissions = filteredCommissions.length > listLimits.commissions;
 
     return (
-      <ScrollView style={styles.tabContent}>
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>{tAdmin("Regles de commission")}</Text>
-            <Text style={styles.sectionSubtitle}>{tAdmin("Taux et seuils par agent.")}</Text>
-          </View>
-          <View style={styles.sectionCount}>
-            <Text style={styles.sectionCountText}>{filteredCommissions.length}</Text>
-          </View>
-        </View>
-        {filteredCommissions.length === 0 ? (
-          <Text style={styles.emptyText}>{tAdmin("Aucune regle de commission pour le moment.")}</Text>
-        ) : (
-          visibleCommissions.map(rule => (
-            <View key={rule.id} style={styles.infoCard}>
-              <View style={styles.infoHeader}>
-                <Text style={styles.infoTitle}>{tAdmin("Agent:")} {rule.agentId}</Text>
-                <View style={[styles.badge, rule.active ? styles.badgeSuccess : styles.badgeMuted]}>
-                  <Text style={[styles.badgeText, rule.active ? styles.badgeTextSuccess : styles.badgeTextMuted]}>
-                    {rule.active ? tAdmin("Actif") : tAdmin("Inactif")}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.infoRow}>
-                <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>{tAdmin("Taux:")} {rule.percentage}%</Text>
-                </View>
-                <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>{tAdmin("Min:")} {rule.minAmount} XOF</Text>
-                </View>
-                <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>{tAdmin("Max:")} {rule.maxAmount} XOF</Text>
-                </View>
-                <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>{tAdmin("Type:")} {rule.propertyType === 'ALL' ? tAdmin("Tout") : tType(rule.propertyType)}</Text>
-                </View>
-              </View>
-              <View style={styles.quickActionsRow}>
-                <QuickAction
-                  label={rule.active ? tAdmin("Desactiver") : tAdmin("Activer")}
-                  icon={rule.active ? 'pause-circle-outline' : 'play-circle-outline'}
-                  tone={rule.active ? 'danger' : 'primary'}
-                  onPress={() => handleToggleCommission(rule)}
-                />
-                <QuickAction
-                  label={tAdmin("Detail")}
-                  icon="information-circle-outline"
-                  onPress={() => Alert.alert(
-                    tAdmin("Commission"),
-                    `${tAdmin('Taux')} ${rule.percentage}% | ${tAdmin('Type')} ${rule.propertyType === 'ALL' ? tAdmin('Tout') : tType(rule.propertyType)}`
-                  )}
-                />
-              </View>
+      <FlatList
+        style={styles.tabContent}
+        data={visibleCommissions}
+        keyExtractor={rule => rule.id}
+        ListHeaderComponent={
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionTitle}>{tAdmin("Regles de commission")}</Text>
+              <Text style={styles.sectionSubtitle}>{tAdmin("Taux et seuils par agent.")}</Text>
             </View>
-          ))
-        )}
-        {hasMoreCommissions && (
+            <View style={styles.sectionCount}>
+              <Text style={styles.sectionCountText}>{filteredCommissions.length}</Text>
+            </View>
+          </View>
+        }
+        ListEmptyComponent={<Text style={styles.emptyText}>{tAdmin("Aucune regle de commission pour le moment.")}</Text>}
+        ListFooterComponent={hasMoreCommissions ? (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('commissions')}>
             <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
+        ) : null}
+        renderItem={({ item: rule }) => (
+          <View style={styles.infoCard}>
+            <View style={styles.infoHeader}>
+              <Text style={styles.infoTitle}>{tAdmin("Agent:")} {rule.agentId}</Text>
+              <View style={[styles.badge, rule.active ? styles.badgeSuccess : styles.badgeMuted]}>
+                <Text style={[styles.badgeText, rule.active ? styles.badgeTextSuccess : styles.badgeTextMuted]}>
+                  {rule.active ? tAdmin("Actif") : tAdmin("Inactif")}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.infoRow}>
+              <View style={styles.metaChip}>
+                <Text style={styles.metaChipText}>{tAdmin("Taux:")} {rule.percentage}%</Text>
+              </View>
+              <View style={styles.metaChip}>
+                <Text style={styles.metaChipText}>{tAdmin("Min:")} {rule.minAmount} XOF</Text>
+              </View>
+              <View style={styles.metaChip}>
+                <Text style={styles.metaChipText}>{tAdmin("Max:")} {rule.maxAmount} XOF</Text>
+              </View>
+              <View style={styles.metaChip}>
+                <Text style={styles.metaChipText}>{tAdmin("Type:")} {rule.propertyType === 'ALL' ? tAdmin("Tout") : tType(rule.propertyType)}</Text>
+              </View>
+            </View>
+            <View style={styles.quickActionsRow}>
+              <QuickAction
+                label={rule.active ? tAdmin("Desactiver") : tAdmin("Activer")}
+                icon={rule.active ? 'pause-circle-outline' : 'play-circle-outline'}
+                tone={rule.active ? 'danger' : 'primary'}
+                onPress={() => handleToggleCommission(rule)}
+              />
+              <QuickAction
+                label={tAdmin("Detail")}
+                icon="information-circle-outline"
+                onPress={() => Alert.alert(
+                  tAdmin("Commission"),
+                  `${tAdmin('Taux')} ${rule.percentage}% | ${tAdmin('Type')} ${rule.propertyType === 'ALL' ? tAdmin('Tout') : tType(rule.propertyType)}`
+                )}
+              />
+            </View>
+          </View>
         )}
-      </ScrollView>
+      />
     );
   };
   const renderPayments = () => {
@@ -2628,93 +2627,66 @@ const AdminScreen: React.FC = () => {
     const hasMorePayments = filteredPayments.length > listLimits.payments;
 
     return (
-      <ScrollView style={styles.tabContent}>
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>{tAdmin("Paiements")}</Text>
-            <Text style={styles.sectionSubtitle}>{tAdmin("Suivi des loyers et reglements.")}</Text>
-          </View>
-          <View style={styles.sectionCount}>
-            <Text style={styles.sectionCountText}>{filteredPayments.length}</Text>
-          </View>
-          <TouchableOpacity style={styles.sectionActionButton} onPress={openPaymentModal}>
-            <Ionicons name="add" size={18} color={theme.onBrand} />
-          </TouchableOpacity>
-        </View>
-        {filteredPayments.length === 0 ? (
-          <Text style={styles.emptyText}>{tAdmin("Aucun paiement pour le moment.")}</Text>
-        ) : (
-          visiblePayments.map(payment => (
-            <View key={payment.id} style={styles.infoCard}>
-              <View style={styles.infoHeader}>
-                <Text style={styles.infoTitle}>{payment.amount} XOF</Text>
-                <View
-                  style={[
-                    styles.badge,
-                    payment.status === 'paid'
-                      ? styles.badgeSuccess
-                      : payment.status === 'pending'
-                      ? styles.badgeWarning
-                      : styles.badgeDanger,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.badgeText,
-                      payment.status === 'paid'
-                        ? styles.badgeTextSuccess
-                        : payment.status === 'pending'
-                        ? styles.badgeTextWarning
-                        : styles.badgeTextDanger,
-                    ]}
-                  >
-                    {tAdmin(payment.status === 'paid' ? 'Payé' : payment.status === 'pending' ? 'En attente' : 'En retard')}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.infoMeta}>
-                {tAdmin("Contrat:")} {getContractLabel(payment.contractId)}
-              </Text>
-              <Text style={styles.infoMeta}>
-                {tAdmin("Mode:")} {tAdmin(payment.method === 'cash' ? 'Cash' : 'Mobile Money')}
-              </Text>
-              <Text style={styles.infoMeta}>
-                {formatAdminDateTime(payment.paidAt)}
-              </Text>
-              <View style={styles.quickActionsRow}>
-                <QuickAction
-                  label={tAdmin("Editer")}
-                  icon="create-outline"
-                  onPress={() => openEditPayment(payment)}
-                />
-                <QuickAction
-                  label={tAdmin("Recu PDF")}
-                  icon="document-text-outline"
-                  tone="primary"
-                  onPress={() => printPaymentReceipt(payment)}
-                />
-                <QuickAction
-                  label={tAdmin("Marquer paye")}
-                  icon="checkmark-circle-outline"
-                  tone="primary"
-                  onPress={() => handleMarkPaid(payment)}
-                />
-                <QuickAction
-                  label={tAdmin("Litige")}
-                  icon="alert-circle-outline"
-                  tone="danger"
-                  onPress={() => handleDispute(payment)}
-                />
-              </View>
+      <FlatList
+        style={styles.tabContent}
+        data={visiblePayments}
+        keyExtractor={payment => payment.id}
+        ListHeaderComponent={
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionTitle}>{tAdmin("Paiements")}</Text>
+              <Text style={styles.sectionSubtitle}>{tAdmin("Suivi des loyers et reglements.")}</Text>
             </View>
-          ))
-        )}
-        {hasMorePayments && (
+            <View style={styles.sectionCount}>
+              <Text style={styles.sectionCountText}>{filteredPayments.length}</Text>
+            </View>
+            <TouchableOpacity style={styles.sectionActionButton} onPress={openPaymentModal}>
+              <Ionicons name="add" size={18} color={theme.onBrand} />
+            </TouchableOpacity>
+          </View>
+        }
+        ListEmptyComponent={<Text style={styles.emptyText}>{tAdmin("Aucun paiement pour le moment.")}</Text>}
+        ListFooterComponent={hasMorePayments ? (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('payments')}>
             <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
+        ) : null}
+        renderItem={({ item: payment }) => (
+          <View style={styles.infoCard}>
+            <View style={styles.infoHeader}>
+              <Text style={styles.infoTitle}>{payment.amount} XOF</Text>
+              <View style={[
+                styles.badge,
+                payment.status === 'paid'
+                  ? styles.badgeSuccess
+                  : payment.status === 'pending'
+                  ? styles.badgeWarning
+                  : styles.badgeDanger,
+              ]}>
+                <Text style={[
+                  styles.badgeText,
+                  payment.status === 'paid'
+                    ? styles.badgeTextSuccess
+                    : payment.status === 'pending'
+                    ? styles.badgeTextWarning
+                    : styles.badgeTextDanger,
+                ]}>
+                  {tAdmin(payment.status === 'paid' ? 'Payé' : payment.status === 'pending' ? 'En attente' : 'En retard')}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.infoMeta}>{tAdmin("Contrat:")} {getContractLabel(payment.contractId)}</Text>
+            <Text style={styles.infoMeta}>{tAdmin("Mode:")} {tAdmin(payment.method === 'cash' ? 'Cash' : 'Mobile Money')}</Text>
+            <Text style={styles.infoMeta}>{formatAdminDateTime(payment.paidAt)}</Text>
+            <View style={styles.quickActionsRow}>
+              <QuickAction label={tAdmin("Editer")} icon="create-outline" onPress={() => openEditPayment(payment)} />
+              <QuickAction label={tAdmin("Recu PDF")} icon="document-text-outline" tone="primary" onPress={() => printPaymentReceipt(payment)} />
+              <QuickAction label={tAdmin("Marquer paye")} icon="checkmark-circle-outline" tone="primary" onPress={() => handleMarkPaid(payment)} />
+              <QuickAction label={tAdmin("Litige")} icon="alert-circle-outline" tone="danger" onPress={() => handleDispute(payment)} />
+            </View>
+          </View>
         )}
-      </ScrollView>
+      />
     );
   };
   const renderContracts = () => {
@@ -2729,83 +2701,71 @@ const AdminScreen: React.FC = () => {
     const hasMoreContracts = filteredContracts.length > listLimits.contracts;
 
     return (
-      <ScrollView style={styles.tabContent}>
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>{tAdmin("Contrats")}</Text>
-            <Text style={styles.sectionSubtitle}>{tAdmin("Baux en cours et historiques.")}</Text>
+      <FlatList
+        style={styles.tabContent}
+        data={visibleContracts}
+        keyExtractor={contract => contract.id}
+        ListHeaderComponent={
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionTitle}>{tAdmin("Contrats")}</Text>
+              <Text style={styles.sectionSubtitle}>{tAdmin("Baux en cours et historiques.")}</Text>
+            </View>
+            <View style={styles.sectionCount}>
+              <Text style={styles.sectionCountText}>{filteredContracts.length}</Text>
+            </View>
+            <TouchableOpacity style={styles.sectionActionButton} onPress={openContractModal}>
+              <Ionicons name="add" size={18} color={theme.onBrand} />
+            </TouchableOpacity>
           </View>
-          <View style={styles.sectionCount}>
-            <Text style={styles.sectionCountText}>{filteredContracts.length}</Text>
-          </View>
-          <TouchableOpacity style={styles.sectionActionButton} onPress={openContractModal}>
-            <Ionicons name="add" size={18} color={theme.onBrand} />
-          </TouchableOpacity>
-        </View>
-        {filteredContracts.length === 0 ? (
-          <Text style={styles.emptyText}>{tAdmin("Aucun contrat pour le moment.")}</Text>
-        ) : (
-          visibleContracts.map(contract => {
-            const property = properties.find(p => p.id === contract.propertyId);
-            const tenant = clients.find(c => c.id === contract.tenantId);
-            return (
-              <View key={contract.id} style={styles.infoCard}>
-                <View style={styles.infoHeader}>
-                  <Text style={styles.infoTitle}>{property?.title || tAdmin("Bien")}</Text>
-                  <View style={[
-                    styles.badge,
-                    contract.status === 'active' ? styles.badgeSuccess : styles.badgeMuted,
-                  ]}>
-                    <Text style={[
-                      styles.badgeText,
-                      contract.status === 'active' ? styles.badgeTextSuccess : styles.badgeTextMuted,
-                    ]}>
-                      {tAdmin(contract.status === 'active' ? 'Actif' : 'Expire')}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.infoMeta}>
-                  {tAdmin("Locataire:")} {tenant?.name || contract.tenantId}
-                </Text>
-                <Text style={styles.infoMeta}>
-                  {tAdmin("Periode:")} {formatAdminDate(contract.startDate)} – {formatAdminDate(contract.endDate)}
-                </Text>
-                <Text style={styles.infoMeta}>
-                  {tAdmin("Loyer:")} {contract.rentAmount} XOF
-                </Text>
-                <View style={styles.quickActionsRow}>
-                  <QuickAction
-                    label={tAdmin("Editer")}
-                    icon="create-outline"
-                    onPress={() => openEditContract(contract)}
-                  />
-                  {contract.status !== 'active' && (
-                    <QuickAction
-                      label={tAdmin("Activer")}
-                      icon="checkmark-circle-outline"
-                      tone="primary"
-                      onPress={() => updateContractStatus(contract.id, 'active')}
-                    />
-                  )}
-                  {contract.status !== 'expired' && (
-                    <QuickAction
-                      label={tAdmin("Expirer")}
-                      icon="time-outline"
-                      tone="danger"
-                      onPress={() => updateContractStatus(contract.id, 'expired')}
-                    />
-                  )}
-                </View>
-              </View>
-            );
-          })
-        )}
-        {hasMoreContracts && (
+        }
+        ListEmptyComponent={<Text style={styles.emptyText}>{tAdmin("Aucun contrat pour le moment.")}</Text>}
+        ListFooterComponent={hasMoreContracts ? (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('contracts')}>
             <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
-        )}
-      </ScrollView>
+        ) : null}
+        renderItem={({ item: contract }) => {
+          const property = properties.find(p => p.id === contract.propertyId);
+          const tenant = clients.find(c => c.id === contract.tenantId);
+          return (
+            <View style={styles.infoCard}>
+              <View style={styles.infoHeader}>
+                <Text style={styles.infoTitle}>{property?.title || tAdmin("Bien")}</Text>
+                <View style={[styles.badge, contract.status === 'active' ? styles.badgeSuccess : styles.badgeMuted]}>
+                  <Text style={[styles.badgeText, contract.status === 'active' ? styles.badgeTextSuccess : styles.badgeTextMuted]}>
+                    {tAdmin(contract.status === 'active' ? 'Actif' : 'Expire')}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.infoMeta}>{tAdmin("Locataire:")} {tenant?.name || contract.tenantId}</Text>
+              <Text style={styles.infoMeta}>
+                {tAdmin("Periode:")} {formatAdminDate(contract.startDate)} – {formatAdminDate(contract.endDate)}
+              </Text>
+              <Text style={styles.infoMeta}>{tAdmin("Loyer:")} {contract.rentAmount} XOF</Text>
+              <View style={styles.quickActionsRow}>
+                <QuickAction label={tAdmin("Editer")} icon="create-outline" onPress={() => openEditContract(contract)} />
+                {contract.status !== 'active' && (
+                  <QuickAction
+                    label={tAdmin("Activer")}
+                    icon="checkmark-circle-outline"
+                    tone="primary"
+                    onPress={() => updateContractStatus(contract.id, 'active')}
+                  />
+                )}
+                {contract.status !== 'expired' && (
+                  <QuickAction
+                    label={tAdmin("Expirer")}
+                    icon="time-outline"
+                    tone="danger"
+                    onPress={() => updateContractStatus(contract.id, 'expired')}
+                  />
+                )}
+              </View>
+            </View>
+          );
+        }}
+      />
     );
   };
   const renderDocuments = () => {
@@ -2820,65 +2780,70 @@ const AdminScreen: React.FC = () => {
     const hasMoreDocuments = filteredDocuments.length > listLimits.documents;
 
     return (
-      <ScrollView style={styles.tabContent}>
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>{tAdmin("Documents")}</Text>
-            <Text style={styles.sectionSubtitle}>{tAdmin("Pièces liées aux dossiers locataires.")}</Text>
+      <FlatList
+        style={styles.tabContent}
+        data={visibleDocuments}
+        keyExtractor={document => document.id}
+        ListHeaderComponent={
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionTitle}>{tAdmin("Documents")}</Text>
+              <Text style={styles.sectionSubtitle}>{tAdmin("Pièces liées aux dossiers locataires.")}</Text>
+            </View>
+            <View style={styles.sectionCount}>
+              <Text style={styles.sectionCountText}>{filteredDocuments.length}</Text>
+            </View>
           </View>
-          <View style={styles.sectionCount}>
-            <Text style={styles.sectionCountText}>{filteredDocuments.length}</Text>
-          </View>
-        </View>
-        {filteredDocuments.length === 0 ? (
-          <Text style={styles.emptyText}>{tAdmin("Aucun document pour le moment.")}</Text>
-        ) : (
-          visibleDocuments.map(document => {
-            const tenant = clients.find(client => client.id === document.tenantId);
-            return (
-              <View key={document.id} style={styles.infoCard}>
-                <View style={styles.infoHeader}>
-                  <Text style={styles.infoTitle}>{tenant?.name || document.tenantId.slice(0, 8)}</Text>
-                  <View style={styles.metaChip}>
-                    <Text style={styles.metaChipText}>
-                      {document.type === 'cni'
-                        ? tAdmin('CNI')
-                        : document.type === 'contract' ? tAdmin('Contrat') : tAdmin('Autre')}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.infoMeta}>{tAdmin("Locataire:")} {document.tenantId.slice(0, 8)}</Text>
-                <Text style={styles.infoMeta}>{tAdmin("Upload:")} {formatAdminDateTime(document.createdAt)}</Text>
-                <View style={styles.quickActionsRow}>
-                  <QuickAction
-                    label={tAdmin("Ouvrir")}
-                    icon="document-text-outline"
-                    tone="primary"
-                    onPress={() => void handleOpenDocument(document)}
-                  />
-                  <QuickAction
-                    label={tAdmin("Partager")}
-                    icon="share-social-outline"
-                    onPress={() => void handleShareDocument(document)}
-                  />
-                </View>
-              </View>
-            );
-          })
-        )}
-        {hasMoreDocuments && (
+        }
+        ListEmptyComponent={<Text style={styles.emptyText}>{tAdmin("Aucun document pour le moment.")}</Text>}
+        ListFooterComponent={hasMoreDocuments ? (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('documents')}>
             <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
           </TouchableOpacity>
-        )}
-      </ScrollView>
+        ) : null}
+        renderItem={({ item: document }) => {
+          const tenant = clients.find(client => client.id === document.tenantId);
+          return (
+            <View style={styles.infoCard}>
+              <View style={styles.infoHeader}>
+                <Text style={styles.infoTitle}>{tenant?.name || document.tenantId.slice(0, 8)}</Text>
+                <View style={styles.metaChip}>
+                  <Text style={styles.metaChipText}>
+                    {document.type === 'cni'
+                      ? tAdmin('CNI')
+                      : document.type === 'contract' ? tAdmin('Contrat') : tAdmin('Autre')}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.infoMeta}>{tAdmin("Locataire:")} {document.tenantId.slice(0, 8)}</Text>
+              <Text style={styles.infoMeta}>{tAdmin("Upload:")} {formatAdminDateTime(document.createdAt)}</Text>
+              <View style={styles.quickActionsRow}>
+                <QuickAction
+                  label={tAdmin("Ouvrir")}
+                  icon="document-text-outline"
+                  tone="primary"
+                  onPress={() => void handleOpenDocument(document)}
+                />
+                <QuickAction
+                  label={tAdmin("Partager")}
+                  icon="share-social-outline"
+                  onPress={() => void handleShareDocument(document)}
+                />
+              </View>
+            </View>
+          );
+        }}
+      />
     );
   };
-  if (gateLoading) {
+  if (!hydrated || gateLoading) {
     return (
-      <View style={[styles.container, styles.gateContainer]}>
-        <ActivityIndicator size="large" color={theme.accent} />
-        <Text style={styles.gateSubtitle}>{tAdmin("Chargement...")}</Text>
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Skeleton style={styles.loadingHeaderSkeleton} />
+        <Skeleton style={styles.loadingSummarySkeleton} />
+        {[0, 1, 2].map(item => (
+          <Skeleton key={item} style={styles.loadingRowSkeleton} />
+        ))}
       </View>
     );
   }
@@ -3758,6 +3723,26 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
     justifyContent: 'center',
     padding: 20,
   },
+  loadingContainer: {
+    justifyContent: 'flex-start',
+    gap: 16,
+    padding: 20,
+    paddingTop: 56,
+  },
+  loadingHeaderSkeleton: {
+    width: '68%',
+    height: 28,
+  },
+  loadingSummarySkeleton: {
+    width: '100%',
+    height: 112,
+    borderRadius: 18,
+  },
+  loadingRowSkeleton: {
+    width: '100%',
+    height: 84,
+    borderRadius: 14,
+  },
   gateScrollContent: {
     flexGrow: 1,
   },
@@ -3801,16 +3786,15 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
   },
   gateButton: {
     width: '100%',
-    marginTop: 14,
+    marginTop: SPACING.md,
     backgroundColor: theme.accentSoft,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     alignItems: 'center',
   },
   gateButtonText: {
+    ...typography.button,
     color: theme.onBrand,
-    fontSize: 12,
-    fontWeight: '700',
   },
   header: {
     flexDirection: 'row',
@@ -3850,8 +3834,7 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
     fontWeight: '600',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    ...typography.title,
     color: theme.headerText,
   },
   headerSubtitle: {
@@ -5233,7 +5216,7 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: theme.scrimStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },

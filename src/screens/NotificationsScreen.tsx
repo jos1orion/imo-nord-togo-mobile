@@ -5,6 +5,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
+import { typography } from '../theme/typography';
+import { RADIUS, SPACING } from '../theme/spacing';
 
 const NotificationsScreen: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
@@ -109,7 +111,7 @@ const baseStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  title: { flex: 1, marginLeft: 12, fontSize: 19, fontWeight: '700', color: COLORS.onSurface },
+  title: { ...typography.title, flex: 1, marginLeft: SPACING.md, color: COLORS.onSurface },
   headerSpacer: { width: 42 },
   clearText: { color: COLORS.danger, fontSize: 14, fontWeight: '700' },
   content: { padding: 16, paddingBottom: 32 },
@@ -127,9 +129,9 @@ const baseStyles = StyleSheet.create({
   emptyText: { textAlign: 'center', lineHeight: 21, color: COLORS.onSurfaceMuted },
   item: {
     flexDirection: 'row',
-    padding: 14,
+    padding: SPACING.md,
     marginBottom: 10,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,

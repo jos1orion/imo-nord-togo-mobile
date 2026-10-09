@@ -342,7 +342,7 @@ const baseStyles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    backgroundColor: COLORS.overlayWhite55,
   },
   imageDotActive: {
     width: 16,
@@ -355,7 +355,7 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 10,
-    backgroundColor: 'rgba(15,23,42,0.7)',
+    backgroundColor: COLORS.overlayNavy70,
   },
   imageCounterText: {
     color: COLORS.white,
@@ -377,7 +377,7 @@ const baseStyles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: COLORS.scrim50,
   },
   viewerImageWrap: {
     width,
@@ -397,7 +397,7 @@ const baseStyles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 12,
     color: COLORS.white,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: COLORS.scrim50,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -428,16 +428,16 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: COLORS.overlayWhite90,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   statusBadgeNew: {
-    backgroundColor: 'rgba(245,158,11,0.2)',
+    backgroundColor: COLORS.overlayAmber20,
     borderColor: COLORS.gold,
   },
   statusBadgeVerified: {
-    backgroundColor: 'rgba(37,99,235,0.15)',
+    backgroundColor: COLORS.overlayBlue15,
     borderColor: COLORS.info,
   },
   statusBadgeText: {
@@ -463,7 +463,7 @@ const baseStyles = StyleSheet.create({
     position: 'absolute',
     top: 44,
     right: 12,
-    backgroundColor: 'rgba(17,24,39,0.7)',
+    backgroundColor: COLORS.overlaySlate70,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -483,7 +483,7 @@ const baseStyles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: COLORS.overlayWhite95,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -496,13 +496,13 @@ const baseStyles = StyleSheet.create({
     position: 'absolute',
     top: 44,
     right: 12,
-    backgroundColor: 'rgba(17,24,39,0.75)',
+    backgroundColor: COLORS.overlaySlate75,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 10,
   },
   likesBadgeEmpty: {
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: COLORS.scrimSoft,
   },
   likesText: {
     fontSize: 10,
@@ -510,7 +510,7 @@ const baseStyles = StyleSheet.create({
     color: COLORS.white,
   },
   likesTextEmpty: {
-    color: 'rgba(255,255,255,0.7)',
+    color: COLORS.overlayWhite70,
   },
   content: {
     padding: SPACING.md,

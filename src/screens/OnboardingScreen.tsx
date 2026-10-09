@@ -15,6 +15,8 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { safeImpactLight, safeNotificationSuccess, safeSelection } from '../lib/expoHapticsSafe';
 import type { TranslationKey } from '../i18n';
 import COLORS from '../theme/colors';
+import { typography } from '../theme/typography';
+import { RADIUS, SPACING } from '../theme/spacing';
 import PrimaryButton from '../components/ui/PrimaryButton';
 
 const { width } = Dimensions.get('window');
@@ -114,13 +116,12 @@ const baseStyles = StyleSheet.create({
   },
   skip: {
     alignSelf: 'flex-end',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.sm,
   },
   skipText: {
+    ...typography.button,
     color: COLORS.primary,
-    fontWeight: '600',
-    fontSize: 15,
   },
   slide: {
     paddingHorizontal: 28,
@@ -137,8 +138,7 @@ const baseStyles = StyleSheet.create({
     color: COLORS.onSurfaceMuted,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '800',
+    ...typography.heroTitle,
     color: COLORS.onSurface,
     marginBottom: 12,
   },

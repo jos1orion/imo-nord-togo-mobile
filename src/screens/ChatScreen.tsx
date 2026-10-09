@@ -20,6 +20,8 @@ import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import { safeImpactLight } from '../lib/expoHapticsSafe';
+import { typography } from '../theme/typography';
+import { RADIUS, SPACING } from '../theme/spacing';
 
 type ChatScreenRouteProp = RouteProp<RootStackParamList, 'Chat'>;
 type ChatScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Chat'>;
@@ -153,14 +155,13 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 15,
+    padding: SPACING.lg,
     backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    ...typography.title,
     color: COLORS.onSurface,
   },
   messagesList: {
@@ -200,7 +201,7 @@ const baseStyles = StyleSheet.create({
     marginTop: 5,
   },
   ownTimestamp: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: COLORS.overlayWhite70,
     textAlign: 'right',
   },
   otherTimestamp: {
@@ -229,7 +230,7 @@ const baseStyles = StyleSheet.create({
   },
   sendButton: {
     backgroundColor: COLORS.primary,
-    borderRadius: 20,
+    borderRadius: RADIUS.full,
     width: 40,
     height: 40,
     justifyContent: 'center',

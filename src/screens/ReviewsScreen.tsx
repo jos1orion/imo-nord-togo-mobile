@@ -16,6 +16,8 @@ import { useApp } from '../context/AppContext';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
+import { typography } from '../theme/typography';
+import { RADIUS, SPACING } from '../theme/spacing';
 import { canViewProperty } from '../utils/propertyVisibility';
 
 type ReviewsScreenRouteProp = RouteProp<RootStackParamList, 'Reviews'>;
@@ -226,8 +228,7 @@ const baseStyles = StyleSheet.create({
     borderBottomColor: COLORS.borderStrong,
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    ...typography.heroTitle,
     color: COLORS.primary,
   },
   propertyInfo: {
@@ -262,13 +263,12 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 15,
-    borderRadius: 8,
+    padding: SPACING.lg,
+    borderRadius: RADIUS.md,
   },
   addReviewButtonText: {
+    ...typography.button,
     color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
     marginLeft: 10,
   },
   addReviewForm: {

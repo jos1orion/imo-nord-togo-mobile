@@ -16,6 +16,8 @@ import { useApp } from '../context/AppContext';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
+import { typography } from '../theme/typography';
+import { RADIUS, SPACING } from '../theme/spacing';
 import { isPublicProperty } from '../utils/propertyVisibility';
 
 type AgentProfileScreenRouteProp = RouteProp<RootStackParamList, 'AgentProfile'>;
@@ -203,8 +205,7 @@ const baseStyles = StyleSheet.create({
     borderBottomColor: COLORS.borderStrong,
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    ...typography.heroTitle,
     color: COLORS.primary,
   },
   profileCard: {
@@ -246,8 +247,7 @@ const baseStyles = StyleSheet.create({
     marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    ...typography.title,
     color: COLORS.onSurface,
     marginBottom: 10,
   },
@@ -298,22 +298,21 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 15,
-    borderRadius: 8,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
     marginBottom: 10,
   },
   contactButtonText: {
+    ...typography.button,
     color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
     marginLeft: 10,
   },
   phoneButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 15,
-    borderRadius: 8,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.primary,
   },

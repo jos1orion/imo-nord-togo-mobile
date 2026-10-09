@@ -31,6 +31,8 @@ import { isDirectPublishingEnabled } from '../lib/publishing';
 import { PROPERTY_TYPE_COLORS, Property, PropertyType } from '../types';
 import COLORS from '../theme/colors';
 import { safeImpactLight } from '../lib/expoHapticsSafe';
+import { typography } from '../theme/typography';
+import { RADIUS, SPACING } from '../theme/spacing';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 type PublishRouteProp = RouteProp<RootStackParamList, 'Publish'>;
@@ -1021,7 +1023,7 @@ const baseStyles = StyleSheet.create({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: RADIUS.full,
     backgroundColor: COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1029,8 +1031,7 @@ const baseStyles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    ...typography.title,
     color: COLORS.onSurface,
     flex: 1,
   },
@@ -1038,7 +1039,7 @@ const baseStyles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     padding: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    backgroundColor: COLORS.scrim55,
   },
   guideCard: {
     width: '100%',
@@ -1257,7 +1258,7 @@ const baseStyles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: COLORS.scrimStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1272,7 +1273,7 @@ const baseStyles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: COLORS.scrimHeavy,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1304,7 +1305,7 @@ const baseStyles = StyleSheet.create({
   neighborhoodModalBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: COLORS.overlayNavy55,
   },
   neighborhoodModal: {
     maxHeight: '82%',

@@ -11,6 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
+import { typography } from '../theme/typography';
+import { RADIUS, SPACING } from '../theme/spacing';
 import { getContactEmail, getContactPhoneDigits } from '../constants/appConfig';
 
 interface LegalScreenProps {
@@ -296,12 +298,12 @@ const baseStyles = StyleSheet.create({
     borderBottomColor: COLORS.onSurfaceMuted,
   },
   backButton: {
-    padding: 8,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.full,
   },
   headerTitle: {
     flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
+    ...typography.title,
     color: COLORS.onSurface,
     textAlign: 'center',
   },

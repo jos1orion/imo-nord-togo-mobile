@@ -18,15 +18,18 @@ import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import EmptyState from '../components/ui/EmptyState';
+import Skeleton from '../components/ui/Skeleton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getContactEmail, getWhatsAppUrl } from '../constants/appConfig';
+import { RADIUS, SPACING } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 type MessagesScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Messages'>;
 
 const MessagesScreen = () => {
   const styles = useThemedStyles(baseStyles);
   const themeColors = useThemeColors();
-  const { chats, currentUser, users, t, language } = useApp();
+  const { chats, currentUser, users, t, language, hydrated } = useApp();
   const navigation = useNavigation<MessagesScreenNavigationProp>();
   const insets = useSafeAreaInsets();
 
@@ -184,6 +187,19 @@ const MessagesScreen = () => {
         keyExtractor={item => item.id}
         ListHeaderComponent={supportHeader}
         ListEmptyComponent={
+          !hydrated ? (
+            <View style={styles.loadingList}>
+              {[0, 1, 2].map(item => (
+                <View key={item} style={styles.loadingChatItem}>
+                  <Skeleton style={styles.loadingAvatar} />
+                  <View style={styles.loadingChatCopy}>
+                    <Skeleton style={styles.loadingName} />
+                    <Skeleton style={styles.loadingMessage} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
           <EmptyState
             icon="chatbubble-ellipses-outline"
             title={t('support_empty_title')}
@@ -194,6 +210,7 @@ const MessagesScreen = () => {
             }
             style={styles.emptyConversations}
           />
+          )
         }
         contentContainerStyle={[
           styles.listContent,
@@ -209,18 +226,45 @@ const baseStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  loadingList: {
+    paddingHorizontal: SPACING.lg,
+  },
+  loadingChatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  loadingAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.full,
+  },
+  loadingChatCopy: {
+    flex: 1,
+    gap: SPACING.sm,
+  },
+  loadingName: {
+    width: '55%',
+    height: 14,
+  },
+  loadingMessage: {
+    width: '82%',
+    height: 12,
+  },
   content: {
     paddingHorizontal: 18,
   },
   header: {
-    paddingBottom: 16,
+    paddingBottom: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   title: {
-    fontSize: 27,
-    fontWeight: '800',
+    ...typography.heroTitle,
     color: COLORS.onSurface,
     letterSpacing: -0.5,
   },
@@ -266,9 +310,9 @@ const baseStyles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: COLORS.overlayWhite12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: COLORS.overlayWhite14,
   },
   heroAccent: {
     width: 29,
@@ -276,7 +320,7 @@ const baseStyles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(244,199,107,0.14)',
+    backgroundColor: COLORS.overlayGold14,
   },
   heroTitle: {
     color: COLORS.white,
