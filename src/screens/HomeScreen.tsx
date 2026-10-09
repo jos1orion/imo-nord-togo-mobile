@@ -54,7 +54,6 @@ const HomeScreen: React.FC = () => {
     searchQuery,
     setSearchQuery,
     properties,
-    users,
     currentUser,
     neighborhoods,
     getFilteredProperties,
@@ -152,13 +151,6 @@ const HomeScreen: React.FC = () => {
     if (!exists) setSelectedNeighborhood(null);
   }, [availableNeighborhoods, selectedNeighborhood]);
   const activeListings = properties.filter(isPublicProperty).length;
-  const verifiedOwnerIds = new Set(users.filter(user => user.verified).map(user => user.id));
-  const verifiedOwnerCount = new Set(
-    properties
-      .filter(isPublicProperty)
-      .map(property => property.ownerId)
-      .filter((ownerId): ownerId is string => Boolean(ownerId && verifiedOwnerIds.has(ownerId)))
-  ).size;
   const totalLikes = Object.values(propertyStats).reduce(
     (sum, stats) => sum + (stats.likes ?? 0),
     0
@@ -498,7 +490,7 @@ const HomeScreen: React.FC = () => {
             <View style={[styles.trustStatIcon, { backgroundColor: themeColors.successContainer }]}>
               <Ionicons name="shield-checkmark-outline" size={16} color={themeColors.success} />
             </View>
-            <Text style={styles.trustStatValue}>{verifiedOwnerCount}</Text>
+            <Text style={styles.trustStatValue}>—</Text>
             <Text style={styles.trustStatLabel}>{t('home_verified_owners')}</Text>
           </View>
           <View style={styles.trustStatDivider} />

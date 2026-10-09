@@ -79,18 +79,8 @@ const PropertyDetailScreen: React.FC = () => {
     setViewerIndex(0);
   }, [property?.id]);
 
-  if (!property || !canViewProperty(property, currentUser?.id)) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{t('property_not_found')}</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backLink}>{t('back')}</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   const agentPhone = useMemo(() => {
+    if (!property) return '';
     const candidates = [
       property.contactPhone,
       property.client?.phone,
@@ -103,15 +93,40 @@ const PropertyDetailScreen: React.FC = () => {
     ];
     return candidates.find(phone => typeof phone === 'string' && phone.trim().length > 0)?.trim() ?? '';
   }, [
-    property.contactPhone,
-    property.client?.phone,
-    property.clientId,
-    property.ownerId,
+    property?.contactPhone,
+    property?.client?.phone,
+    property?.clientId,
+    property?.ownerId,
     clients,
     users,
     currentUser?.id,
     currentUser?.phone,
   ]);
+
+  const similarProperties = useMemo(() => {
+    if (!property) return [];
+    return properties
+      .filter(p => isPublicProperty(p) && p.id !== property.id && p.type === property.type)
+      .slice(0, 6);
+  }, [properties, property?.id, property?.type]);
+
+  useEffect(() => {
+    if (!viewerOpen) return;
+    requestAnimationFrame(() => {
+      viewerScrollRef.current?.scrollToIndex({ index: viewerIndex, animated: false });
+    });
+  }, [viewerOpen, viewerIndex]);
+
+  if (!property || !canViewProperty(property, currentUser?.id)) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{t('property_not_found')}</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text style={styles.backLink}>{t('back')}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   const normalizeDigits = (value: string) => {
     const digits = value.replace(/\D/g, '');
@@ -184,12 +199,6 @@ const PropertyDetailScreen: React.FC = () => {
     trackShare(property.id);
   };
 
-  const similarProperties = useMemo(() => {
-    return properties
-      .filter(p => isPublicProperty(p) && p.id !== property.id && p.type === property.type)
-      .slice(0, 6);
-  }, [properties, property.id, property.type]);
-
   const handleGoBack = () => {
     if (navigation.canGoBack()) {
       navigation.goBack();
@@ -258,13 +267,6 @@ const PropertyDetailScreen: React.FC = () => {
     setViewerIndex(index);
     setViewerOpen(true);
   };
-
-  useEffect(() => {
-    if (!viewerOpen) return;
-    requestAnimationFrame(() => {
-      viewerScrollRef.current?.scrollToIndex({ index: viewerIndex, animated: false });
-    });
-  }, [viewerOpen, viewerIndex]);
 
   return (
     <View style={styles.container}>

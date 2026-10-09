@@ -33,6 +33,7 @@ import COLORS from '../theme/colors';
 import { safeImpactLight } from '../lib/expoHapticsSafe';
 import { typography } from '../theme/typography';
 import { RADIUS, SPACING } from '../theme/spacing';
+import { logger } from '../lib/logger';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 type PublishRouteProp = RouteProp<RootStackParamList, 'Publish'>;
@@ -159,7 +160,7 @@ const PublishScreen: React.FC = () => {
         }
       })
       .catch(error => {
-        console.warn('Unable to load the publishing guide state.', error);
+        logger.warn('Unable to load the publishing guide state.', error);
         if (!cancelled) setPublishGuideStep(step as PublishGuideStep);
       });
 
@@ -177,7 +178,7 @@ const PublishScreen: React.FC = () => {
     const writes: [string, string][] = [[guideKey, 'true']];
     if (disableAll) writes.push(['imo:publish-step-guide-disabled', 'true']);
     void AsyncStorage.multiSet(writes).catch(error => {
-      console.warn('Unable to save the publishing guide state.', error);
+      logger.warn('Unable to save the publishing guide state.', error);
     });
   };
 

@@ -2,6 +2,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { logger } from './logger';
 
 export const supabaseUrl =
   process.env.EXPO_PUBLIC_SUPABASE_URL ??
@@ -214,7 +215,7 @@ export const exchangeAuthCallback = async (url: string) => {
 };
 
 if (!isSupabaseConfigured) {
-  console.warn(
+  logger.warn(
     'Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to enable backend features.'
   );
 }

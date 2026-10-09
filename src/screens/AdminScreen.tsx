@@ -44,6 +44,7 @@ import { THEME_PALETTES } from '../theme/colors';
 import Skeleton from '../components/ui/Skeleton';
 import { typography } from '../theme/typography';
 import { RADIUS, SPACING } from '../theme/spacing';
+import { logger } from '../lib/logger';
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -621,7 +622,7 @@ const AdminScreen: React.FC = () => {
         .from('tenant-documents')
         .createSignedUploadUrl(path);
       if (signedError || !signed?.signedUrl) {
-        console.warn('Signed upload URL error (tenant doc)', {
+        logger.warn('Signed upload URL error (tenant doc)', {
           error: signedError?.message ?? signedError,
           path,
           tenantId: tenant.id,
@@ -638,7 +639,7 @@ const AdminScreen: React.FC = () => {
         },
       });
       if (uploadResult.status < 200 || uploadResult.status >= 300) {
-        console.warn('Signed upload failed (tenant doc)', {
+        logger.warn('Signed upload failed (tenant doc)', {
           status: uploadResult.status,
           body: uploadResult.body,
           path,
@@ -951,9 +952,9 @@ const AdminScreen: React.FC = () => {
         actor_name: [currentUser?.name, currentUser?.email].filter(Boolean).join(' — ') || null,
         created_at: new Date().toISOString(),
       });
-      if (error) console.warn('Unable to save the admin activity log:', error.message);
+      if (error) logger.warn('Unable to save the admin activity log:', error.message);
     } catch (error) {
-      console.warn('Unable to save the admin activity log:', error);
+      logger.warn('Unable to save the admin activity log:', error);
     }
   };
 

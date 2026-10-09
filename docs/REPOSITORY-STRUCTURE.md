@@ -15,7 +15,7 @@ Limiter les conflits de dépendances et clarifier les workflows de build/déploi
 - Ne jamais utiliser de clé Supabase **service_role** côté mobile (uniquement côté serveur, ex. routes API Next).
 - Centraliser la doc “prod” dans `docs/`.
 - SQL existant : `docs/supabase-user-role.sql` puis `docs/supabase-production-migration.sql`.
-- Les migrations exécutables et ordonnées sont aussi conservées dans `supabase/migrations/` (`0001_*.sql`, `0002_*.sql`, etc.). Les copies historiques dans `docs/` restent disponibles comme documentation ; toute nouvelle évolution SQL doit être ajoutée comme une migration numérotée.
+- Les copies SQL de `docs/` sont archivées dans `supabase/migrations/`, mais elles ne constituent pas encore une suite sûre à appliquer automatiquement : `0001_rls.sql` est explicitement un brouillon historique à ne pas exécuter, `0002_bootstrap.sql` est une installation complète autonome, et les autres scripts déclarent des prérequis dont l'ordre doit être validé selon la base cible. Conserver les originaux dans `docs/` ; ne pas exécuter tout le dossier en bloc. Toute nouvelle migration doit être vérifiée et ordonnée avant déploiement.
 - Promouvoir un `ADMIN` à la main après migration. Les inscriptions sont `USER`.
 
 ## Commandes (depuis la racine)

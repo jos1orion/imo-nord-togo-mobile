@@ -34,6 +34,7 @@ import COLORS from '../theme/colors';
 import { isPublicProperty } from '../utils/propertyVisibility';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { logger } from '../lib/logger';
 
 type ProfileRouteProp = RouteProp<
   { Profile: { authMode?: 'login' | 'register' } | undefined },
@@ -282,7 +283,7 @@ const ProfileScreen: React.FC = () => {
         }
         if (sessionResult?.error) throw sessionResult.error;
       } else if (result.type !== 'cancel' && result.type !== 'dismiss') {
-        console.warn('Google sign-in ended without completing authentication.', {
+        logger.warn('Google sign-in ended without completing authentication.', {
           resultType: result.type,
         });
       }
@@ -290,7 +291,7 @@ const ProfileScreen: React.FC = () => {
       const errorDetails = error instanceof Error
         ? { name: error.name, message: error.message }
         : { message: String(error) };
-      console.error(`Google sign-in failed while ${authStage}.`, errorDetails);
+      logger.error(`Google sign-in failed while ${authStage}.`, errorDetails);
       setAuthError(t('profile_auth_google_failed'));
     } finally {
       setAuthLoading(false);

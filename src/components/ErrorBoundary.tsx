@@ -3,6 +3,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { THEME_PALETTES } from '../theme/colors';
 import { getCurrentLanguage, translate } from '../i18n';
+import { logger } from '../lib/logger';
 
 type Props = { children: ReactNode };
 
@@ -46,7 +47,7 @@ export class ErrorBoundary extends Component<Props, State> {
       }
     })();
 
-    if (__DEV__) console.error('ErrorBoundary', error, componentStack);
+    logger.error('ErrorBoundary', { error, componentStack });
   }
 
   handleReset = () => {

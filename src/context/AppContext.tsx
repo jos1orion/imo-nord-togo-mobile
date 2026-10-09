@@ -42,6 +42,7 @@ import { Language, TranslationKey, setCurrentLanguage, translate, translateStatu
 import { isExpiredProperty, isPublicProperty } from '../utils/propertyVisibility';
 import { isDirectPublishingEnabled } from '../lib/publishing';
 import { MessageRow, PropertyRow, ReportRow, ReviewRow } from '../types/db';
+import { logger } from '../lib/logger';
 
 interface AppContextType {
   properties: Property[];
@@ -367,7 +368,7 @@ const storage = {
     try {
       return await AsyncStorage.getItem(key);
     } catch (error) {
-      console.warn(`Unable to read persisted app data for "${key}".`, error);
+      logger.warn(`Unable to read persisted app data for "${key}".`, error);
       throw error;
     }
   },
@@ -375,8 +376,7 @@ const storage = {
     try {
       await AsyncStorage.setItem(key, value);
     } catch (error) {
-      console.warn(`Unable to persist app data for "${key}".`, error);
-      throw error;
+      logger.error(`Unable to persist app data for "${key}".`, error);
     }
   },
   async multiGet(keys: string[]) {
@@ -445,7 +445,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           try {
             return JSON.parse(raw) as T;
           } catch (error) {
-            console.warn(`Unable to parse persisted app data for "${key}".`, error);
+            logger.warn(`Unable to parse persisted app data for "${key}".`, error);
             return fallback;
           }
         };
@@ -502,6 +502,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setContracts(parse<Contract[]>(STORAGE_KEYS.contracts, []));
         setPayments(parse<Payment[]>(STORAGE_KEYS.payments, []));
         setTenantDocuments(parse<TenantDocument[]>(STORAGE_KEYS.tenantDocuments, []));
+      } catch (error) {
+        logger.error('Unable to load persisted app data.', error);
       } finally {
         setHydrated(true);
       }
@@ -714,7 +716,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         );
       }
       const { error: signOutError } = await supabase.auth.signOut();
-      if (signOutError) console.error('Unable to sign out suspended account.', signOutError.message);
+      if (signOutError) logger.error('Unable to sign out suspended account.', signOutError.message);
       return;
     }
     suspendedAccountNotice.current = null;
@@ -750,7 +752,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Notifications are optional for older installations. Keep the local
     // inbox intact when the table or its user-scoped policies are unavailable.
     if (error || !data) {
-      if (error) console.warn('Notifications fetch error:', error.message);
+      if (error) logger.warn('Notifications fetch error:', error.message);
       return;
     }
 
@@ -824,14 +826,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
         const result = await exchangeAuthCallback(url);
         if (result?.error) {
-          console.error('Unable to complete the mobile auth callback.', result.error.message);
+          logger.error('Unable to complete the mobile auth callback.', result.error.message);
           Alert.alert(
             translate(language, 'error'),
             translate(language, 'profile_auth_callback_failed')
           );
         }
       } catch (error) {
-        console.error('Unable to complete the mobile auth callback.', error);
+        logger.error('Unable to complete the mobile auth callback.', error);
         Alert.alert(
           translate(language, 'error'),
           translate(language, 'profile_auth_callback_failed')
@@ -841,7 +843,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     void Linking.getInitialURL()
       .then(completeAuthCallback)
-      .catch(error => console.error('Unable to read the initial auth callback URL.', error));
+      .catch(error => logger.error('Unable to read the initial auth callback URL.', error));
     const subscription = Linking.addEventListener('url', ({ url }) => {
       void completeAuthCallback(url);
     });
@@ -851,7 +853,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     if (!currentUser) return;
     void registerPushToken().catch(error => {
-      console.warn('Push token registration failed:', error);
+      logger.warn('Push token registration failed:', error);
     });
   }, [currentUser, registerPushToken]);
 
@@ -1001,17 +1003,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           reloadProperties(),
           loadReviewsFromSupabase(),
           loadReportsFromSupabase(),
-          (async () => {
-            const { data, error } = await supabase.from('tenants').select('*');
-            if (error) throw error;
-            setClients((data ?? []).map(tenant => ({
-              id: tenant.id,
-              name: tenant.full_name ?? '',
-              email: tenant.email ?? '',
-              phone: tenant.phone ?? '',
-              createdAt: tenant.created_at ?? new Date().toISOString(),
-            })));
-          })(),
         ];
 
         if (currentUser) {
@@ -1024,6 +1015,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         if (currentUser?.role === 'ADMIN') {
           tasks.push(
+            (async () => {
+              const { data, error } = await supabase.from('tenants').select('*');
+              if (error) throw error;
+              setClients((data ?? []).map(tenant => ({
+                id: tenant.id,
+                name: tenant.full_name ?? '',
+                email: tenant.email ?? '',
+                phone: tenant.phone ?? '',
+                createdAt: tenant.created_at ?? new Date().toISOString(),
+              })));
+            })(),
             (async () => {
               const { data, error } = await supabase
                 .from('contracts')
@@ -1073,6 +1075,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             })()
           );
         } else {
+          setClients([]);
           setContracts([]);
           setPayments([]);
           setTenantDocuments([]);
@@ -1080,7 +1083,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         await Promise.all(tasks);
       } catch (error) {
-        console.error('Failed to fetch from Supabase', error);
+        logger.error('Failed to fetch from Supabase', error);
         setSyncError('Une erreur est survenue. Veuillez réessayer.');
       }
     }, [
@@ -1225,7 +1228,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 );
               }
               void supabase.auth.signOut().then(({ error }) => {
-                if (error) console.error('Unable to sign out suspended account.', error.message);
+                if (error) logger.error('Unable to sign out suspended account.', error.message);
               });
               return;
             }
@@ -1368,7 +1371,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             .from('property_images')
             .insert({ property_id: propertyId, url: rawUri });
           if (insertError) {
-            console.warn('Insert existing property image failed', {
+            logger.warn('Insert existing property image failed', {
               error: insertError.message,
               propertyId,
               url: rawUri,
@@ -1433,12 +1436,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               lastUploadFailure = error instanceof Error
                 ? error.message
                 : 'Impossible de préparer l’envoi d’une photo.';
-              console.warn('Signed upload URL exception', { error, path, propertyId });
+              logger.warn('Signed upload URL exception', { error, path, propertyId });
               break;
             }
             if (signedError || !signed?.signedUrl) {
               lastUploadFailure = signedError?.message ?? 'Impossible de préparer l’envoi d’une photo.';
-              console.warn('Signed upload URL error', {
+              logger.warn('Signed upload URL error', {
                 error: signedError?.message ?? signedError,
                 path,
                 propertyId,
@@ -1466,7 +1469,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   `Échec de l’envoi de la photo (HTTP ${uploadResult.status}).`,
                   responseBody ? responseBody.slice(0, 300) : '',
                 ].filter(Boolean).join(' ');
-                console.warn('Signed upload failed', {
+                logger.warn('Signed upload failed', {
                   attempt,
                   status: uploadResult.status,
                   body: uploadResult.body,
@@ -1483,7 +1486,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               lastUploadFailure = uploadError instanceof Error
                 ? uploadError.message
                 : 'La connexion a interrompu l’envoi de la photo.';
-              console.warn('Signed upload exception', {
+              logger.warn('Signed upload exception', {
                 attempt,
                 error: uploadError,
                 path,
@@ -1497,7 +1500,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           try {
             await FileSystem.deleteAsync(uploadUri, { idempotent: true });
           } catch (cleanupError) {
-            console.warn('Unable to remove the optimized temporary image.', cleanupError);
+            logger.warn('Unable to remove the optimized temporary image.', cleanupError);
           }
           if (!uploadOk) {
             failures.push(lastUploadFailure || 'L’envoi d’une photo a échoué. Vérifiez votre connexion et réessayez.');
@@ -1510,7 +1513,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               .from('property-images')
               .remove(failedAttemptPaths);
             if (cleanupError) {
-              console.warn('Unable to clean up retried property image uploads.', cleanupError);
+              logger.warn('Unable to clean up retried property image uploads.', cleanupError);
             }
           }
           const { data } = supabase.storage.from('property-images').getPublicUrl(successfulPath);
@@ -1519,7 +1522,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               .from('property_images')
               .insert({ property_id: propertyId, url: data.publicUrl });
             if (insertError) {
-              console.warn('Insert property_image failed', {
+              logger.warn('Insert property_image failed', {
                 error: insertError.message ?? insertError,
                 propertyId,
                 url: data.publicUrl,
@@ -1533,7 +1536,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             failures.push('Impossible de récupérer l’adresse d’une photo envoyée.');
           }
         } catch (err) {
-          console.warn('Upload image exception', {
+          logger.warn('Upload image exception', {
             error: err,
             propertyId,
           });
@@ -1543,7 +1546,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             try {
               await FileSystem.deleteAsync(sourceUriToDelete, { idempotent: true });
             } catch (cleanupError) {
-              console.warn('Unable to remove the temporary source image.', cleanupError);
+              logger.warn('Unable to remove the temporary source image.', cleanupError);
             }
           }
         }
@@ -1556,7 +1559,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             .eq('property_id', propertyId)
             .in('url', insertedImageUrls);
           if (cleanupError) {
-            console.warn('Unable to clean up partially saved property images.', cleanupError);
+            logger.warn('Unable to clean up partially saved property images.', cleanupError);
           }
         }
         if (uploadedStoragePaths.length) {
@@ -1565,7 +1568,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             .from('property-images')
             .remove(uploadedStoragePaths);
           if (cleanupError) {
-            console.warn('Unable to clean up partially uploaded property images.', cleanupError);
+            logger.warn('Unable to clean up partially uploaded property images.', cleanupError);
           }
         }
         throw new Error([...new Set(failures)].join('\n'));
@@ -1609,14 +1612,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } catch (uploadError) {
         const { error: cleanupError } = await supabase.from('properties').delete().eq('id', base.id);
         if (cleanupError) {
-          console.warn('Unable to remove property after image upload failed.', cleanupError);
+          logger.warn('Unable to remove property after image upload failed.', cleanupError);
         }
         throw uploadError;
       }
       if (propertyData.images?.length && uploadedImages.length === 0) {
         const { error: cleanupError } = await supabase.from('properties').delete().eq('id', base.id);
         if (cleanupError) {
-          console.warn('Unable to remove property without uploaded images.', cleanupError);
+          logger.warn('Unable to remove property without uploaded images.', cleanupError);
         }
         throw new Error("Aucune image n'a pu être envoyée. Réessayez.");
       }
@@ -1637,7 +1640,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       setProperties(prev => dedupeProperties([next, ...prev]));
     void addNeighborhood(next.neighborhood ?? next.location).catch(error => {
-      console.warn('Unable to save the property neighborhood:', error);
+      logger.warn('Unable to save the property neighborhood:', error);
     });
     return next;
     }, [resolveAuthUserId, uploadPropertyImages, omitUnsupportedPropertyColumns]);
@@ -1673,7 +1676,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
     if (updates.neighborhood || updates.location) {
       void addNeighborhood((updates.neighborhood ?? updates.location) as string).catch(error => {
-        console.warn('Unable to save the property neighborhood:', error);
+        logger.warn('Unable to save the property neighborhood:', error);
       });
     }
   }, [omitUnsupportedPropertyColumns]);

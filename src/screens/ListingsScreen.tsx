@@ -25,6 +25,7 @@ import COLORS from '../theme/colors';
 import { isPublicProperty } from '../utils/propertyVisibility';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { logger } from '../lib/logger';
 
 type ListingsTabParamList = {
   Home: undefined;
@@ -114,7 +115,7 @@ const ListingsScreen: React.FC = () => {
       await requestAgentAccess();
       Alert.alert(t('success'), t('listing_agent_request_sent'));
     } catch (error) {
-      console.error('Unable to submit agent access request.', error);
+      logger.error('Unable to submit agent access request.', error);
       Alert.alert(t('error'), t('listing_agent_request_error'));
     } finally {
       setRequestingAgentAccess(false);
