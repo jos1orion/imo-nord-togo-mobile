@@ -112,6 +112,7 @@ export default function PaymentsPage() {
   };
 
   const handleDelete = async (paymentId: string) => {
+    if (!window.confirm('Supprimer ce paiement ? Cette action est irréversible.')) return;
     const { error } = await supabase.from('payments').delete().eq('id', paymentId);
     if (error) {
       alert(`Erreur suppression: ${error.message}`);

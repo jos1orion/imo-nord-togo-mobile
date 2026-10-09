@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Image,
   Share,
+  KeyboardAvoidingView,
   LayoutAnimation,
   Platform,
   UIManager,
@@ -23,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
 import { translateAdmin, type AdminTranslationKey } from '../i18n/admin';
 import { supabase } from '../lib/supabase';
+import { fetchAdminAccounts, updateAdminAccount } from '../lib/adminAccounts';
 import {
   PROPERTY_TYPE_LABELS,
   PROPERTY_TYPE_COLORS,
@@ -34,13 +36,11 @@ import {
   User,
   Contract,
   Payment,
-  Message,
-  PremiumListing,
   CommissionRule,
-  Document,
+  TenantDocument,
 } from '../types';
-import { formatPrice } from '../data/mock-data';
-import COLORS from '../theme/colors';
+import { formatPrice } from '../utils/format';
+import { THEME_PALETTES } from '../theme/colors';
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -100,6 +100,8 @@ type AdminTheme = {
   dangerSoft: string;
   success: string;
   successSoft: string;
+  purple: string;
+  onBrand: string;
   headerBg: string;
   headerText: string;
   headerMuted: string;
@@ -108,62 +110,38 @@ type AdminTheme = {
   shadow: string;
 };
 
-const lightTheme: AdminTheme = {
-  name: 'light',
-  bg: '#f1f5f9',
-  surface: '#ffffff',
-  surfaceAlt: '#f8fafc',
-  surfaceMuted: '#f1f5f9',
-  border: '#e2e8f0',
-  text: '#0f172a',
-  textMuted: '#64748b',
-  textSoft: '#94a3b8',
-  accent: COLORS.primary,
-  accentSoft: COLORS.infoBg,
-  accentText: COLORS.primary,
-  warning: '#b45309',
-  warningSoft: '#fef9c3',
-  info: '#1d4ed8',
-  infoSoft: '#dbeafe',
-  danger: '#b91c1c',
-  dangerSoft: '#fee2e2',
-  success: COLORS.accent,
-  successSoft: COLORS.successBg,
-  headerBg: '#ffffff',
-  headerText: '#0f172a',
-  headerMuted: '#64748b',
-  badgeBg: '#eff6ff',
-  badgeText: '#334155',
-  shadow: '#0f172a',
-};
-
-const darkTheme: AdminTheme = {
-  name: 'dark',
-  bg: '#0a0f16',
-  surface: '#0f172a',
-  surfaceAlt: '#111c31',
-  surfaceMuted: '#0b1220',
-  border: '#1f2a3a',
-  text: '#e5ecf6',
-  textMuted: '#9aa7bd',
-  textSoft: '#7c8aa5',
-  accent: '#3B82F6',
-  accentSoft: '#0B1B36',
-  accentText: '#93C5FD',
-  warning: '#fbbf24',
-  warningSoft: '#3a2a12',
-  info: '#22d3ee',
-  infoSoft: '#102a34',
-  danger: '#fb7185',
-  dangerSoft: '#3a1a1a',
-  success: COLORS.accent,
-  successSoft: 'rgba(34,197,94,0.18)',
-  headerBg: '#0a0f16',
-  headerText: '#e5ecf6',
-  headerMuted: '#9aa7bd',
-  badgeBg: '#0f172a',
-  badgeText: '#cbd5f5',
-  shadow: '#0f172a',
+const createAdminTheme = (name: AdminTheme['name']): AdminTheme => {
+  const colors = THEME_PALETTES[name];
+  return {
+    name,
+    bg: colors.background,
+    surface: colors.surface,
+    surfaceAlt: colors.surfaceAlt,
+    surfaceMuted: colors.surfaceMuted,
+    border: colors.border,
+    text: colors.onSurface,
+    textMuted: colors.onSurfaceMuted,
+    textSoft: colors.onSurfaceSoft,
+    accent: colors.primary,
+    accentSoft: colors.primaryContainer,
+    accentText: colors.primary,
+    warning: colors.warning,
+    warningSoft: colors.warningContainer,
+    info: colors.info,
+    infoSoft: colors.infoContainer,
+    danger: colors.danger,
+    dangerSoft: colors.dangerContainer,
+    success: colors.success,
+    successSoft: colors.successContainer,
+    purple: colors.purple,
+    onBrand: colors.onBrand,
+    headerBg: colors.surface,
+    headerText: colors.onSurface,
+    headerMuted: colors.onSurfaceMuted,
+    badgeBg: colors.primaryContainer,
+    badgeText: colors.onSurface,
+    shadow: colors.shadow,
+  };
 };
 
 const AdminScreen: React.FC = () => {
@@ -176,7 +154,6 @@ const AdminScreen: React.FC = () => {
   const {
     properties,
     clients,
-    users,
     currentUser,
     language,
     tType,
@@ -189,8 +166,6 @@ const AdminScreen: React.FC = () => {
     addClient,
     updateProperty,
     updateClient,
-    updateUser,
-    verifyUser,
     reviewAgentRequest,
     addNeighborhood,
     updateNeighborhood,
@@ -201,11 +176,9 @@ const AdminScreen: React.FC = () => {
     messages,
     chats,
     reviews,
-    agentProfiles,
-    searchAlerts,
+    setReviewVerified,
     premiumListings,
     commissionRules,
-    documents,
     contracts,
     payments,
     addContract,
@@ -216,6 +189,7 @@ const AdminScreen: React.FC = () => {
     updatePayment,
     tenantDocuments,
     addTenantDocumentRecord,
+    toggleCommissionRule,
   } = useApp();
   const tAdmin = (key: AdminTranslationKey) => translateAdmin(language, key);
   const dateLocale = language === 'en' ? 'en-US' : 'fr-FR';
@@ -258,6 +232,10 @@ const AdminScreen: React.FC = () => {
   const [userModalVisible, setUserModalVisible] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [userForm, setUserForm] = useState({ name: '', email: '', phone: '' });
+  const [adminAccounts, setAdminAccounts] = useState<User[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [accountUpdateId, setAccountUpdateId] = useState<string | null>(null);
   const [newNeighborhood, setNewNeighborhood] = useState('');
   const [neighborhoodEditModalVisible, setNeighborhoodEditModalVisible] = useState(false);
   const [editingNeighborhoodName, setEditingNeighborhoodName] = useState<string | null>(null);
@@ -470,7 +448,7 @@ const AdminScreen: React.FC = () => {
           rentAmount,
           status: contractForm.status,
         });
-      } else {
+        } else {
         await addContract({
           propertyId: contractForm.propertyId,
           tenantId: contractForm.tenantId,
@@ -580,12 +558,12 @@ const AdminScreen: React.FC = () => {
           <head>
             <meta charset="utf-8" />
             <style>
-              body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+              body { font-family: Arial, sans-serif; padding: 24px; color: ${theme.text}; }
               h1 { font-size: 20px; margin-bottom: 6px; }
-              .muted { color: #64748b; font-size: 12px; }
-              .card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-top: 16px; }
+              .muted { color: ${theme.textMuted}; font-size: 12px; }
+              .card { border: 1px solid ${theme.border}; border-radius: 12px; padding: 16px; margin-top: 16px; }
               .row { display: flex; justify-content: space-between; margin: 6px 0; }
-              .label { color: #475569; font-size: 12px; }
+              .label { color: ${theme.textMuted}; font-size: 12px; }
               .value { font-weight: 700; }
             </style>
           </head>
@@ -720,22 +698,47 @@ const AdminScreen: React.FC = () => {
     setUserForm({ name: '', email: '', phone: '' });
   };
 
-  const handleSaveUser = () => {
+  const loadAdminAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    setAccountsError(null);
+    try {
+      setAdminAccounts(await fetchAdminAccounts());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : tAdmin("Impossible de charger les comptes.");
+      setAccountsError(message);
+      throw error;
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, [language]);
+
+  useEffect(() => {
+    if (!['accounts', 'agents'].includes(activeTab) || !unlocked || !currentUser?.isAdmin) return;
+    void loadAdminAccounts().catch(() => {});
+  }, [activeTab, currentUser?.isAdmin, loadAdminAccounts, unlocked]);
+
+  const handleSaveUser = async () => {
     if (!editingUserId) return;
     if (!userForm.name.trim() || !userForm.phone.trim()) {
       Alert.alert(tAdmin("Erreur"), tAdmin("Nom et tlphone sont obligatoires"));
       return;
     }
-    updateUser(editingUserId, {
-      name: userForm.name.trim(),
-      email: userForm.email.trim(),
-      phone: userForm.phone.trim(),
-    });
-    Alert.alert(tAdmin("Succes"), tAdmin("Compte modifie avec succes."));
-    closeUserModal();
+    try {
+      await updateAdminAccount(editingUserId, {
+        full_name: userForm.name.trim(),
+        phone: userForm.phone.trim(),
+      });
+      setAdminAccounts(previous => previous.map(user => user.id === editingUserId
+        ? { ...user, name: userForm.name.trim(), phone: userForm.phone.trim() }
+        : user));
+      Alert.alert(tAdmin("Succes"), tAdmin("Compte modifie avec succes."));
+      closeUserModal();
+    } catch (error) {
+      Alert.alert(tAdmin("Erreur"), error instanceof Error ? error.message : tAdmin("Impossible de modifier le compte."));
+    }
   };
 
-  const handleAddNeighborhood = () => {
+  const handleAddNeighborhood = async () => {
     if (!newNeighborhood.trim()) {
       Alert.alert(tAdmin("Erreur"), tAdmin("Entrez un nom de quartier."));
       return;
@@ -747,8 +750,12 @@ const AdminScreen: React.FC = () => {
       Alert.alert(tAdmin("Erreur"), tAdmin("Ce quartier existe deja."));
       return;
     }
-    addNeighborhood(newNeighborhood);
-    setNewNeighborhood('');
+    try {
+      await addNeighborhood(newNeighborhood);
+      setNewNeighborhood('');
+    } catch (error) {
+      Alert.alert(tAdmin("Erreur"), error instanceof Error ? error.message : "Impossible d'ajouter le quartier.");
+    }
   };
 
   const handleRemoveNeighborhood = (name: string) => {
@@ -767,7 +774,17 @@ const AdminScreen: React.FC = () => {
       tAdmin("Supprimer \"{name}\" ?").replace('{name}', name),
       [
         { text: tAdmin("Annuler"), style: 'cancel' },
-        { text: tAdmin("Supprimer"), style: 'destructive', onPress: () => removeNeighborhood(name) },
+        {
+          text: tAdmin("Supprimer"),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await removeNeighborhood(name);
+            } catch (error) {
+              Alert.alert(tAdmin("Erreur"), error instanceof Error ? error.message : "Impossible de supprimer le quartier.");
+            }
+          },
+        },
       ]
     );
   };
@@ -840,7 +857,7 @@ const AdminScreen: React.FC = () => {
     };
   }, [properties, clients]);
 
-  const theme = useMemo(() => (adminTheme === 'dark' ? darkTheme : lightTheme), [adminTheme]);
+  const theme = useMemo(() => createAdminTheme(adminTheme), [adminTheme]);
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const contractCountByTenant = useMemo(() => {
@@ -920,7 +937,7 @@ const AdminScreen: React.FC = () => {
     meta?: Record<string, unknown>
   ) => {
     try {
-      await supabase.from('activity_logs').insert({
+      const { error } = await supabase.from('activity_logs').insert({
         action,
         entity,
         entity_id: entityId ?? null,
@@ -928,8 +945,9 @@ const AdminScreen: React.FC = () => {
         actor_name: [currentUser?.name, currentUser?.email].filter(Boolean).join(' — ') || null,
         created_at: new Date().toISOString(),
       });
-    } catch {
-      // Ignore logging failures to avoid blocking admin actions.
+      if (error) console.warn('Unable to save the admin activity log:', error.message);
+    } catch (error) {
+      console.warn('Unable to save the admin activity log:', error);
     }
   };
 
@@ -963,8 +981,34 @@ const AdminScreen: React.FC = () => {
   };
 
   const handleVerifyUser = async (user: User, value: boolean) => {
-    await verifyUser(user.id, value);
-    logAdminAction('verify_user', 'user', user.id, { verified: value });
+    try {
+      setAccountUpdateId(user.id);
+      await updateAdminAccount(user.id, { verified: value });
+      setAdminAccounts(previous => previous.map(account =>
+        account.id === user.id ? { ...account, verified: value } : account
+      ));
+      logAdminAction('verify_user', 'user', user.id, { verified: value });
+    } catch (error) {
+      Alert.alert(tAdmin("Erreur"), error instanceof Error ? error.message : tAdmin("Impossible de modifier ce compte."));
+    } finally {
+      setAccountUpdateId(null);
+    }
+  };
+
+  const handleAccountStatus = async (user: User) => {
+    const nextStatus = user.accountStatus === 'suspended' ? 'active' : 'suspended';
+    try {
+      setAccountUpdateId(user.id);
+      await updateAdminAccount(user.id, { account_status: nextStatus });
+      setAdminAccounts(previous => previous.map(account =>
+        account.id === user.id ? { ...account, accountStatus: nextStatus } : account
+      ));
+      logAdminAction('account_status', 'user', user.id, { status: nextStatus });
+    } catch (error) {
+      Alert.alert(tAdmin("Erreur"), error instanceof Error ? error.message : tAdmin("Impossible de modifier ce compte."));
+    } finally {
+      setAccountUpdateId(null);
+    }
   };
 
   const handleReviewAgent = async (user: User, approved: boolean) => {
@@ -993,6 +1037,7 @@ const AdminScreen: React.FC = () => {
         if (reason === undefined) return;
       }
       await reviewAgentRequest(user.id, approved, reason);
+      await loadAdminAccounts();
       logAdminAction(approved ? 'approve_agent' : 'reject_agent', 'user', user.id);
       Alert.alert('Demande agent', approved ? 'Agent approuvé.' : 'Demande agent refusée.');
     } catch (error) {
@@ -1068,12 +1113,16 @@ const AdminScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  const handleQuickReply = (_message: Message) => {};
-  const handleCloseMessage = (_messageId: string) => {};
-  const handleVerifyReview = (_reviewId: string) => {};
-  const handleHideReview = (_reviewId: string) => {};
-  const handleRenewPremium = (_premium: PremiumListing) => {};
-  const handleToggleCommission = (_rule: CommissionRule) => {};
+  const handleVerifyReview = async (reviewId: string, verified: boolean) => {
+    try {
+      await setReviewVerified(reviewId, verified);
+    } catch (error) {
+      Alert.alert(tAdmin("Erreur"), error instanceof Error ? error.message : tAdmin("Impossible de moderer cet avis."));
+    }
+  };
+  const handleToggleCommission = (rule: CommissionRule) => {
+    toggleCommissionRule(rule.id);
+  };
   const handleMarkPaid = async (payment: { id: string }) => {
     try {
       await updatePaymentStatus(payment.id, 'paid');
@@ -1088,11 +1137,40 @@ const AdminScreen: React.FC = () => {
       Alert.alert(tAdmin("Erreur"), tAdmin("Impossible de mettre a jour le paiement."));
     }
   };
-  const handleOpenDocument = (_document: Document) => {};
-  const handleShareDocument = (_document: Document) => {};
+  const resolveTenantDocumentUrl = async (document: TenantDocument) => {
+    if (/^https?:\/\//i.test(document.url)) return document.url;
+    const { data, error } = await supabase.storage
+      .from('tenant-documents')
+      .createSignedUrl(document.url, 60);
+    if (error) throw error;
+    return data.signedUrl;
+  };
+
+  const handleOpenDocument = async (document: TenantDocument) => {
+    try {
+      await Linking.openURL(await resolveTenantDocumentUrl(document));
+    } catch (error) {
+      Alert.alert(tAdmin("Erreur"), error instanceof Error ? error.message : tAdmin("Impossible d'ouvrir le document."));
+    }
+  };
+
+  const handleShareDocument = async (document: TenantDocument) => {
+    try {
+      const url = await resolveTenantDocumentUrl(document);
+      await Share.share({ message: url, url });
+    } catch (error) {
+      Alert.alert(tAdmin("Erreur"), error instanceof Error ? error.message : tAdmin("Impossible de partager le document."));
+    }
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
+    if (activeTab === 'accounts' || activeTab === 'agents') {
+      void loadAdminAccounts()
+        .catch(() => {})
+        .finally(() => setRefreshing(false));
+      return;
+    }
     setTimeout(() => setRefreshing(false), 1000);
   };
 
@@ -1294,9 +1372,8 @@ const AdminScreen: React.FC = () => {
       return;
     }
 
-    addNeighborhood(formData.location.trim());
-
-    if (editingPropertyId) {
+    try {
+      if (editingPropertyId) {
       const existingProperty = properties.find(p => p.id === editingPropertyId);
 
       await updateProperty(editingPropertyId, {
@@ -1356,10 +1433,13 @@ const AdminScreen: React.FC = () => {
       logAdminAction('create', 'property', created.id, { title: created.title });
 
       Alert.alert(tAdmin("Succes"), tAdmin("Annonce ajoutee avec succes."));
-    }
+      }
 
-    closePropertyModal();
-    resetPropertyForm();
+      closePropertyModal();
+      resetPropertyForm();
+    } catch (error) {
+      Alert.alert(tAdmin("Erreur"), error instanceof Error ? error.message : "Impossible d'enregistrer l'annonce.");
+    }
   };
   const handleDeleteProperty = (id: string, title: string) => {
     Alert.alert(
@@ -1424,7 +1504,7 @@ const AdminScreen: React.FC = () => {
         </View>
         <View style={styles.backupActions}>
           <TouchableOpacity style={styles.backupButton} onPress={handleExportBackup}>
-            <Ionicons name="download" size={18} color="#fff" />
+            <Ionicons name="download" size={18} color={theme.onBrand} />
             <Text style={styles.backupButtonText}>{tAdmin("Exporter")}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.backupButtonSecondary} onPress={handleImportBackup}>
@@ -1477,7 +1557,7 @@ const AdminScreen: React.FC = () => {
         </View>
 
         <View style={[styles.statCard, styles.cardElevated]}>
-          <View style={[styles.statAccent, { backgroundColor: '#4f46e5' }]} />
+          <View style={[styles.statAccent, { backgroundColor: theme.purple }]} />
           <View style={styles.statHeaderRow}>
             <View style={[styles.statIconWrap, { backgroundColor: theme.surfaceAlt }]}>
               <Ionicons name="people-circle" size={16} color={theme.text} />
@@ -1909,35 +1989,51 @@ const AdminScreen: React.FC = () => {
 
   const renderAccounts = () => {
     const filteredUsers = shouldFilter
-      ? users.filter(user =>
+      ? adminAccounts.filter(user =>
           includesQuery(user.name) ||
           includesQuery(user.email) ||
           includesQuery(user.phone) ||
           includesQuery(user.id)
         )
-      : users;
+      : adminAccounts;
     const visibleUsers = filteredUsers.slice(0, listLimits.users);
     const hasMoreUsers = filteredUsers.length > listLimits.users;
 
     const listHeader = (
-      <View style={styles.sectionHeaderRow}>
-        <View>
-          <Text style={styles.sectionTitle}>{tAdmin("Comptes")}</Text>
-          <Text style={styles.sectionSubtitle}>{tAdmin("Verification et acces utilisateurs.")}</Text>
+      <View>
+        <View style={styles.sectionHeaderRow}>
+          <View>
+            <Text style={styles.sectionTitle}>{tAdmin("Comptes")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Verification et acces utilisateurs.")}</Text>
+          </View>
+          <View style={styles.sectionCount}>
+            <Text style={styles.sectionCountText}>{filteredUsers.length}</Text>
+          </View>
         </View>
-        <View style={styles.sectionCount}>
-          <Text style={styles.sectionCountText}>{filteredUsers.length}</Text>
-        </View>
+        {accountsLoading && !adminAccounts.length ? (
+          <View style={styles.accountsLoading}>
+            <ActivityIndicator color={theme.accent} />
+            <Text style={styles.accountMeta}>{tAdmin("Chargement des comptes...")}</Text>
+          </View>
+        ) : null}
+        {accountsError ? <Text style={styles.accountsError}>{accountsError}</Text> : null}
       </View>
     );
 
     return (
       <FlatList
         style={styles.tabContent}
+        refreshControl={<RefreshControl refreshing={refreshing || accountsLoading} onRefresh={onRefresh} />}
         data={visibleUsers}
         keyExtractor={item => item.id}
         ListHeaderComponent={listHeader}
-        ListEmptyComponent={<Text style={styles.emptyText}>{tAdmin("Aucun compte pour le moment.")}</Text>}
+        ListEmptyComponent={
+          accountsLoading ? null : (
+            <Text style={styles.emptyText}>
+              {accountsError ? tAdmin("Impossible de charger les comptes.") : tAdmin("Aucun compte pour le moment.")}
+            </Text>
+          )
+        }
         ListFooterComponent={
           hasMoreUsers ? (
             <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('users')}>
@@ -1954,11 +2050,30 @@ const AdminScreen: React.FC = () => {
               <Text style={styles.accountName}>{user.name}</Text>
               <Text style={styles.accountMeta}>{user.email}</Text>
               <Text style={styles.accountMeta}>{user.phone}</Text>
+              <Text style={styles.accountMeta}>
+                {user.role ?? 'USER'} · {tAdmin(user.accountStatus === 'suspended'
+                  ? "Compte suspendu"
+                  : user.accountStatus === 'pending' ? "Compte en attente" : "Compte actif")}
+              </Text>
               {user.agentStatus === 'pending' ? (
                 <Text style={styles.accountMeta}>{tAdmin("Demande agent en attente")}</Text>
               ) : null}
             </View>
             <View style={styles.accountActions}>
+              {user.id !== currentUser?.id ? (
+                <TouchableOpacity
+                  style={[
+                    styles.accountVerifyButton,
+                    user.accountStatus === 'suspended' ? styles.accountVerifyOn : styles.accountVerifyOff,
+                  ]}
+                  disabled={accountUpdateId === user.id}
+                  onPress={() => void handleAccountStatus(user)}
+                >
+                  <Text style={styles.accountVerifyText}>
+                    {user.accountStatus === 'suspended' ? tAdmin("Reactiver") : tAdmin("Suspendre")}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
               {user.agentStatus === 'pending' ? (
                 <>
                   <TouchableOpacity
@@ -1980,7 +2095,8 @@ const AdminScreen: React.FC = () => {
                   styles.accountVerifyButton,
                   user.verified ? styles.accountVerifyOff : styles.accountVerifyOn,
                 ]}
-                onPress={() => handleVerifyUser(user, !user.verified)}
+                disabled={accountUpdateId === user.id}
+                onPress={() => void handleVerifyUser(user, !user.verified)}
               >
                 <Text style={[
                   styles.accountVerifyText,
@@ -2011,7 +2127,11 @@ const AdminScreen: React.FC = () => {
     );
 
       return (
-        <ScrollView style={styles.tabContent} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          style={styles.tabContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
+        >
         <View style={styles.sectionHeaderRow}>
           <View>
             <Text style={styles.sectionTitle}>{tAdmin("Quartiers")}</Text>
@@ -2030,7 +2150,7 @@ const AdminScreen: React.FC = () => {
             placeholderTextColor={theme.textSoft}
           />
           <TouchableOpacity style={styles.neighborhoodAddButton} onPress={handleAddNeighborhood}>
-            <Ionicons name="add" size={18} color="#fff" />
+            <Ionicons name="add" size={18} color={theme.onBrand} />
           </TouchableOpacity>
         </View>
 
@@ -2211,19 +2331,6 @@ const AdminScreen: React.FC = () => {
               <Text style={styles.infoMeta}>
                 {formatAdminDateTime(message.timestamp)}
               </Text>
-              <View style={styles.quickActionsRow}>
-                <QuickAction
-                  label={tAdmin("Repondre")}
-                  icon="chatbubble-ellipses-outline"
-                  tone="primary"
-                  onPress={() => handleQuickReply(message)}
-                />
-                <QuickAction
-                  label={tAdmin("Clore")}
-                  icon="checkmark-done-outline"
-                  onPress={() => handleCloseMessage(message.id)}
-                />
-              </View>
             </View>
           ))
         )}
@@ -2277,16 +2384,10 @@ const AdminScreen: React.FC = () => {
               </Text>
               <View style={styles.quickActionsRow}>
                 <QuickAction
-                  label={tAdmin("Verifier")}
+                  label={review.verified ? tAdmin("Retirer") : tAdmin("Verifier")}
                   icon="shield-checkmark-outline"
                   tone="primary"
-                  onPress={() => handleVerifyReview(review.id)}
-                />
-                <QuickAction
-                  label={tAdmin("Masquer")}
-                  icon="eye-off-outline"
-                  tone="danger"
-                  onPress={() => handleHideReview(review.id)}
+                  onPress={() => void handleVerifyReview(review.id, !review.verified)}
                 />
               </View>
             </View>
@@ -2302,49 +2403,67 @@ const AdminScreen: React.FC = () => {
   };
   const renderAgents = () => {
     const filteredAgents = shouldFilter
-      ? agentProfiles.filter(agent => {
-          const user = users.find(u => u.id === agent.userId);
+      ? adminAccounts.filter(user => user.role === 'AGENT').filter(user => {
           return (
-            includesQuery(agent.userId) ||
-            includesQuery(agent.bio) ||
-            includesQuery(user?.name) ||
-            includesQuery(agent.specialties?.join(' '))
+            includesQuery(user.id) ||
+            includesQuery(user.name) ||
+            includesQuery(user.email) ||
+            includesQuery(user.phone)
           );
         })
-      : agentProfiles;
+      : adminAccounts.filter(user => user.role === 'AGENT');
     const visibleAgents = filteredAgents.slice(0, listLimits.agents);
     const hasMoreAgents = filteredAgents.length > listLimits.agents;
 
     return (
-      <ScrollView style={styles.tabContent}>
+      <ScrollView
+        style={styles.tabContent}
+        refreshControl={<RefreshControl refreshing={refreshing || accountsLoading} onRefresh={onRefresh} />}
+      >
         <View style={styles.sectionHeaderRow}>
           <View>
             <Text style={styles.sectionTitle}>{tAdmin("Profils agents")}</Text>
-            <Text style={styles.sectionSubtitle}>{tAdmin("Performance, specialites et ventes.")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Comptes agents et statut de validation.")}</Text>
           </View>
           <View style={styles.sectionCount}>
             <Text style={styles.sectionCountText}>{filteredAgents.length}</Text>
           </View>
         </View>
-        {filteredAgents.length === 0 ? (
+        {accountsLoading && !adminAccounts.length ? (
+          <View style={styles.accountsLoading}>
+            <ActivityIndicator color={theme.accent} />
+            <Text style={styles.accountMeta}>{tAdmin("Chargement des comptes...")}</Text>
+          </View>
+        ) : accountsError ? (
+          <Text style={styles.accountsError}>{accountsError}</Text>
+        ) : filteredAgents.length === 0 ? (
           <Text style={styles.emptyText}>{tAdmin("Aucun profil d'agent pour le moment.")}</Text>
         ) : (
-          visibleAgents.map(agent => {
-            const user = users.find(u => u.id === agent.userId);
+          visibleAgents.map(user => {
+            const agentProperties = properties.filter(property => property.ownerId === user.id);
+            const activeProperties = agentProperties.filter(property =>
+              property.listingStatus === 'approved' && property.status === 'available'
+            ).length;
+            const soldProperties = agentProperties.filter(property => property.soldAt).length;
+            const archivedProperties = agentProperties.filter(property =>
+              property.listingStatus === 'archived'
+            ).length;
             return (
-              <View key={agent.userId} style={styles.clientItem}>
+              <View key={user.id} style={styles.clientItem}>
                 <View style={styles.clientAvatar}>
                   <Text style={styles.clientInitials}>
-                    {user?.name.charAt(0).toUpperCase() || '?'}
+                    {user.name.charAt(0).toUpperCase() || '?'}
                   </Text>
                 </View>
                 <View style={styles.clientInfo}>
-                  <Text style={styles.clientName}>{user?.name || tAdmin("Utilisateur inconnu")}</Text>
-                  <Text style={styles.clientEmail}>
-                    {tAdmin("Ventes:")} {agent.totalSales} | {tAdmin("Commission:")} {agent.totalCommission} XOF
-                  </Text>
+                  <Text style={styles.clientName}>{user.name || tAdmin("Utilisateur inconnu")}</Text>
+                  <Text style={styles.clientEmail}>{user.email}</Text>
+                  <Text style={styles.clientPhone}>{user.phone}</Text>
+                  <Text style={styles.clientPhone}>{tAdmin(user.agentStatus === 'approved'
+                    ? "Approuvé"
+                    : user.agentStatus === 'rejected' ? "Refusé" : "Demande agent en attente")}</Text>
                   <Text style={styles.clientPhone}>
-                    {tAdmin("Note:")} {agent.rating.toFixed(1)} ({agent.reviewCount} {tAdmin("avis")})
+                    {tAdmin("Biens:")} {agentProperties.length} · {tAdmin("Actifs:")} {activeProperties} · {tAdmin("Vendus:")} {soldProperties} · {tAdmin("Archivés:")} {archivedProperties}
                   </Text>
                 </View>
               </View>
@@ -2397,12 +2516,6 @@ const AdminScreen: React.FC = () => {
                   .replace('{end}', formatAdminDate(premium.endDate))}
               </Text>
               <View style={styles.quickActionsRow}>
-                <QuickAction
-                  label={tAdmin("Renouveler")}
-                  icon="refresh-outline"
-                  tone="primary"
-                  onPress={() => handleRenewPremium(premium)}
-                />
                 <QuickAction
                   label={tAdmin("Detail")}
                   icon="open-outline"
@@ -2525,7 +2638,7 @@ const AdminScreen: React.FC = () => {
             <Text style={styles.sectionCountText}>{filteredPayments.length}</Text>
           </View>
           <TouchableOpacity style={styles.sectionActionButton} onPress={openPaymentModal}>
-            <Ionicons name="add" size={18} color="#fff" />
+            <Ionicons name="add" size={18} color={theme.onBrand} />
           </TouchableOpacity>
         </View>
         {filteredPayments.length === 0 ? (
@@ -2626,7 +2739,7 @@ const AdminScreen: React.FC = () => {
             <Text style={styles.sectionCountText}>{filteredContracts.length}</Text>
           </View>
           <TouchableOpacity style={styles.sectionActionButton} onPress={openContractModal}>
-            <Ionicons name="add" size={18} color="#fff" />
+            <Ionicons name="add" size={18} color={theme.onBrand} />
           </TouchableOpacity>
         </View>
         {filteredContracts.length === 0 ? (
@@ -2697,12 +2810,12 @@ const AdminScreen: React.FC = () => {
   };
   const renderDocuments = () => {
     const filteredDocuments = shouldFilter
-      ? documents.filter(document =>
-          includesQuery(document.name) ||
+      ? tenantDocuments.filter(document =>
+          includesQuery(clients.find(client => client.id === document.tenantId)?.name) ||
           includesQuery(document.type) ||
-          includesQuery(document.propertyId)
+          includesQuery(document.tenantId)
         )
-      : documents;
+      : tenantDocuments;
     const visibleDocuments = filteredDocuments.slice(0, listLimits.documents);
     const hasMoreDocuments = filteredDocuments.length > listLimits.documents;
 
@@ -2711,7 +2824,7 @@ const AdminScreen: React.FC = () => {
         <View style={styles.sectionHeaderRow}>
           <View>
             <Text style={styles.sectionTitle}>{tAdmin("Documents")}</Text>
-            <Text style={styles.sectionSubtitle}>{tAdmin("Contrats, pieces et preuves.")}</Text>
+            <Text style={styles.sectionSubtitle}>{tAdmin("Pièces liées aux dossiers locataires.")}</Text>
           </View>
           <View style={styles.sectionCount}>
             <Text style={styles.sectionCountText}>{filteredDocuments.length}</Text>
@@ -2720,45 +2833,38 @@ const AdminScreen: React.FC = () => {
         {filteredDocuments.length === 0 ? (
           <Text style={styles.emptyText}>{tAdmin("Aucun document pour le moment.")}</Text>
         ) : (
-          visibleDocuments.map(document => (
-            <View key={document.id} style={styles.infoCard}>
-              <View style={styles.infoHeader}>
-                <Text style={styles.infoTitle}>{document.name}</Text>
-                <View style={styles.metaChip}>
-                  <Text style={styles.metaChipText}>
-                    {document.type === 'contract'
-                      ? tAdmin('Contrat')
-                      : document.type === 'inspection'
-                      ? tAdmin('Inspection')
-                      : document.type === 'permit'
-                      ? tAdmin('Permis')
-                      : document.type === 'other'
-                      ? tAdmin('Autre')
-                      : document.type}
-                  </Text>
+          visibleDocuments.map(document => {
+            const tenant = clients.find(client => client.id === document.tenantId);
+            return (
+              <View key={document.id} style={styles.infoCard}>
+                <View style={styles.infoHeader}>
+                  <Text style={styles.infoTitle}>{tenant?.name || document.tenantId.slice(0, 8)}</Text>
+                  <View style={styles.metaChip}>
+                    <Text style={styles.metaChipText}>
+                      {document.type === 'cni'
+                        ? tAdmin('CNI')
+                        : document.type === 'contract' ? tAdmin('Contrat') : tAdmin('Autre')}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.infoMeta}>{tAdmin("Locataire:")} {document.tenantId.slice(0, 8)}</Text>
+                <Text style={styles.infoMeta}>{tAdmin("Upload:")} {formatAdminDateTime(document.createdAt)}</Text>
+                <View style={styles.quickActionsRow}>
+                  <QuickAction
+                    label={tAdmin("Ouvrir")}
+                    icon="document-text-outline"
+                    tone="primary"
+                    onPress={() => void handleOpenDocument(document)}
+                  />
+                  <QuickAction
+                    label={tAdmin("Partager")}
+                    icon="share-social-outline"
+                    onPress={() => void handleShareDocument(document)}
+                  />
                 </View>
               </View>
-              <Text style={styles.infoMeta}>
-                {tAdmin("Propriete:")} {document.propertyId}
-              </Text>
-              <Text style={styles.infoMeta}>
-                {tAdmin("Upload:")} {formatAdminDateTime(document.uploadedAt)}
-              </Text>
-              <View style={styles.quickActionsRow}>
-                <QuickAction
-                  label={tAdmin("Ouvrir")}
-                  icon="document-text-outline"
-                  tone="primary"
-                  onPress={() => handleOpenDocument(document)}
-                />
-                <QuickAction
-                  label={tAdmin("Partager")}
-                  icon="share-social-outline"
-                  onPress={() => handleShareDocument(document)}
-                />
-              </View>
-            </View>
-          ))
+            );
+          })
         )}
         {hasMoreDocuments && (
           <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('documents')}>
@@ -2779,61 +2885,85 @@ const AdminScreen: React.FC = () => {
 
   if (!storedPin) {
     return (
-      <View style={[styles.container, styles.gateContainer]}>
-        <View style={styles.gateCard}>
-          <Ionicons name="lock-closed" size={28} color={theme.accent} />
-          <Text style={styles.gateTitle}>{tAdmin("Creer un PIN Admin")}</Text>
-          <Text style={styles.gateSubtitle}>
-            {tAdmin("Ce PIN protege l'acces au back-office et la sauvegarde.")}
-          </Text>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.gateScrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
+        >
+          <View style={[styles.container, styles.gateContainer]}>
+            <View style={styles.gateCard}>
+              <Ionicons name="lock-closed" size={28} color={theme.accent} />
+              <Text style={styles.gateTitle}>{tAdmin("Creer un PIN Admin")}</Text>
+              <Text style={styles.gateSubtitle}>
+                {tAdmin("Ce PIN protege l'acces au back-office et la sauvegarde.")}
+              </Text>
 
-          <TextInput
-            style={styles.gateInput}
-            value={pinInput}
-            onChangeText={setPinInput}
-            placeholder={tAdmin("Nouveau PIN (min 4)")}
-            keyboardType="number-pad"
-            secureTextEntry
-          />
-          <TextInput
-            style={styles.gateInput}
-            value={pinConfirm}
-            onChangeText={setPinConfirm}
-            placeholder={tAdmin("Confirmer le PIN")}
-            keyboardType="number-pad"
-            secureTextEntry
-          />
+              <TextInput
+                style={styles.gateInput}
+                value={pinInput}
+                onChangeText={setPinInput}
+                placeholder={tAdmin("Nouveau PIN (min 4)")}
+                keyboardType="number-pad"
+                secureTextEntry
+              />
+              <TextInput
+                style={styles.gateInput}
+                value={pinConfirm}
+                onChangeText={setPinConfirm}
+                placeholder={tAdmin("Confirmer le PIN")}
+                keyboardType="number-pad"
+                secureTextEntry
+              />
 
-          <TouchableOpacity style={styles.gateButton} onPress={handleSetupPin}>
-            <Text style={styles.gateButtonText}>{tAdmin("Enregistrer")}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+              <TouchableOpacity style={styles.gateButton} onPress={handleSetupPin}>
+                <Text style={styles.gateButtonText}>{tAdmin("Enregistrer")}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     );
   }
 
   if (!unlocked) {
     return (
-      <View style={[styles.container, styles.gateContainer]}>
-        <View style={styles.gateCard}>
-          <Ionicons name="shield-checkmark" size={28} color={theme.accent} />
-          <Text style={styles.gateTitle}>{tAdmin("Acces Admin")}</Text>
-          <Text style={styles.gateSubtitle}>{tAdmin("Saisie securisee pour acceder au mini back-office.")}</Text>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.gateScrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
+        >
+          <View style={[styles.container, styles.gateContainer]}>
+            <View style={styles.gateCard}>
+              <Ionicons name="shield-checkmark" size={28} color={theme.accent} />
+              <Text style={styles.gateTitle}>{tAdmin("Acces Admin")}</Text>
+              <Text style={styles.gateSubtitle}>
+                {tAdmin("Saisie securisee pour acceder au mini back-office.")}
+              </Text>
 
-          <TextInput
-            style={styles.gateInput}
-            value={pinInput}
-            onChangeText={setPinInput}
-            placeholder={tAdmin("PIN")}
-            keyboardType="number-pad"
-            secureTextEntry
-          />
+              <TextInput
+                style={styles.gateInput}
+                value={pinInput}
+                onChangeText={setPinInput}
+                placeholder={tAdmin("PIN")}
+                keyboardType="number-pad"
+                secureTextEntry
+              />
 
-          <TouchableOpacity style={styles.gateButton} onPress={handleUnlock}>
-            <Text style={styles.gateButtonText}>{tAdmin("Deverrouiller")}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+              <TouchableOpacity style={styles.gateButton} onPress={handleUnlock}>
+                <Text style={styles.gateButtonText}>{tAdmin("Deverrouiller")}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     );
   }
 
@@ -2866,7 +2996,7 @@ const AdminScreen: React.FC = () => {
             <Ionicons name="lock-closed" size={18} color={theme.accent} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.addButton} onPress={openNewPropertyModal}>
-            <Ionicons name="add" size={22} color="#fff" />
+            <Ionicons name="add" size={22} color={theme.onBrand} />
           </TouchableOpacity>
         </View>
       </View>
@@ -2998,7 +3128,11 @@ const AdminScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView
+            style={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="none"
+          >
             <Text style={styles.inputLabel}>{tAdmin("Titre *")}</Text>
             <TextInput
               style={styles.input}
@@ -3038,7 +3172,7 @@ const AdminScreen: React.FC = () => {
                       style={styles.photoRemove}
                       onPress={() => setDraftImages(prev => prev.filter(x => x !== uri))}
                     >
-                      <Ionicons name="close" size={14} color="#fff" />
+                      <Ionicons name="close" size={14} color={theme.onBrand} />
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -3189,7 +3323,11 @@ const AdminScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView
+            style={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="none"
+          >
             <Text style={styles.inputLabel}>{tAdmin("Nom *")}</Text>
             <TextInput
               style={styles.input}
@@ -3242,7 +3380,11 @@ const AdminScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView
+            style={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="none"
+          >
             <Text style={styles.inputLabel}>{tAdmin("Nom du quartier")}</Text>
             <TextInput
               style={styles.input}
@@ -3273,7 +3415,11 @@ const AdminScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView
+            style={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="none"
+          >
             <Text style={styles.inputLabel}>{tAdmin("Bien *")}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectRow}>
               {properties.map(property => (
@@ -3391,7 +3537,11 @@ const AdminScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView
+            style={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="none"
+          >
             <Text style={styles.inputLabel}>{tAdmin("Contrat *")}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectRow}>
               {contracts.map(contract => (
@@ -3498,7 +3648,11 @@ const AdminScreen: React.FC = () => {
             <View style={{ width: 24 }} />
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView
+            style={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="none"
+          >
             {tenantDocuments.filter(d => d.tenantId === activeTenantId).length === 0 ? (
               <Text style={styles.emptyText}>{tAdmin("Aucun document pour ce locataire.")}</Text>
             ) : (
@@ -3556,7 +3710,11 @@ const AdminScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView
+            style={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="none"
+          >
             <Text style={styles.inputLabel}>{tAdmin("Nom *")}</Text>
             <TextInput
               style={styles.input}
@@ -3578,10 +3736,10 @@ const AdminScreen: React.FC = () => {
             <TextInput
               style={styles.input}
               value={userForm.email}
-              onChangeText={text => setUserForm({ ...userForm, email: text })}
               placeholder="email@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
+              editable={false}
             />
           </ScrollView>
         </View>
@@ -3599,6 +3757,9 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
+  },
+  gateScrollContent: {
+    flexGrow: 1,
   },
   gateCard: {
     width: '100%',
@@ -3647,7 +3808,7 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
     alignItems: 'center',
   },
   gateButtonText: {
-    color: '#fff',
+    color: theme.onBrand,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -3938,7 +4099,7 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
     borderRadius: 10,
   },
   backupButtonText: {
-    color: '#fff',
+    color: theme.onBrand,
     fontSize: 10,
     fontWeight: '700',
   },
@@ -4227,7 +4388,7 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
     color: theme.textMuted,
   },
   filterTabTextActive: {
-    color: '#fff',
+    color: theme.onBrand,
     fontWeight: '600',
   },
   filterToggleRow: {
@@ -4325,7 +4486,7 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
   },
   propertyTypeText: {
     fontSize: 8,
-    color: '#fff',
+    color: theme.onBrand,
     fontWeight: '600',
   },
   propertyTitle: {
@@ -4492,7 +4653,7 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
   clientInitials: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#fff',
+    color: theme.onBrand,
   },
   clientInfo: {
     flex: 1,
@@ -4547,7 +4708,7 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
   accountInitials: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#fff',
+    color: theme.onBrand,
   },
   accountInfo: {
     flex: 1,
@@ -4567,6 +4728,18 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
     alignItems: 'flex-end',
     gap: 8,
   },
+  accountsLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 16,
+  },
+  accountsError: {
+    color: theme.danger,
+    fontSize: 12,
+    marginTop: 10,
+    marginBottom: 6,
+  },
   accountVerifyButton: {
     paddingHorizontal: 9,
     paddingVertical: 6,
@@ -4581,7 +4754,7 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
   accountVerifyText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#fff',
+    color: theme.onBrand,
   },
   accountEditButton: {
     width: 30,
@@ -5005,7 +5178,7 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
     color: theme.textMuted,
   },
   selectChipTextActive: {
-    color: '#fff',
+    color: theme.onBrand,
   },
   typeSelector: {
     flexDirection: 'row',
@@ -5067,5 +5240,3 @@ const createStyles = (theme: AdminTheme) => StyleSheet.create({
 });
 
 export default AdminScreen;
-
-

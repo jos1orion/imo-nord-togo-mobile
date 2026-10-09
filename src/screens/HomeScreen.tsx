@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import {
   UIManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,13 +26,16 @@ import PropertyCard from '../components/PropertyCard';
 import SearchBar from '../components/SearchBar';
 import OfflineBanner from '../components/ui/OfflineBanner';
 import EmptyState from '../components/ui/EmptyState';
+import Skeleton from '../components/ui/Skeleton';
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { Property, PropertyType } from '../types';
 import COLORS from '../theme/colors';
 import { RootStackParamList } from '../../App';
 import { translate } from '../i18n';
 import { isFeaturedProperty, isPublicProperty } from '../utils/propertyVisibility';
+import { RADIUS, SPACING } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 const { width } = Dimensions.get('window');
 
@@ -38,6 +43,7 @@ type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 const HomeScreen: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const {
@@ -71,9 +77,9 @@ const HomeScreen: React.FC = () => {
     }));
   }, [properties]);
   const featuredProperties = useMemo(() => {
-    const featured = properties.filter(p => isFeaturedProperty(p) && isPublicProperty(p));
-    if (featured.length > 0) return featured.slice(0, 10);
-    return properties.filter(isPublicProperty).slice(0, 10);
+    return properties
+      .filter(property => isFeaturedProperty(property) && isPublicProperty(property))
+      .slice(0, 10);
   }, [properties]);
   const recentProperties = useMemo(() => {
     const sorted = [...properties].sort((a, b) => {
@@ -318,14 +324,14 @@ const HomeScreen: React.FC = () => {
 
   const renderSkeletonCard = (key: string, compact = false) => (
     <View key={key} style={[styles.skeletonCard, compact && styles.skeletonCardCompact]}>
-      <View style={[styles.skeletonImage, compact && styles.skeletonImageCompact]} />
+      <Skeleton style={[styles.skeletonImage, compact && styles.skeletonImageCompact]} />
       <View style={styles.skeletonBody}>
-        <View style={styles.skeletonLine} />
-        <View style={[styles.skeletonLine, styles.skeletonLineShort]} />
+        <Skeleton style={styles.skeletonLine} />
+        <Skeleton style={[styles.skeletonLine, styles.skeletonLineShort]} />
         {!compact && (
           <View style={styles.skeletonMetaRow}>
-            <View style={styles.skeletonPill} />
-            <View style={styles.skeletonDot} />
+            <Skeleton style={styles.skeletonPill} />
+            <Skeleton style={styles.skeletonDot} />
           </View>
         )}
       </View>
@@ -346,7 +352,7 @@ const HomeScreen: React.FC = () => {
             accessibilityHint={t('home_category_back_hint')}
             hitSlop={8}
           >
-            <Ionicons name="arrow-back" size={19} color={COLORS.primary} />
+            <Ionicons name="arrow-back" size={19} color={themeColors.primary} />
             <Text style={styles.categoryBackText}>{t('back')}</Text>
           </TouchableOpacity>
           <View style={styles.categoryNavigationDetails}>
@@ -363,8 +369,13 @@ const HomeScreen: React.FC = () => {
       <FlatList
         ref={scrollRef}
         style={styles.container}
-        contentContainerStyle={{ paddingTop: insets.top }}
+        contentContainerStyle={{
+          paddingTop: insets.top,
+          paddingBottom: Math.max(insets.bottom, 16),
+        }}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         data={isLoading ? [] : visibleProperties}
         keyExtractor={property => property.id}
         renderItem={({ item }) => (
@@ -380,10 +391,23 @@ const HomeScreen: React.FC = () => {
       <>
       <View>
         {/* Header */}
-        <View style={[styles.headerBlock, { paddingTop: insets.top + 18 }]}>
+        <LinearGradient
+          colors={[themeColors.brand, themeColors.primaryDark]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.headerBlock, { paddingTop: insets.top + 18 }]}
+        >
+          <View style={styles.heroDecorLg} pointerEvents="none" />
+          <View style={styles.heroDecorSm} pointerEvents="none" />
+          <View style={styles.locationPill}>
+            <Ionicons name="location" size={13} color={themeColors.brandAccent} />
+            <Text style={styles.locationPillText}>{t('footer_location')}</Text>
+          </View>
           <Text style={styles.headerTitle}>{t('home_hero_line1')}</Text>
           <Text style={styles.headerTitleEm}>{t('home_hero_line2')}</Text>
+        </LinearGradient>
 
+        <View style={styles.searchCardOverlap}>
           <View style={styles.searchCard}>
             <View style={styles.searchHeader}>
               <Text style={styles.searchTitle}>{t('home_search_card_title')}</Text>
@@ -401,7 +425,7 @@ const HomeScreen: React.FC = () => {
                   style={styles.suggestionChip}
                   onPress={() => applySuggestion(item.query, item.type)}
                 >
-                  <Ionicons name="sparkles" size={12} color={COLORS.primary} />
+                  <Ionicons name="sparkles" size={12} color={themeColors.primary} />
                   <Text style={styles.suggestionText}>{item.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -416,18 +440,20 @@ const HomeScreen: React.FC = () => {
                   ))}
                 </View>
                 <TouchableOpacity style={styles.activeFiltersReset} onPress={resetAllFilters}>
-                  <Ionicons name="refresh" size={14} color={COLORS.primary} />
+                  <Ionicons name="refresh" size={14} color={themeColors.primary} />
                   <Text style={styles.activeFiltersResetText}>{t('home_reset_short')}</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
+        </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterChipRow}
-          >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterChipScroll}
+          contentContainerStyle={styles.filterChipRow}
+        >
             {[
               {
                 key: 'beds',
@@ -461,13 +487,12 @@ const HomeScreen: React.FC = () => {
                 </Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
-        </View>
+        </ScrollView>
 
         {syncError && (
           <View style={styles.syncErrorCard}>
             <View style={styles.syncErrorRow}>
-              <Ionicons name="alert-circle" size={18} color="#EF4444" />
+              <Ionicons name="alert-circle" size={18} color={themeColors.danger} />
               <Text style={styles.syncErrorText}>{syncError}</Text>
             </View>
             <TouchableOpacity style={styles.syncRetryButton} onPress={retrySync}>
@@ -481,12 +506,12 @@ const HomeScreen: React.FC = () => {
         {selectedNeighborhood && (
           <View style={styles.neighborhoodBadgeRow}>
             <View style={styles.neighborhoodBadge}>
-              <Ionicons name="location" size={14} color={COLORS.primary} />
+              <Ionicons name="location" size={14} color={themeColors.primary} />
               <Text style={styles.neighborhoodBadgeText} numberOfLines={1}>
                 {selectedNeighborhood}
               </Text>
               <TouchableOpacity onPress={() => setSelectedNeighborhood(null)}>
-                <Ionicons name="close" size={16} color={COLORS.primary} />
+                <Ionicons name="close" size={16} color={themeColors.primary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -568,7 +593,7 @@ const HomeScreen: React.FC = () => {
                 <Ionicons
                   name={neighborhoodOpen ? 'chevron-up' : 'chevron-down'}
                   size={16}
-                  color="#64748B"
+                  color={themeColors.onSurfaceMuted}
                 />
               </TouchableOpacity>
             </View>
@@ -576,16 +601,21 @@ const HomeScreen: React.FC = () => {
           {neighborhoodOpen && (
             <View style={styles.dropdownPanel}>
               <View style={styles.dropdownSearchRow}>
-                <Ionicons name="search" size={14} color="#94A3B8" />
+                <Ionicons name="search" size={14} color={themeColors.onSurfaceMuted} />
                 <TextInput
                   style={styles.dropdownSearchInput}
                   value={neighborhoodQuery}
                   onChangeText={setNeighborhoodQuery}
                   placeholder={t('filter_search_neighborhood_ph')}
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={themeColors.onSurfaceMuted}
                 />
               </View>
-              <ScrollView style={styles.dropdownList} nestedScrollEnabled>
+              <ScrollView
+                style={styles.dropdownList}
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+              >
                 <TouchableOpacity
                   style={styles.dropdownItem}
                   onPress={() => {
@@ -681,20 +711,20 @@ const HomeScreen: React.FC = () => {
             <View style={styles.filterField}>
               <Text style={styles.filterLabel}>{t('filter_date_label')}</Text>
               <View style={styles.filterStatic}>
-                <Ionicons name="calendar" size={14} color="#94A3B8" />
+                <Ionicons name="calendar" size={14} color={themeColors.onSurfaceMuted} />
                 <Text style={styles.filterStaticText}>{t('filter_last_30_days')}</Text>
               </View>
             </View>
           </View>
           <TouchableOpacity style={styles.saveSearchButton} onPress={handleSaveSearch}>
-            <Ionicons name="bookmark" size={16} color={COLORS.primary} />
+            <Ionicons name="bookmark" size={16} color={themeColors.primary} />
             <Text style={styles.saveSearchText}>{t('save_search')}</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {/* Quick Categories */}
-      <View style={styles.section}>
+      <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
         <Text style={styles.sectionTitle}>{t('categories_title')}</Text>
         <TouchableOpacity
           style={styles.chooseCategoryButton}
@@ -702,43 +732,44 @@ const HomeScreen: React.FC = () => {
           accessibilityRole="button"
         >
           <View style={styles.chooseCategoryIcon}>
-            <Ionicons name="grid-outline" size={20} color={COLORS.primary} />
+            <Ionicons name="grid-outline" size={20} color={themeColors.primary} />
           </View>
           <Text style={styles.chooseCategoryText}>{t('home_choose_category')}</Text>
-          <Ionicons name="chevron-forward" size={19} color="#64748B" />
+          <Ionicons name="chevron-forward" size={19} color={themeColors.onSurfaceMuted} />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
-      {/* Featured Properties */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('featured_title')}</Text>
-          <TouchableOpacity onPress={showAllProperties}>
-            <Text style={styles.seeAll}>{t('see_all')}</Text>
-          </TouchableOpacity>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.featuredRow}
-        >
-          {isLoading
-            ? Array.from({ length: 4 }).map((_, idx) =>
-                renderSkeletonCard(`featured-skel-${idx}`, true)
-              )
-            : featuredProperties.map(property => (
-                <PropertyCard
-                  key={property.id}
-                  property={property}
-                  onPress={() => handlePropertyPress(property)}
-                  compact
-                />
-              ))}
-        </ScrollView>
-      </View>
+      {(isLoading || featuredProperties.length > 0) && (
+        <Animated.View entering={FadeInDown.duration(400).delay(80)} style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t('featured_title')}</Text>
+            <TouchableOpacity onPress={showAllProperties}>
+              <Text style={styles.seeAll}>{t('see_all')}</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.featuredRow}
+          >
+            {isLoading
+              ? Array.from({ length: 4 }).map((_, idx) =>
+                  renderSkeletonCard(`featured-skel-${idx}`, true)
+                )
+              : featuredProperties.map(property => (
+                  <PropertyCard
+                    key={property.id}
+                    property={property}
+                    onPress={() => handlePropertyPress(property)}
+                    compact
+                  />
+                ))}
+          </ScrollView>
+        </Animated.View>
+      )}
 
       {recentProperties.length > 0 && (
-        <View style={styles.section}>
+        <Animated.View entering={FadeInDown.duration(400).delay(140)} style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('home_recent_title')}</Text>
             <TouchableOpacity onPress={showAllProperties}>
@@ -759,11 +790,11 @@ const HomeScreen: React.FC = () => {
               />
             ))}
           </ScrollView>
-        </View>
+        </Animated.View>
       )}
 
       {availableNeighborhoods.length > 0 && (
-        <View style={styles.section}>
+        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('home_neighborhoods_popular')}</Text>
             <TouchableOpacity onPress={() => {
@@ -806,7 +837,7 @@ const HomeScreen: React.FC = () => {
               </TouchableOpacity>
             ))}
           </ScrollView>
-        </View>
+        </Animated.View>
       )}
       </>
       )}
@@ -846,14 +877,14 @@ const HomeScreen: React.FC = () => {
         <Text style={styles.sectionTitle}>{t('reviews_title')}</Text>
         <View style={styles.reviewCard}>
           <View style={styles.reviewHeader}>
-            <Ionicons name="star" size={16} color="#F59E0B" />
+            <Ionicons name="star" size={16} color={themeColors.gold} />
             <Text style={styles.reviewTitle}>5.0</Text>
           </View>
           <Text style={styles.reviewText}>{t('review_1')}</Text>
         </View>
         <View style={styles.reviewCard}>
           <View style={styles.reviewHeader}>
-            <Ionicons name="star" size={16} color="#F59E0B" />
+            <Ionicons name="star" size={16} color={themeColors.gold} />
             <Text style={styles.reviewTitle}>4.8</Text>
           </View>
           <Text style={styles.reviewText}>{t('review_2')}</Text>
@@ -867,7 +898,7 @@ const HomeScreen: React.FC = () => {
             onPress={() => navigation.navigate('MainTabs', { screen: 'Profile' })}
           >
             <View style={styles.quickActionIcon}>
-              <Ionicons name="log-in" size={18} color="#fff" />
+              <Ionicons name="log-in" size={18} color={themeColors.white} />
             </View>
             <View style={styles.quickActionText}>
               <Text style={[styles.quickActionTitle, styles.quickActionTitleOnPrimary]}>
@@ -914,14 +945,14 @@ const HomeScreen: React.FC = () => {
                 accessibilityRole="button"
                 accessibilityLabel={t('close')}
               >
-                <Ionicons name="close" size={20} color="#475569" />
+                <Ionicons name="close" size={20} color={themeColors.onSurfaceMuted} />
               </TouchableOpacity>
             </View>
             {[
-              { type: 'house' as PropertyType, icon: 'home', color: '#22C55E' },
-              { type: 'apartment' as PropertyType, icon: 'business', color: COLORS.primary },
-              { type: 'land' as PropertyType, icon: 'map', color: '#F59E0B' },
-              { type: 'shop' as PropertyType, icon: 'storefront', color: '#0EA5A4' },
+              { type: 'house' as PropertyType, icon: 'home', color: themeColors.accent },
+              { type: 'apartment' as PropertyType, icon: 'business', color: themeColors.primary },
+              { type: 'land' as PropertyType, icon: 'map', color: themeColors.gold },
+              { type: 'shop' as PropertyType, icon: 'storefront', color: themeColors.cyan },
             ].map(item => (
               <TouchableOpacity
                 key={item.type}
@@ -936,7 +967,7 @@ const HomeScreen: React.FC = () => {
                 <Text style={styles.categoryOptionCount}>
                   {propertiesByType.find(propertyType => propertyType.type === item.type)?.count ?? 0}
                 </Text>
-                <Ionicons name="chevron-forward" size={17} color="#94A3B8" />
+                <Ionicons name="chevron-forward" size={17} color={themeColors.onSurfaceMuted} />
               </TouchableOpacity>
             ))}
           </View>
@@ -954,21 +985,66 @@ const baseStyles = StyleSheet.create({
   headerBlock: {
     paddingTop: 18,
     paddingHorizontal: 20,
-    paddingBottom: 16,
-    backgroundColor: COLORS.background,
+    paddingBottom: 64,
+    backgroundColor: COLORS.brand,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
+  },
+  heroDecorLg: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    top: -80,
+    right: -60,
+  },
+  heroDecorSm: {
+    position: 'absolute',
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    bottom: 10,
+    left: -50,
+  },
+  locationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    marginBottom: 14,
+  },
+  locationPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.white,
+    letterSpacing: 0.3,
+  },
+  searchCardOverlap: {
+    marginTop: -40,
+    paddingHorizontal: 20,
+    zIndex: 2,
+    elevation: 2,
   },
   headerTitle: {
+    ...typography.heroTitle,
     fontSize: 24,
     lineHeight: 31,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.white,
     textAlign: 'left',
   },
   headerTitleEm: {
     fontSize: 24,
     lineHeight: 31,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: COLORS.brandAccent,
     textAlign: 'left',
     marginTop: 0,
   },
@@ -976,12 +1052,12 @@ const baseStyles = StyleSheet.create({
     marginTop: 9,
     fontSize: 13,
     lineHeight: 19,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     textAlign: 'left',
   },
   section: {
     marginTop: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.lg,
   },
   bottomCta: {
     marginTop: 8,
@@ -989,9 +1065,9 @@ const baseStyles = StyleSheet.create({
     paddingBottom: 8,
   },
   quickActionCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 18,
-    padding: 14,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -1011,7 +1087,7 @@ const baseStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   quickActionIconLight: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
   },
   quickActionText: {
     flex: 1,
@@ -1019,31 +1095,30 @@ const baseStyles = StyleSheet.create({
   quickActionTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#111827',
+    color: COLORS.onSurface,
   },
   quickActionTitleOnPrimary: {
-    color: '#fff',
+    color: COLORS.white,
   },
   quickActionSub: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginTop: 2,
   },
   quickActionSubOnPrimary: {
-    color: '#E0E7FF',
+    color: COLORS.infoContainer,
   },
   searchCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 22,
-    padding: 14,
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    padding: SPACING.lg,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: COLORS.text,
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 3,
-    marginTop: 16,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 8,
   },
   searchHeader: {
     flexDirection: 'row',
@@ -1054,7 +1129,7 @@ const baseStyles = StyleSheet.create({
   searchTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.onSurface,
   },
   suggestionRow: {
     flexDirection: 'row',
@@ -1068,20 +1143,22 @@ const baseStyles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: COLORS.infoBg,
+    backgroundColor: COLORS.primaryContainer,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    borderColor: COLORS.borderStrong,
   },
   suggestionText: {
     fontSize: 11,
     color: COLORS.primary,
     fontWeight: '700',
   },
-  filterChipRow: {
-    paddingHorizontal: 4,
-    gap: 10,
+  filterChipScroll: {
     marginTop: 14,
+  },
+  filterChipRow: {
+    paddingHorizontal: 20,
+    gap: 10,
     paddingBottom: 6,
   },
   filterChip: {
@@ -1089,20 +1166,20 @@ const baseStyles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    backgroundColor: COLORS.card,
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.surface,
   },
   filterChipActive: {
-    backgroundColor: COLORS.text,
-    borderColor: COLORS.text,
+    backgroundColor: COLORS.onSurface,
+    borderColor: COLORS.onSurface,
   },
   filterChipText: {
     fontSize: 12,
-    color: COLORS.text,
+    color: COLORS.onSurface,
     fontWeight: '600',
   },
   filterChipTextActive: {
-    color: COLORS.card,
+    color: COLORS.surface,
   },
   activeFiltersRow: {
     marginTop: 12,
@@ -1114,14 +1191,14 @@ const baseStyles = StyleSheet.create({
     gap: 8,
   },
   activeFilterChip: {
-    backgroundColor: COLORS.text,
+    backgroundColor: COLORS.onSurface,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
   },
   activeFilterText: {
     fontSize: 11,
-    color: COLORS.card,
+    color: COLORS.surface,
     fontWeight: '700',
   },
   activeFiltersReset: {
@@ -1132,9 +1209,9 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: COLORS.infoBg,
+    backgroundColor: COLORS.primaryContainer,
     borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    borderColor: COLORS.borderStrong,
   },
   activeFiltersResetText: {
     fontSize: 11,
@@ -1144,11 +1221,11 @@ const baseStyles = StyleSheet.create({
   syncErrorCard: {
     marginHorizontal: 16,
     marginBottom: 12,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: COLORS.dangerContainer,
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: COLORS.dangerContainer,
   },
   syncErrorRow: {
     flexDirection: 'row',
@@ -1158,13 +1235,13 @@ const baseStyles = StyleSheet.create({
   syncErrorText: {
     flex: 1,
     fontSize: 12,
-    color: '#991B1B',
+    color: COLORS.onDangerContainer,
     fontWeight: '600',
   },
   syncRetryButton: {
     marginTop: 10,
     alignSelf: 'flex-start',
-    backgroundColor: '#EF4444',
+    backgroundColor: COLORS.danger,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 12,
@@ -1172,10 +1249,10 @@ const baseStyles = StyleSheet.create({
   syncRetryText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#fff',
+    color: COLORS.white,
   },
   filterSticky: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.surfaceAlt,
     paddingTop: 6,
     paddingBottom: 6,
   },
@@ -1195,7 +1272,7 @@ const baseStyles = StyleSheet.create({
   filterTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#111827',
+    color: COLORS.onSurface,
   },
   filterActions: {
     flexDirection: 'row',
@@ -1204,7 +1281,7 @@ const baseStyles = StyleSheet.create({
   },
   filterToggle: {
     fontSize: 12,
-    color: '#111827',
+    color: COLORS.onSurface,
     fontWeight: '600',
   },
   clearFilter: {
@@ -1213,13 +1290,13 @@ const baseStyles = StyleSheet.create({
     fontWeight: '600',
   },
   filtersPanel: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     marginHorizontal: 16,
     marginTop: 10,
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   trustRow: {
     flexDirection: 'row',
@@ -1235,24 +1312,24 @@ const baseStyles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: COLORS.background,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
     maxWidth: '100%',
   },
   trustText: {
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.2,
-    color: '#111827',
+    color: COLORS.onSurface,
     flexShrink: 1,
   },
   trustSub: {
     marginHorizontal: 16,
     marginTop: 6,
     fontSize: 12,
-    color: '#64748B',
+    color: COLORS.onSurfaceMuted,
   },
   filterRow: {
     flexDirection: 'row',
@@ -1275,9 +1352,9 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: COLORS.background,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   filterChoiceActive: {
     backgroundColor: COLORS.primary,
@@ -1285,51 +1362,51 @@ const baseStyles = StyleSheet.create({
   },
   filterChoiceText: {
     fontSize: 12,
-    color: '#475569',
+    color: COLORS.onSurfaceMuted,
   },
   filterChoiceTextActive: {
-    color: '#fff',
+    color: COLORS.white,
     fontWeight: '700',
   },
   filterLabel: {
     fontSize: 11,
-    color: '#6B7280',
+    color: COLORS.onSurfaceMuted,
     marginBottom: 6,
     fontWeight: '600',
   },
   filterInput: {
-    backgroundColor: '#F5F7FA',
+    backgroundColor: COLORS.background,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
     fontSize: 13,
-    color: '#111827',
+    color: COLORS.onSurface,
   },
   filterStatic: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: COLORS.background,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   filterStaticText: {
     fontSize: 12,
-    color: '#64748B',
+    color: COLORS.onSurfaceMuted,
     fontWeight: '600',
   },
   dropdownButton: {
-    backgroundColor: '#F5F7FA',
+    backgroundColor: COLORS.background,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1338,32 +1415,32 @@ const baseStyles = StyleSheet.create({
   dropdownButtonText: {
     flex: 1,
     fontSize: 13,
-    color: '#111827',
+    color: COLORS.onSurface,
     fontWeight: '600',
   },
   dropdownPanel: {
-    backgroundColor: '#ffffff',
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 10,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
     marginBottom: 10,
   },
   dropdownSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: COLORS.background,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   dropdownSearchInput: {
     flex: 1,
     fontSize: 12,
-    color: '#111827',
+    color: COLORS.onSurface,
   },
   dropdownList: {
     marginTop: 8,
@@ -1375,11 +1452,11 @@ const baseStyles = StyleSheet.create({
     borderRadius: 8,
   },
   dropdownItemActive: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
   },
   dropdownItemText: {
     fontSize: 12,
-    color: '#374151',
+    color: COLORS.onSurfaceMuted,
     fontWeight: '600',
   },
   dropdownItemTextActive: {
@@ -1387,7 +1464,7 @@ const baseStyles = StyleSheet.create({
   },
   dropdownEmpty: {
     fontSize: 11,
-    color: '#64748B',
+    color: COLORS.onSurfaceMuted,
     paddingVertical: 6,
     paddingHorizontal: 4,
   },
@@ -1398,7 +1475,7 @@ const baseStyles = StyleSheet.create({
     gap: 8,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
   },
   saveSearchText: {
     fontSize: 12,
@@ -1408,7 +1485,12 @@ const baseStyles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: COLORS.onSurface,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    paddingLeft: 10,
+    borderTopLeftRadius: 2,
+    borderBottomLeftRadius: 2,
   },
   neighborhoods: {
     marginTop: 8,
@@ -1422,13 +1504,13 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: COLORS.background,
     borderRadius: 16,
     paddingVertical: 6,
     paddingHorizontal: 10,
     alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   neighborhoodBadgeText: {
     fontSize: 12,
@@ -1444,11 +1526,11 @@ const baseStyles = StyleSheet.create({
   neighborhoodChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: COLORS.background,
     borderRadius: 20,
     marginRight: 10,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   neighborhoodChipActive: {
     backgroundColor: COLORS.primary,
@@ -1456,11 +1538,11 @@ const baseStyles = StyleSheet.create({
   },
   neighborhoodChipText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: COLORS.onSurfaceMuted,
     fontWeight: '600',
   },
   neighborhoodChipTextActive: {
-    color: '#fff',
+    color: COLORS.white,
   },
   seeAll: {
     fontSize: 14,
@@ -1469,26 +1551,26 @@ const baseStyles = StyleSheet.create({
   },
   count: {
     fontSize: 14,
-    color: '#6B7280',
+    color: COLORS.onSurfaceMuted,
   },
   chooseCategoryButton: {
     minHeight: 62,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 11,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   chooseCategoryIcon: {
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1496,23 +1578,23 @@ const baseStyles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '700',
-    color: '#1E293B',
+    color: COLORS.surface,
   },
   categoryNavigationBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: COLORS.border,
   },
   categoryBackButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 11,
@@ -1528,12 +1610,12 @@ const baseStyles = StyleSheet.create({
     marginLeft: 12,
   },
   categoryResultsTitle: {
-    color: '#0F172A',
+    color: COLORS.onSurface,
     fontSize: 17,
     fontWeight: '800',
   },
   categoryResultsSubtitle: {
-    color: '#64748B',
+    color: COLORS.onSurfaceMuted,
     fontSize: 11,
     marginTop: 3,
   },
@@ -1542,12 +1624,12 @@ const baseStyles = StyleSheet.create({
     height: 34,
     paddingHorizontal: 8,
     borderRadius: 17,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   categoryResultsCountText: {
-    color: '#475569',
+    color: COLORS.onSurfaceMuted,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1558,10 +1640,10 @@ const baseStyles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.48)',
   },
   categoryModal: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     borderRadius: 20,
     padding: 20,
-    shadowColor: '#0F172A',
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.2,
     shadowRadius: 24,
@@ -1577,12 +1659,12 @@ const baseStyles = StyleSheet.create({
     paddingRight: 12,
   },
   categoryModalTitle: {
-    color: '#0F172A',
+    color: COLORS.onSurface,
     fontSize: 20,
     fontWeight: '800',
   },
   categoryModalSubtitle: {
-    color: '#64748B',
+    color: COLORS.onSurfaceMuted,
     fontSize: 13,
     marginTop: 5,
   },
@@ -1590,7 +1672,7 @@ const baseStyles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1601,7 +1683,7 @@ const baseStyles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: COLORS.surfaceAlt,
   },
   categoryOptionIcon: {
     width: 38,
@@ -1612,12 +1694,12 @@ const baseStyles = StyleSheet.create({
   },
   categoryOptionText: {
     flex: 1,
-    color: '#1E293B',
+    color: COLORS.onSurface,
     fontSize: 14,
     fontWeight: '700',
   },
   categoryOptionCount: {
-    color: '#64748B',
+    color: COLORS.onSurfaceMuted,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1636,7 +1718,7 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 11,
     borderRadius: 12,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
   },
   loadMoreText: {
     color: COLORS.primary,
@@ -1644,13 +1726,13 @@ const baseStyles = StyleSheet.create({
     fontWeight: '700',
   },
   skeletonCard: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     marginHorizontal: 8,
     marginVertical: 8,
     width: width - 32,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
     overflow: 'hidden',
   },
   skeletonCardCompact: {
@@ -1660,7 +1742,7 @@ const baseStyles = StyleSheet.create({
   skeletonImage: {
     width: '100%',
     height: 150,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: COLORS.borderStrong,
   },
   skeletonImageCompact: {
     height: 150,
@@ -1670,7 +1752,7 @@ const baseStyles = StyleSheet.create({
   },
   skeletonLine: {
     height: 12,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: COLORS.borderStrong,
     borderRadius: 6,
     marginBottom: 10,
     width: '80%',
@@ -1688,21 +1770,21 @@ const baseStyles = StyleSheet.create({
     width: 80,
     height: 16,
     borderRadius: 999,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: COLORS.infoContainer,
   },
   skeletonDot: {
     width: 48,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: COLORS.borderStrong,
   },
   reviewCard: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   featuredRow: {
     paddingRight: 16,
@@ -1717,15 +1799,15 @@ const baseStyles = StyleSheet.create({
   reviewTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#111827',
+    color: COLORS.onSurface,
   },
   reviewText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: COLORS.onSurfaceMuted,
   },
   emptyText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: COLORS.onSurfaceMuted,
     marginTop: 6,
   },
   emptyStateWrap: {
@@ -1745,8 +1827,8 @@ const baseStyles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#DBEAFE',
-    backgroundColor: '#EFF6FF',
+    borderColor: COLORS.infoContainer,
+    backgroundColor: COLORS.infoContainer,
   },
   emptyResetText: {
     fontSize: 12,
@@ -1760,12 +1842,12 @@ const baseStyles = StyleSheet.create({
   },
   footerText: {
     fontSize: 14,
-    color: '#64748B',
+    color: COLORS.onSurfaceMuted,
     fontWeight: '500',
   },
   footerSubtext: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: COLORS.onSurfaceMuted,
     marginTop: 4,
   },
 });

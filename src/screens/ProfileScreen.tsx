@@ -13,6 +13,7 @@ import {
   InteractionManager,
   Linking,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 
 import Constants from 'expo-constants';
@@ -24,12 +25,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LegalScreen from './SettingsScreen';
 import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { authCallbackUrl, exchangeAuthCallback, resetPasswordCallbackUrl, supabase } from '../lib/supabase';
 import { getContactEmail } from '../constants/appConfig';
 import PropertyCard from '../components/PropertyCard';
 import COLORS from '../theme/colors';
 import { isPublicProperty } from '../utils/propertyVisibility';
+import { RADIUS, SPACING } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 type ProfileRouteProp = RouteProp<
   { Profile: { authMode?: 'login' | 'register' } | undefined },
@@ -38,6 +41,7 @@ type ProfileRouteProp = RouteProp<
 
 const ProfileScreen: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const [legalModal, setLegalModal] = useState<'privacy' | 'terms' | null>(null);
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const route = useRoute<ProfileRouteProp>();
@@ -49,6 +53,8 @@ const ProfileScreen: React.FC = () => {
     searchHistory,
     clearSearchHistory,
     recentViewedIds,
+    getMyProperties,
+    chats,
     currentUser,
     registerUser,
     loginUser,
@@ -67,6 +73,7 @@ const ProfileScreen: React.FC = () => {
   } = useApp();
   const secretTapCount = useRef(0);
   const secretTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const authScrollRef = useRef<ScrollView>(null);
   const recentViewedProperties = recentViewedIds
     .map(id => properties.find(p => p.id === id))
     .filter((item): item is NonNullable<typeof item> => isPublicProperty(item));
@@ -265,7 +272,13 @@ const ProfileScreen: React.FC = () => {
       if (result.type === 'success') {
         authStage = 'completing the Supabase session';
         const sessionResult = await exchangeAuthCallback(result.url);
-        if (!sessionResult) throw new Error('Google returned no authorization code.');
+        if (!sessionResult) {
+          const { data, error: sessionError } = await supabase.auth.getSession();
+          if (sessionError) throw sessionError;
+          if (!data.session) {
+            throw new Error('Google returned no authorization code or session tokens.');
+          }
+        }
         if (sessionResult?.error) throw sessionResult.error;
       } else if (result.type !== 'cancel' && result.type !== 'dismiss') {
         console.warn('Google sign-in ended without completing authentication.', {
@@ -336,7 +349,18 @@ const ProfileScreen: React.FC = () => {
 
   if (!currentUser) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.authContainer} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+      >
+        <ScrollView
+          ref={authScrollRef}
+          style={styles.container}
+          contentContainerStyle={[styles.authContainer, { paddingTop: insets.top + 8 }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
+        >
         <View style={styles.authHero}>
           <TouchableOpacity style={styles.authBrand} onPress={handleSecretTap} activeOpacity={1}>
             <View style={styles.authLogo}>
@@ -347,8 +371,17 @@ const ProfileScreen: React.FC = () => {
               <Text style={styles.authSubtitle}>{t('app_tagline')}</Text>
             </View>
           </TouchableOpacity>
+          <View style={styles.authWelcome}>
+            <View style={styles.authWelcomeIcon}>
+              <Ionicons name="home" size={22} color={themeColors.onSurfaceMuted} />
+            </View>
+            <View style={styles.authWelcomeCopy}>
+              <Text style={styles.authWelcomeTitle}>{t('profile_auth_hero_title')}</Text>
+              <Text style={styles.authWelcomeSubtitle}>{t('profile_auth_hero_subtitle')}</Text>
+            </View>
+          </View>
           <View style={styles.authSecureNote}>
-            <Ionicons name="shield-checkmark" size={15} color={COLORS.primary} />
+            <Ionicons name="shield-checkmark" size={15} color={themeColors.onSurfaceMuted} />
             <Text style={styles.authSecureText}>{t('profile_auth_secure')}</Text>
           </View>
           <View style={styles.guestLanguageRow}>
@@ -419,7 +452,7 @@ const ProfileScreen: React.FC = () => {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>{t('profile_name')}</Text>
               <View style={styles.authInputRow}>
-                <Ionicons name="person-outline" size={19} color="#64748B" />
+                <Ionicons name="person-outline" size={19} color={themeColors.onSurfaceMuted} />
                 <TextInput
                   style={styles.authInput}
                   value={authName}
@@ -442,7 +475,7 @@ const ProfileScreen: React.FC = () => {
               <Ionicons
                 name={wantsAgentAccess ? 'checkbox' : 'square-outline'}
                 size={22}
-                color={wantsAgentAccess ? COLORS.primary : '#64748B'}
+                color={wantsAgentAccess ? themeColors.primary : themeColors.onSurfaceMuted}
               />
               <Text style={styles.agentOptionText}>
                 {t('profile_agent_signup')}
@@ -453,7 +486,7 @@ const ProfileScreen: React.FC = () => {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>{t('profile_email')}</Text>
             <View style={styles.authInputRow}>
-              <Ionicons name="mail-outline" size={19} color="#64748B" />
+              <Ionicons name="mail-outline" size={19} color={themeColors.onSurfaceMuted} />
               <TextInput
                 style={styles.authInput}
                 value={authEmail}
@@ -463,6 +496,7 @@ const ProfileScreen: React.FC = () => {
                 keyboardType="email-address"
                 textContentType="emailAddress"
                 returnKeyType="next"
+                onFocus={() => setTimeout(() => authScrollRef.current?.scrollToEnd({ animated: true }), 300)}
               />
             </View>
           </View>
@@ -470,7 +504,7 @@ const ProfileScreen: React.FC = () => {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>{t('profile_phone')}</Text>
               <View style={styles.authInputRow}>
-                <Ionicons name="call-outline" size={19} color="#64748B" />
+                <Ionicons name="call-outline" size={19} color={themeColors.onSurfaceMuted} />
                 <TextInput
                   style={styles.authInput}
                   value={authPhone}
@@ -479,6 +513,7 @@ const ProfileScreen: React.FC = () => {
                   keyboardType="phone-pad"
                   textContentType="telephoneNumber"
                   returnKeyType="next"
+                  onFocus={() => setTimeout(() => authScrollRef.current?.scrollToEnd({ animated: true }), 300)}
                 />
               </View>
             </View>
@@ -486,7 +521,7 @@ const ProfileScreen: React.FC = () => {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>{t('profile_password')}</Text>
             <View style={[styles.authInputRow, styles.passwordRow]}>
-              <Ionicons name="lock-closed-outline" size={19} color="#64748B" />
+              <Ionicons name="lock-closed-outline" size={19} color={themeColors.onSurfaceMuted} />
               <TextInput
                 style={[styles.authInput, styles.passwordInput]}
                 value={authPassword}
@@ -496,12 +531,15 @@ const ProfileScreen: React.FC = () => {
                 textContentType={authMode === 'login' ? 'password' : 'newPassword'}
                 autoCapitalize="none"
                 returnKeyType="done"
+                onFocus={() => setTimeout(() => authScrollRef.current?.scrollToEnd({ animated: true }), 300)}
               />
               <TouchableOpacity
                 style={styles.passwordToggle}
                 onPress={() => setShowPassword(prev => !prev)}
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? t('profile_password_hide') : t('profile_password_show')}
               >
-                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={18} color="#64748B" />
+                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={18} color={themeColors.onSurfaceMuted} />
               </TouchableOpacity>
             </View>
             {authMode === 'register' && (
@@ -548,7 +586,7 @@ const ProfileScreen: React.FC = () => {
             disabled={authLoading}
             accessibilityRole="button"
           >
-            <Ionicons name="logo-google" size={18} color="#4285F4" />
+            <Ionicons name="logo-google" size={18} color={themeColors.socialGoogle} />
             <Text style={styles.googleButtonText}>
               {authLoading ? t('profile_please_wait') : t('profile_auth_google')}
             </Text>
@@ -558,11 +596,33 @@ const ProfileScreen: React.FC = () => {
             <Text style={styles.authLegal}>{t('profile_legal_consent_short')}</Text>
           )}
         </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     );
   }
 
   const accountVerified = currentUser.verified;
+  const isAgent = currentUser.role === 'AGENT';
+  const canRequestAgentAccess =
+    !isAgent &&
+    currentUser.role !== 'ADMIN' &&
+    currentUser.role !== 'ACCOUNTANT' &&
+    (currentUser.agentStatus === undefined ||
+      currentUser.agentStatus === 'none' ||
+      currentUser.agentStatus === 'pending' ||
+      currentUser.agentStatus === 'rejected');
+  const agentProperties = isAgent ? getMyProperties() : [];
+  const activeAgentListings = agentProperties.filter(
+    property => property.listingStatus === 'approved' && property.status === 'available'
+  ).length;
+  const pendingAgentListings = agentProperties.filter(
+    property => property.listingStatus === 'pending'
+  ).length;
+  const unreadAgentMessages = isAgent
+    ? chats
+        .filter(chat => chat.participants.includes(currentUser.id))
+        .reduce((total, chat) => total + (chat.unreadCount[currentUser.id] ?? 0), 0)
+    : 0;
 
   return (
     <>
@@ -570,6 +630,7 @@ const ProfileScreen: React.FC = () => {
         style={[styles.container, theme === 'dark' && styles.containerDark]}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="none"
       >
         {/* Header */}
         <View style={styles.profileHeader}>
@@ -577,61 +638,236 @@ const ProfileScreen: React.FC = () => {
             <View style={styles.profileLogo}>
               <Text style={styles.profileLogoText}>IMO</Text>
             </View>
-            <View>
+            <View style={styles.profileBrandCopy}>
               <Text style={[styles.profileHeading, theme === 'dark' && styles.textLight]}>
                 {t('tab_profile')}
               </Text>
-              <Text style={[styles.profileTagline, theme === 'dark' && styles.textMutedDark]}>
-                Imo Nord Togo
+              <Text style={styles.profileTagline}>
+                {isAgent ? t('profile_agent_dashboard') : t('profile_personal_space')}
+              </Text>
+            </View>
+            <View style={styles.profileRoleBadge}>
+              <Ionicons
+                name={isAgent ? 'briefcase' : 'person'}
+                size={13}
+                color={isAgent ? themeColors.onSurfaceMuted : themeColors.onBrandMuted}
+              />
+              <Text style={styles.profileRoleBadgeText}>
+                {isAgent ? t('profile_agent_approved') : t('profile_client_badge')}
               </Text>
             </View>
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.accountCard, theme === 'dark' && styles.accountCardDark]}>
-          <View style={[styles.accountAvatar, theme === 'dark' && styles.accountAvatarDark]}>
-            <Text style={styles.accountInitial}>
-              {currentUser.name.trim().charAt(0).toUpperCase() || '?'}
-            </Text>
-          </View>
-          <View style={styles.accountDetails}>
-            <Text style={[styles.accountName, theme === 'dark' && styles.accountNameDark]}>
-              {currentUser.name}
-            </Text>
-            <Text style={[styles.accountMeta, theme === 'dark' && styles.accountMetaDark]}>
-              {currentUser.email}
-            </Text>
-            {currentUser.phone ? (
-              <Text style={[styles.accountMeta, theme === 'dark' && styles.accountMetaDark]}>
-                {currentUser.phone}
+        {canRequestAgentAccess && (
+          <View style={[styles.agentAccessCard, theme === 'dark' && styles.agentAccessCardDark]}>
+            <View style={styles.agentAccessTop}>
+              <View style={styles.agentAccessIcon}>
+                <Ionicons name="briefcase" size={19} color={themeColors.onSurfaceMuted} />
+              </View>
+              <View style={styles.agentAccessCopy}>
+                <Text style={[styles.agentAccessTitle, theme === 'dark' && styles.textLight]}>
+                  {currentUser.agentStatus === 'pending'
+                    ? t('profile_agent_pending_title')
+                    : currentUser.agentStatus === 'rejected'
+                      ? t('profile_agent_rejected_title')
+                      : t('profile_agent_access_title')}
+                </Text>
+                <Text style={[styles.agentAccessSubtitle, theme === 'dark' && styles.textMutedDark]}>
+                  {currentUser.agentStatus === 'pending'
+                    ? t('profile_agent_pending_subtitle')
+                    : currentUser.agentStatus === 'rejected'
+                      ? currentUser.agentRejectionReason || t('profile_agent_rejected_subtitle')
+                      : t('profile_agent_access_subtitle')}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.agentAccessButton}
+              onPress={() => navigation.navigate('MainTabs', { screen: 'Publish' })}
+              accessibilityRole="button"
+            >
+              <Text style={styles.agentAccessButtonText}>
+                {currentUser.agentStatus === 'pending'
+                  ? t('profile_agent_pending_button')
+                  : currentUser.agentStatus === 'rejected'
+                    ? t('profile_agent_reapply_button')
+                    : t('profile_agent_apply_button')}
               </Text>
-            ) : null}
+              <Ionicons name="arrow-forward" size={17} color={themeColors.onSurfaceMuted} />
+            </TouchableOpacity>
           </View>
-          <Ionicons
-            name={accountVerified ? 'shield-checkmark' : 'person-circle-outline'}
-            size={21}
-            color={accountVerified ? '#16a34a' : theme === 'dark' ? '#94A3B8' : COLORS.textMuted}
-          />
-        </View>
+        )}
+
+        {isAgent && (
+          <View style={[styles.agentDashboard, theme === 'dark' && styles.agentDashboardDark]}>
+            <View style={styles.agentDashboardHeader}>
+              <View style={styles.agentDashboardHeading}>
+                <View style={styles.agentDashboardIcon}>
+                  <Ionicons name="briefcase" size={17} color={themeColors.onSurfaceMuted} />
+                </View>
+                <View style={styles.agentDashboardTitleWrap}>
+                  <Text style={[styles.agentDashboardTitle, theme === 'dark' && styles.textLight]}>
+                    {t('profile_agent_dashboard')}
+                  </Text>
+                  <Text style={[styles.agentDashboardSubtitle, theme === 'dark' && styles.textMutedDark]}>
+                    {t('profile_agent_dashboard_subtitle')}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.agentApprovedBadge}>
+                <Ionicons name="checkmark-circle" size={14} color={themeColors.success} />
+                <Text style={styles.agentApprovedText}>{t('profile_agent_approved')}</Text>
+              </View>
+            </View>
+
+            <View style={styles.agentStatsGrid}>
+              {[
+                {
+                  key: 'active',
+                  value: activeAgentListings,
+                  label: t('profile_agent_active_listings'),
+                  icon: 'home-outline' as const,
+                  color: themeColors.primary,
+                },
+                {
+                  key: 'pending',
+                  value: pendingAgentListings,
+                  label: t('profile_agent_pending_listings'),
+                  icon: 'time-outline' as const,
+                  color: themeColors.warning,
+                },
+                {
+                  key: 'messages',
+                  value: unreadAgentMessages,
+                  label: t('profile_agent_unread_messages'),
+                  icon: 'chatbubble-ellipses-outline' as const,
+                  color: themeColors.success,
+                },
+              ].map(stat => (
+                <View
+                  key={stat.key}
+                  style={[styles.agentStatCard, theme === 'dark' && styles.agentStatCardDark]}
+                >
+                  <View style={[styles.agentStatIcon, { backgroundColor: `${stat.color}18` }]}>
+                    <Ionicons name={stat.icon} size={17} color={stat.color} />
+                  </View>
+                  <Text style={[styles.agentStatValue, theme === 'dark' && styles.textLight]}>
+                    {stat.value}
+                  </Text>
+                  <Text style={[styles.agentStatLabel, theme === 'dark' && styles.textMutedDark]}>
+                    {stat.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.agentActions}>
+              <TouchableOpacity
+                style={styles.agentPrimaryAction}
+                onPress={() => navigation.navigate('Publish')}
+                accessibilityRole="button"
+              >
+                <Ionicons name="add" size={18} color={themeColors.onSurfaceMuted} />
+                <Text style={styles.agentPrimaryActionText}>{t('profile_agent_publish')}</Text>
+              </TouchableOpacity>
+              <View style={styles.agentSecondaryActions}>
+                <TouchableOpacity
+                  style={[styles.agentSecondaryAction, theme === 'dark' && styles.agentSecondaryActionDark]}
+                  onPress={() => navigation.navigate('MainTabs', { screen: 'Publish' })}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="list-outline" size={16} color={theme === 'dark' ? themeColors.onSurfaceMuted : themeColors.primary} />
+                  <Text style={[styles.agentSecondaryActionText, theme === 'dark' && styles.agentSecondaryActionTextDark]}>
+                    {t('profile_agent_manage_listings')}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={15} color={theme === 'dark' ? themeColors.onSurfaceMuted : themeColors.onSurfaceMuted} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.agentSecondaryAction, theme === 'dark' && styles.agentSecondaryActionDark]}
+                  onPress={() => navigation.navigate('MainTabs', { screen: 'Messages' })}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="chatbubbles-outline" size={16} color={theme === 'dark' ? themeColors.onSurfaceMuted : themeColors.primary} />
+                  <Text style={[styles.agentSecondaryActionText, theme === 'dark' && styles.agentSecondaryActionTextDark]}>
+                    {t('profile_agent_open_messages')}
+                  </Text>
+                  {unreadAgentMessages > 0 && (
+                    <View style={styles.agentUnreadBadge}>
+                      <Text style={styles.agentUnreadBadgeText}>{unreadAgentMessages}</Text>
+                    </View>
+                  )}
+                  <Ionicons name="chevron-forward" size={15} color={theme === 'dark' ? themeColors.onSurfaceMuted : themeColors.onSurfaceMuted} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Account Status */}
         <View style={[styles.section, theme === 'dark' && styles.sectionDark]}>
-          <Text style={[styles.sectionTitle, theme === 'dark' && styles.sectionTitleDark]}>{t('profile_account_status')}</Text>
+          <Text style={[styles.sectionTitle, theme === 'dark' && styles.sectionTitleDark]}>
+            {currentUser.agentStatus === 'pending' || currentUser.agentStatus === 'rejected' || isAgent
+              ? t('profile_agent_status')
+              : t('profile_account_status')}
+          </Text>
           <View style={[styles.statusCard, theme === 'dark' && styles.statusCardDark]}>
             <Ionicons
-              name={accountVerified ? 'shield-checkmark' : 'alert-circle'}
+              name={
+                isAgent || currentUser.agentStatus === 'pending'
+                  ? 'time'
+                  : currentUser.agentStatus === 'rejected'
+                    ? 'close-circle'
+                    : accountVerified
+                      ? 'shield-checkmark'
+                      : 'alert-circle'
+              }
               size={22}
-              color={accountVerified ? '#16a34a' : '#f59e0b'}
+              color={
+                isAgent
+                  ? themeColors.accent
+                  : currentUser.agentStatus === 'rejected'
+                    ? themeColors.danger
+                    : currentUser.agentStatus === 'pending' || !accountVerified
+                      ? themeColors.gold
+                      : themeColors.accent
+              }
             />
             <View style={styles.statusInfo}>
               <Text style={[styles.statusTitle, theme === 'dark' && styles.statusTitleDark]}>
-                {accountVerified ? t('profile_verified') : t('profile_not_verified')}
+                {isAgent
+                  ? t('profile_agent_approved')
+                  : currentUser.agentStatus === 'pending'
+                    ? t('listing_agent_access_pending')
+                    : currentUser.agentStatus === 'rejected'
+                      ? t('listing_agent_access_rejected')
+                      : accountVerified
+                        ? t('profile_verified')
+                        : t('profile_not_verified')}
               </Text>
               <Text style={[styles.statusSubtitle, theme === 'dark' && styles.statusSubtitleDark]}>
-                {accountVerified ? t('profile_verified_sub') : t('profile_verify_admin')}
+                {isAgent
+                  ? t('profile_agent_approved_subtitle')
+                  : currentUser.agentStatus === 'pending'
+                    ? t('profile_agent_pending_subtitle')
+                    : currentUser.agentStatus === 'rejected'
+                      ? currentUser.agentRejectionReason || t('profile_agent_rejected_subtitle')
+                      : accountVerified
+                        ? t('profile_verified_sub')
+                        : t('profile_verify_admin')}
               </Text>
             </View>
           </View>
+          {!isAgent && currentUser.agentStatus === 'rejected' && (
+            <TouchableOpacity
+              style={styles.agentStatusAction}
+              onPress={() => navigation.navigate('MainTabs', { screen: 'Publish' })}
+              accessibilityRole="button"
+            >
+              <Text style={styles.agentStatusActionText}>{t('profile_agent_request_again')}</Text>
+              <Ionicons name="chevron-forward" size={16} color={themeColors.primary} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Saved Searches */}
@@ -653,13 +889,13 @@ const ProfileScreen: React.FC = () => {
                     style={styles.savedSearchApply}
                     onPress={() => applySavedSearch(saved.id)}
                   >
-                    <Ionicons name="arrow-forward" size={16} color={COLORS.primary} />
+                    <Ionicons name="arrow-forward" size={16} color={themeColors.primary} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.savedSearchDelete}
                     onPress={() => removeSavedSearch(saved.id)}
                   >
-                    <Ionicons name="trash" size={16} color="#ef4444" />
+                    <Ionicons name="trash" size={16} color={themeColors.danger} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -687,7 +923,7 @@ const ProfileScreen: React.FC = () => {
                 onPress={() => applySearchHistory(query)}
               >
                 <Text style={[styles.historyText, theme === 'dark' && styles.textLight]}>{query}</Text>
-                <Ionicons name="arrow-forward" size={16} color={COLORS.primary} />
+                <Ionicons name="arrow-forward" size={16} color={themeColors.primary} />
               </TouchableOpacity>
             ))
           )}
@@ -716,7 +952,7 @@ const ProfileScreen: React.FC = () => {
         <View style={[styles.section, theme === 'dark' && styles.sectionDark]}>
           <Text style={[styles.sectionTitle, theme === 'dark' && styles.sectionTitleDark]}>{t('profile_invite_friend')}</Text>
           <TouchableOpacity style={styles.inviteButton} onPress={handleInvite}>
-            <Ionicons name="share-social" size={18} color="#fff" />
+            <Ionicons name="share-social" size={18} color={themeColors.white} />
             <Text style={styles.inviteText}>{t('profile_invite_friend')}</Text>
           </TouchableOpacity>
         </View>
@@ -808,18 +1044,18 @@ const ProfileScreen: React.FC = () => {
             style={[styles.legalItem, theme === 'dark' && styles.legalItemDark]}
             onPress={() => setLegalModal('privacy')}
           >
-            <Ionicons name="shield-checkmark" size={20} color={COLORS.primary} />
+            <Ionicons name="shield-checkmark" size={20} color={themeColors.primary} />
             <Text style={[styles.legalText, theme === 'dark' && styles.textLight]}>{t('privacy')}</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            <Ionicons name="chevron-forward" size={20} color={themeColors.onSurfaceMuted} />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.legalItem, theme === 'dark' && styles.legalItemDark]}
             onPress={() => setLegalModal('terms')}
           >
-            <Ionicons name="document-text" size={20} color={COLORS.primary} />
+            <Ionicons name="document-text" size={20} color={themeColors.primary} />
             <Text style={[styles.legalText, theme === 'dark' && styles.textLight]}>{t('terms')}</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            <Ionicons name="chevron-forward" size={20} color={themeColors.onSurfaceMuted} />
           </TouchableOpacity>
         </View>
 
@@ -828,13 +1064,13 @@ const ProfileScreen: React.FC = () => {
           <Text style={[styles.sectionTitle, theme === 'dark' && styles.sectionTitleDark]}>{t('follow_us')}</Text>
           <View style={styles.socialRow}>
             <TouchableOpacity style={styles.socialButton}>
-              <Ionicons name="logo-facebook" size={24} color="#1877F2" />
+              <Ionicons name="logo-facebook" size={24} color={themeColors.socialFacebook} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.socialButton}>
-              <Ionicons name="logo-instagram" size={24} color="#E4405F" />
+              <Ionicons name="logo-instagram" size={24} color={themeColors.socialInstagram} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.socialButton}>
-              <Ionicons name="logo-twitter" size={24} color="#1DA1F2" />
+              <Ionicons name="logo-twitter" size={24} color={themeColors.socialTwitter} />
             </TouchableOpacity>
           </View>
         </View>
@@ -846,11 +1082,11 @@ const ProfileScreen: React.FC = () => {
           onPress={handleLogoutPress}
           accessibilityRole="button"
         >
-          <Ionicons name="log-out" size={18} color={COLORS.error} />
+          <Ionicons name="log-out" size={18} color={themeColors.danger} />
           <Text style={styles.logoutText}>
             {logoutLoading ? t('profile_logging_out') : t('profile_logout')}
           </Text>
-          {logoutLoading && <ActivityIndicator size="small" color={COLORS.error} />}
+          {logoutLoading && <ActivityIndicator size="small" color={themeColors.danger} />}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -858,7 +1094,7 @@ const ProfileScreen: React.FC = () => {
           onPress={handleAccountDeletionRequest}
           accessibilityRole="button"
         >
-          <Ionicons name="trash-outline" size={17} color={COLORS.error} />
+          <Ionicons name="trash-outline" size={17} color={themeColors.danger} />
           <Text style={styles.deleteAccountText}>{t('profile_delete_account')}</Text>
         </TouchableOpacity>
 
@@ -894,7 +1130,7 @@ const baseStyles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   containerDark: {
-    backgroundColor: '#0F172A',
+    backgroundColor: COLORS.background,
   },
   content: {
     paddingBottom: 32,
@@ -903,13 +1139,15 @@ const baseStyles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     paddingBottom: 28,
-    backgroundColor: '#F4F7FB',
+    backgroundColor: COLORS.background,
   },
   authHero: {
     paddingHorizontal: 22,
     paddingTop: 26,
-    paddingBottom: 22,
-    backgroundColor: '#F4F7FB',
+    paddingBottom: 34,
+    backgroundColor: COLORS.brand,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
   authBrand: {
     flexDirection: 'row',
@@ -920,15 +1158,20 @@ const baseStyles = StyleSheet.create({
   authLogo: {
     width: 52,
     height: 52,
-    borderRadius: 16,
-    backgroundColor: COLORS.primary,
+    borderRadius: 18,
+    backgroundColor: COLORS.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 4,
   },
   authLogoText: {
     fontSize: 17,
     fontWeight: '900',
-    color: '#fff',
+    color: COLORS.onSurfaceMuted,
     letterSpacing: 0.5,
   },
   authBrandCopy: {
@@ -938,12 +1181,43 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    marginTop: 20,
+    marginTop: 18,
   },
   authSecureText: {
-    color: '#475569',
+    color: COLORS.onBrandMuted,
     fontSize: 12,
     fontWeight: '600',
+  },
+  authWelcome: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+    marginTop: 28,
+  },
+  authWelcomeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(244, 199, 107, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 199, 107, 0.32)',
+  },
+  authWelcomeCopy: {
+    flex: 1,
+  },
+  authWelcomeTitle: {
+    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  authWelcomeSubtitle: {
+    color: COLORS.onBrandMuted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
   },
   guestLanguageRow: {
     flexDirection: 'row',
@@ -953,35 +1227,47 @@ const baseStyles = StyleSheet.create({
   },
   guestLanguageLabel: {
     flex: 1,
-    color: '#475569',
+    color: COLORS.onBrandMuted,
     fontSize: 12,
     fontWeight: '700',
   },
   authTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
+    color: COLORS.white,
   },
   authSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: COLORS.onBrandMuted,
     marginTop: 3,
   },
   profileHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 8,
+    marginHorizontal: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 14,
+    backgroundColor: COLORS.brand,
+    borderRadius: 22,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 3,
   },
   profileBrand: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 11,
+  },
+  profileBrandCopy: {
+    flex: 1,
+    minWidth: 0,
   },
   profileLogo: {
-    width: 46,
-    height: 46,
+    width: 44,
+    height: 44,
     borderRadius: 15,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -989,45 +1275,62 @@ const baseStyles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
     letterSpacing: 0.3,
-    color: '#fff',
+    color: COLORS.onSurfaceMuted,
+  },
+  profileRoleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+  },
+  profileRoleBadgeText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '700',
   },
   profileHeading: {
-    color: '#0F172A',
-    fontSize: 23,
+    color: COLORS.white,
+    fontSize: 19,
     fontWeight: '800',
   },
   profileTagline: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginTop: 2,
+    fontSize: 11,
+    color: COLORS.onBrandMuted,
+    marginTop: 3,
   },
   textLight: {
-    color: '#F8FAFC',
+    color: COLORS.onSurfaceMuted,
   },
   textMutedDark: {
-    color: '#94A3B8',
+    color: COLORS.onSurfaceMuted,
   },
   authCard: {
-    backgroundColor: '#fff',
-    marginHorizontal: 18,
-    marginTop: 0,
-    padding: 22,
-    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    marginHorizontal: SPACING.lg,
+    marginTop: -16,
+    padding: SPACING.xxl,
+    borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: '#E6EBF2',
-    shadowColor: '#0f172a',
+    borderColor: COLORS.borderStrong,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.06,
     shadowRadius: 18,
     elevation: 3,
   },
   authCardTitle: {
-    color: '#0F172A',
+    ...typography.heroTitle,
+    color: COLORS.onSurface,
     fontSize: 24,
     fontWeight: '800',
   },
   authCardSubtitle: {
-    color: '#64748B',
+    color: COLORS.onSurfaceMuted,
     fontSize: 13,
     lineHeight: 19,
     marginTop: 5,
@@ -1035,7 +1338,7 @@ const baseStyles = StyleSheet.create({
   },
   authTabs: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.surfaceAlt,
     borderRadius: 12,
     padding: 3,
     marginBottom: 22,
@@ -1047,15 +1350,15 @@ const baseStyles = StyleSheet.create({
     borderRadius: 9,
   },
   authTabActive: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.brand,
   },
   authTabText: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
   },
   authTabTextActive: {
-    color: '#fff',
+    color: COLORS.white,
   },
   inputGroup: {
     marginBottom: 16,
@@ -1069,13 +1372,13 @@ const baseStyles = StyleSheet.create({
   },
   agentOptionText: {
     flex: 1,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     fontSize: 12,
     lineHeight: 18,
   },
   inputLabel: {
     fontSize: 12,
-    color: '#334155',
+    color: COLORS.onSurfaceMuted,
     marginBottom: 7,
     fontWeight: '700',
   },
@@ -1084,22 +1387,22 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 11,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.surfaceAlt,
     borderRadius: 12,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.borderStrong,
   },
   authInput: {
     flex: 1,
     minWidth: 0,
     paddingVertical: 12,
     fontSize: 14,
-    color: '#0F172A',
+    color: COLORS.onSurface,
   },
   authButton: {
     marginTop: 8,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.brand,
     minHeight: 52,
     paddingVertical: 15,
     borderRadius: 12,
@@ -1111,7 +1414,7 @@ const baseStyles = StyleSheet.create({
     elevation: 2,
   },
   authButtonText: {
-    color: '#fff',
+    color: COLORS.white,
     fontWeight: '700',
     fontSize: 14,
   },
@@ -1125,10 +1428,10 @@ const baseStyles = StyleSheet.create({
   authDividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: COLORS.surfaceAlt,
   },
   authDividerText: {
-    color: '#64748B',
+    color: COLORS.onSurfaceMuted,
     fontSize: 12,
   },
   googleButton: {
@@ -1137,80 +1440,38 @@ const baseStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#fff',
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.surface,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   googleButtonText: {
-    color: '#334155',
+    color: COLORS.onSurfaceMuted,
     fontSize: 14,
     fontWeight: '700',
   },
   authError: {
     fontSize: 12,
-    color: COLORS.error,
+    color: COLORS.danger,
     marginBottom: 10,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: COLORS.dangerContainer,
     borderRadius: 9,
     paddingHorizontal: 11,
     paddingVertical: 9,
   },
   authNotice: {
     fontSize: 12,
-    color: '#166534',
+    color: COLORS.onSuccessContainer,
     marginBottom: 10,
-    backgroundColor: COLORS.successBg,
+    backgroundColor: COLORS.successContainer,
     borderRadius: 9,
     paddingHorizontal: 11,
     paddingVertical: 9,
-  },
-  accountCard: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 10,
-    padding: 16,
-    borderRadius: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#E8EDF4',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  accountAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 17,
-    backgroundColor: COLORS.infoBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  accountInitial: {
-    color: COLORS.primary,
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  accountAvatarDark: {
-    backgroundColor: '#1E3A5F',
-  },
-  accountDetails: {
-    flex: 1,
-    minWidth: 0,
-  },
-  accountNameDark: {
-    color: '#F8FAFC',
-  },
-  accountMetaDark: {
-    color: '#94A3B8',
-  },
-  accountCardDark: {
-    backgroundColor: '#1E293B',
-    borderColor: '#334155',
   },
   deleteAccountButton: {
     flexDirection: 'row',
@@ -1222,87 +1483,273 @@ const baseStyles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#FECACA',
-    backgroundColor: '#FEF2F2',
+    borderColor: COLORS.dangerContainer,
+    backgroundColor: COLORS.dangerContainer,
   },
   deleteAccountButtonBottom: {
     marginTop: 8,
   },
   deleteAccountText: {
-    color: COLORS.error,
+    color: COLORS.danger,
     fontSize: 13,
     fontWeight: '700',
-  },
-  accountName: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  accountMeta: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginTop: 4,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: COLORS.dangerBg,
+    backgroundColor: COLORS.dangerContainer,
     marginHorizontal: 16,
     marginTop: 18,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: COLORS.dangerContainer,
   },
   logoutText: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.error,
+    color: COLORS.danger,
   },
   agentDashboard: {
     marginHorizontal: 16,
     marginTop: 16,
-    padding: 16,
-    backgroundColor: '#f0fdf4',
-    borderRadius: 16,
+    padding: 17,
+    backgroundColor: COLORS.surface,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#bbf7d0',
+    borderColor: COLORS.borderStrong,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  agentAccessCard: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    padding: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.045,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  agentAccessCardDark: {
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.border,
+  },
+  agentAccessTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+  },
+  agentAccessIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.brand,
+  },
+  agentAccessCopy: {
+    flex: 1,
+  },
+  agentAccessTitle: {
+    color: COLORS.onSurface,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  agentAccessSubtitle: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 3,
+  },
+  agentAccessButton: {
+    minHeight: 42,
+    marginTop: 12,
+    paddingHorizontal: 13,
+    borderRadius: 13,
+    backgroundColor: COLORS.surfaceAlt,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  agentAccessButtonText: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  agentDashboardDark: {
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.border,
   },
   agentDashboardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
+  },
+  agentDashboardHeading: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  agentDashboardIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    backgroundColor: COLORS.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  agentDashboardTitleWrap: {
+    flex: 1,
+  },
+  agentDashboardTitle: {
+    color: COLORS.onSurface,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  agentApprovedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.successContainer,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  agentApprovedText: {
+    color: COLORS.onSuccessContainer,
+    fontSize: 10,
+    fontWeight: '800',
   },
   agentDashboardSubtitle: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    marginTop: 4,
+    color: COLORS.onSurfaceMuted,
+    fontSize: 11,
+    marginTop: 3,
   },
   agentStatsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: 9,
     marginTop: 14,
   },
   agentStatCard: {
-    width: '48%',
-    backgroundColor: '#fff',
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: 15,
+    paddingHorizontal: 8,
+    paddingVertical: 11,
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  agentStatCardDark: {
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.border,
+  },
+  agentStatIcon: {
+    width: 30,
+    height: 30,
     borderRadius: 10,
-    paddingVertical: 10,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 7,
   },
   agentStatValue: {
-    color: COLORS.primary,
-    fontSize: 20,
+    color: COLORS.onSurfaceMuted,
+    fontSize: 21,
     fontWeight: '800',
   },
   agentStatLabel: {
-    color: COLORS.textMuted,
-    fontSize: 11,
-    marginTop: 2,
+    color: COLORS.onSurfaceMuted,
+    fontSize: 10,
+    lineHeight: 14,
+    marginTop: 3,
+  },
+  agentActions: {
+    marginTop: 13,
+    gap: 8,
+  },
+  agentPrimaryAction: {
+    minHeight: 45,
+    borderRadius: 14,
+    backgroundColor: COLORS.surfaceAlt,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  agentPrimaryActionText: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  agentSecondaryActions: {
+    gap: 7,
+  },
+  agentSecondaryAction: {
+    minHeight: 43,
+    paddingHorizontal: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    backgroundColor: COLORS.surfaceAlt,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 13,
+  },
+  agentSecondaryActionDark: {
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.border,
+  },
+  agentSecondaryActionText: {
+    flex: 1,
+    color: COLORS.onSurfaceMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  agentSecondaryActionTextDark: {
+    color: COLORS.onSurfaceMuted,
+  },
+  agentUnreadBadge: {
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  agentUnreadBadgeText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  agentStatusAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderStrong,
+  },
+  agentStatusActionText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   agentStatusLine: {
     flexDirection: 'row',
@@ -1311,7 +1758,7 @@ const baseStyles = StyleSheet.create({
     marginTop: 14,
   },
   agentStatusText: {
-    color: '#166534',
+    color: COLORS.onSuccessContainer,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1319,19 +1766,19 @@ const baseStyles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 14,
     padding: 17,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E8EDF4',
-    shadowColor: '#0f172a',
+    borderColor: COLORS.borderStrong,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.035,
     shadowRadius: 10,
     elevation: 1,
   },
   sectionDark: {
-    backgroundColor: '#1E293B',
-    borderColor: '#334155',
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.border,
   },
   cardRow: {
     paddingRight: 16,
@@ -1340,14 +1787,14 @@ const baseStyles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
+    color: COLORS.onSurface,
     marginBottom: 14,
   },
   sectionTitleCompact: {
     marginBottom: 0,
   },
   sectionTitleDark: {
-    color: '#F8FAFC',
+    color: COLORS.onSurfaceMuted,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1362,41 +1809,41 @@ const baseStyles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 13,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
   },
   historyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.chipBg,
+    backgroundColor: COLORS.surfaceAlt,
     padding: 13,
     borderRadius: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#EEF2F7',
+    borderColor: COLORS.border,
   },
   historyRowDark: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.border,
   },
   historyText: {
     fontSize: 13,
-    color: '#0F172A',
+    color: COLORS.onSurface,
     fontWeight: '600',
   },
   statusCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.chipBg,
+    backgroundColor: COLORS.surfaceAlt,
     padding: 14,
     borderRadius: 12,
     gap: 10,
     borderWidth: 1,
-    borderColor: '#EEF2F7',
+    borderColor: COLORS.border,
   },
   statusCardDark: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.border,
   },
   statusInfo: {
     flex: 1,
@@ -1404,18 +1851,18 @@ const baseStyles = StyleSheet.create({
   statusTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: COLORS.onSurface,
   },
   statusSubtitle: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginTop: 2,
   },
   statusTitleDark: {
-    color: '#F8FAFC',
+    color: COLORS.onSurfaceMuted,
   },
   statusSubtitleDark: {
-    color: '#94A3B8',
+    color: COLORS.onSurfaceMuted,
   },
   inviteButton: {
     flexDirection: 'row',
@@ -1429,17 +1876,17 @@ const baseStyles = StyleSheet.create({
   inviteText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#fff',
+    color: COLORS.white,
   },
   propertyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.chipBg,
+    backgroundColor: COLORS.surfaceAlt,
     padding: 12,
     borderRadius: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#eef2f7',
+    borderColor: COLORS.border,
   },
   propertyInfo: {
     flex: 1,
@@ -1448,16 +1895,16 @@ const baseStyles = StyleSheet.create({
   propertyTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: COLORS.onSurface,
     marginBottom: 4,
   },
   propertyMeta: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
   },
   propertyStats: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: COLORS.onSurfaceMuted,
     marginTop: 4,
   },
   propertyRight: {
@@ -1471,7 +1918,7 @@ const baseStyles = StyleSheet.create({
   },
   propertyStatus: {
     fontSize: 11,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginTop: 4,
   },
   listingBadge: {
@@ -1484,34 +1931,34 @@ const baseStyles = StyleSheet.create({
   listingBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.onSurface,
   },
   listingPending: {
-    backgroundColor: '#fef3c7',
+    backgroundColor: COLORS.warningContainer,
   },
   listingApproved: {
-    backgroundColor: COLORS.successBg,
+    backgroundColor: COLORS.successContainer,
   },
   listingRejected: {
-    backgroundColor: COLORS.dangerBg,
+    backgroundColor: COLORS.dangerContainer,
   },
   listingArchived: {
-    backgroundColor: COLORS.borderSoft,
+    backgroundColor: COLORS.borderStrong,
   },
   savedSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.chipBg,
+    backgroundColor: COLORS.surfaceAlt,
     padding: 12,
     borderRadius: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#eef2f7',
+    borderColor: COLORS.border,
   },
   savedSearchRowDark: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.border,
   },
   savedSearchInfo: {
     flex: 1,
@@ -1520,11 +1967,11 @@ const baseStyles = StyleSheet.create({
   savedSearchLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0F172A',
+    color: COLORS.onSurface,
   },
   savedSearchMeta: {
     fontSize: 11,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginTop: 4,
   },
   savedSearchActions: {
@@ -1535,7 +1982,7 @@ const baseStyles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: COLORS.infoBg,
+    backgroundColor: COLORS.primaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1543,7 +1990,7 @@ const baseStyles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#fef2f2',
+    backgroundColor: COLORS.dangerContainer,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1555,70 +2002,70 @@ const baseStyles = StyleSheet.create({
   languageChip: {
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.surfaceAlt,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.borderStrong,
   },
   languageChipDark: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.border,
   },
   languageChipActive: {
     backgroundColor: COLORS.primary,
   },
   languageText: {
     fontSize: 12,
-    color: '#374151',
+    color: COLORS.onSurfaceMuted,
     fontWeight: '600',
   },
   languageTextActive: {
-    color: '#fff',
+    color: COLORS.white,
   },
   languageTextDark: {
-    color: '#CBD5E1',
+    color: COLORS.onSurfaceMuted,
   },
   aboutText: {
     fontSize: 14,
-    color: '#475569',
+    color: COLORS.onSurfaceMuted,
     lineHeight: 22,
   },
   addressCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.chipBg,
+    backgroundColor: COLORS.surfaceAlt,
     padding: 16,
     borderRadius: 12,
     gap: 12,
     borderWidth: 1,
-    borderColor: '#eef2f7',
+    borderColor: COLORS.border,
   },
   addressInfo: {
     flex: 1,
   },
   addressText: {
     fontSize: 14,
-    color: '#475569',
+    color: COLORS.onSurfaceMuted,
   },
   legalItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.chipBg,
+    backgroundColor: COLORS.surfaceAlt,
     padding: 14,
     borderRadius: 12,
     marginBottom: 10,
     gap: 12,
     borderWidth: 1,
-    borderColor: '#eef2f7',
+    borderColor: COLORS.border,
   },
   legalItemDark: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.border,
   },
   legalText: {
     flex: 1,
     fontSize: 14,
-    color: '#0F172A',
+    color: COLORS.onSurface,
     fontWeight: '500',
   },
   servicesGrid: {
@@ -1628,18 +2075,18 @@ const baseStyles = StyleSheet.create({
   },
   serviceItem: {
     width: '47%',
-    backgroundColor: COLORS.chipBg,
+    backgroundColor: COLORS.surfaceAlt,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#eef2f7',
+    borderColor: COLORS.border,
   },
   serviceIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: COLORS.infoBg,
+    backgroundColor: COLORS.primaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
@@ -1647,12 +2094,12 @@ const baseStyles = StyleSheet.create({
   serviceTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#0F172A',
+    color: COLORS.onSurface,
     textAlign: 'center',
   },
   serviceDesc: {
     fontSize: 11,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     textAlign: 'center',
     marginTop: 4,
   },
@@ -1665,11 +2112,11 @@ const baseStyles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: COLORS.chipBg,
+    backgroundColor: COLORS.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#eef2f7',
+    borderColor: COLORS.border,
   },
   footer: {
     alignItems: 'center',
@@ -1680,14 +2127,14 @@ const baseStyles = StyleSheet.create({
   },
   footerText: {
     fontSize: 14,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
   },
   footerTextDark: {
-    color: '#94A3B8',
+    color: COLORS.onSurfaceMuted,
   },
   footerVersion: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: COLORS.onSurfaceMuted,
     marginTop: 4,
   },
 
@@ -1719,13 +2166,13 @@ const baseStyles = StyleSheet.create({
   },
   passwordHint: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: COLORS.onSurfaceMuted,
     marginTop: 6,
   },
   authLegal: {
     marginTop: 16,
     fontSize: 11,
-    color: '#94a3b8',
+    color: COLORS.onSurfaceMuted,
     textAlign: 'center',
   },
 });

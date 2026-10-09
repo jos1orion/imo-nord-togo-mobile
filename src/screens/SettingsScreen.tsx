@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
 import { getContactEmail, getContactPhoneDigits } from '../constants/appConfig';
 
@@ -20,6 +20,7 @@ interface LegalScreenProps {
 
 const LegalScreen: React.FC<LegalScreenProps> = ({ type, onClose }) => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const { language, theme } = useApp();
   const isDark = theme === 'dark';
   const content =
@@ -43,7 +44,7 @@ const LegalScreen: React.FC<LegalScreenProps> = ({ type, onClose }) => {
     <SafeAreaView style={[styles.container, isDark && styles.containerDark]}>
       <View style={[styles.header, isDark && styles.headerDark]}>
         <TouchableOpacity onPress={onClose} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
+          <Ionicons name="arrow-back" size={24} color={themeColors.primary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, isDark && styles.headerTitleDark]}>{title}</Text>
         <View style={styles.placeholder} />
@@ -278,10 +279,10 @@ Address: Avenue de la Liberation, Kara, Togo
 const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.surface,
   },
   containerDark: {
-    backgroundColor: '#0F172A',
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
@@ -289,10 +290,10 @@ const baseStyles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderSoft,
+    borderBottomColor: COLORS.borderStrong,
   },
   headerDark: {
-    borderBottomColor: '#334155',
+    borderBottomColor: COLORS.onSurfaceMuted,
   },
   backButton: {
     padding: 8,
@@ -301,11 +302,11 @@ const baseStyles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.onSurface,
     textAlign: 'center',
   },
   headerTitleDark: {
-    color: '#F1F5F9',
+    color: COLORS.surfaceAlt,
   },
   placeholder: {
     width: 40,
@@ -319,11 +320,11 @@ const baseStyles = StyleSheet.create({
   },
   textContent: {
     fontSize: 14,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     lineHeight: 24,
   },
   textContentDark: {
-    color: '#CBD5E1',
+    color: COLORS.onSurfaceMuted,
   },
 });
 

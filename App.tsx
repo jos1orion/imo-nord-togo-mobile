@@ -36,7 +36,6 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import PublishScreen from './src/screens/PublishScreen';
 import MessagesScreen from './src/screens/MessagesScreen';
 import ChatScreen from './src/screens/ChatScreen';
-import MortgageCalculatorScreen from './src/screens/MortgageCalculatorScreen';
 import AgentProfileScreen from './src/screens/AgentProfileScreen';
 import ReviewsScreen from './src/screens/ReviewsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
@@ -44,7 +43,7 @@ import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { lightPaperTheme, darkPaperTheme } from './src/theme/paperTheme';
-import COLORS from './src/theme/colors';
+import { THEME_PALETTES } from './src/theme/colors';
 import { typography } from './src/theme/typography';
 import { supabase } from './src/lib/supabase';
 
@@ -77,7 +76,6 @@ export type RootStackParamList = {
   Messages: undefined;
   Chat: { chatId: string; otherUserId: string };
   AgentProfile: { userId: string };
-  MortgageCalculator: undefined;
   Reviews: { propertyId: string };
   Notifications: undefined;
   ResetPassword: undefined;
@@ -146,7 +144,7 @@ const TabNavigator = () => {
                 typeof style === 'function' ? style(state) : style,
                 {
                   flex: 1,
-                  paddingVertical: 8,
+                  paddingVertical: 2,
                   opacity: Platform.OS === 'ios' && state.pressed ? 0.65 : 1,
                 },
               ]}
@@ -158,9 +156,10 @@ const TabNavigator = () => {
           borderTopWidth: 1,
           borderTopColor: paper.colors.outlineVariant,
           paddingBottom: Math.max(insets.bottom, 10),
-          paddingTop: 8,
-          height: 62 + Math.max(insets.bottom, 10),
+          paddingTop: 6,
+          height: 68 + Math.max(insets.bottom, 10),
         },
+        tabBarHideOnKeyboard: true,
         tabBarLabelStyle: {
           ...typography.tabLabel,
           marginTop: 2,
@@ -182,6 +181,7 @@ const TabNavigator = () => {
 
 const AppContent = () => {
   const { theme, t } = useApp();
+  const colors = THEME_PALETTES[theme];
   const paperTheme = theme === 'light' ? lightPaperTheme : darkPaperTheme;
   const [navReady, setNavReady] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -294,8 +294,8 @@ const AppContent = () => {
 
   if (!navReady) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
-        <ActivityIndicator color={COLORS.primary} size="large" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator color={colors.primary} size="large" />
       </View>
     );
   }
@@ -340,7 +340,6 @@ const AppContent = () => {
           <Stack.Screen name="Publish" component={PublishScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="Messages" component={MessagesScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="Chat" component={ChatScreen} options={{ presentation: 'card' }} />
-          <Stack.Screen name="MortgageCalculator" component={MortgageCalculatorScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="AgentProfile" component={AgentProfileScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="Reviews" component={ReviewsScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ presentation: 'card' }} />

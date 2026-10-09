@@ -30,6 +30,7 @@
       },
       "package": "com.imonordtogo.app",
       "versionCode": 2,
+      "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -88,12 +89,20 @@
           "backgroundColor": "#FFFFFF"
         }
       ],
+      [
+        "expo-navigation-bar",
+        {
+          "enforceContrast": true,
+          "style": "dark"
+        }
+      ],
       "expo-web-browser"
     ],
     "extra": {
       "contactPhone": "22893576298",
       "contactEmail": "kondgbandi@gmail.com",
       "whatsappPhone": "22893576298",
+      "adminApiUrl": "https://imo-nord-togo-mobile.vercel.app",
       "enableAdminShortcut": false,
       "apkDownloadUrl": "",
       "eas": {

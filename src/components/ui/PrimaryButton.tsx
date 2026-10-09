@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, ViewStyle } from 'react-native';
 import COLORS from '../../theme/colors';
-import { useThemedStyles } from '../../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../../theme/useThemedStyles';
 
 type Props = {
   title: string;
@@ -14,6 +14,7 @@ type Props = {
 
 const PrimaryButton: React.FC<Props> = ({ title, onPress, loading, variant = 'primary', disabled, style }) => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const isPrimary = variant === 'primary';
   return (
     <TouchableOpacity
@@ -25,7 +26,7 @@ const PrimaryButton: React.FC<Props> = ({ title, onPress, loading, variant = 'pr
       accessibilityState={{ disabled: Boolean(disabled || loading) }}
     >
       {loading ? (
-        <ActivityIndicator color={isPrimary ? '#fff' : COLORS.primary} />
+        <ActivityIndicator color={isPrimary ? themeColors.white : themeColors.primary} />
       ) : (
         <Text style={[styles.label, isPrimary ? styles.textPrimary : styles.textSecondary]}>{title}</Text>
       )}
@@ -42,10 +43,10 @@ const baseStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   primary: { backgroundColor: COLORS.primary },
-  secondary: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border },
+  secondary: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
   disabled: { opacity: 0.55 },
   label: { fontSize: 14, fontWeight: '700', lineHeight: 18 },
-  textPrimary: { color: '#fff' },
+  textPrimary: { color: COLORS.white },
   textSecondary: { color: COLORS.primary },
 });
 

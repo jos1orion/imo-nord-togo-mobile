@@ -2,8 +2,8 @@ import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   InteractionManager,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,10 +17,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RootStackParamList } from '../../App';
 import PropertyCard from '../components/PropertyCard';
+import Skeleton from '../components/ui/Skeleton';
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
 import { isPublicProperty } from '../utils/propertyVisibility';
+import { RADIUS, SPACING } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 type ListingsTabParamList = {
   Home: undefined;
@@ -33,6 +36,7 @@ type NavigationProp = BottomTabNavigationProp<ListingsTabParamList, 'Publish'>;
 
 const ListingsScreen: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const {
@@ -43,6 +47,7 @@ const ListingsScreen: React.FC = () => {
     toggleNeighborhoodAlert,
     updatePropertyStatus,
     currentUser,
+    hydrated,
     requestAgentAccess,
     t,
   } = useApp();
@@ -174,7 +179,7 @@ const ListingsScreen: React.FC = () => {
           accessibilityRole="button"
           onPress={openPublishOrRequestAccess}
         >
-          <Ionicons name="add" size={20} color="#fff" />
+          <Ionicons name="add" size={20} color={themeColors.white} />
           <Text style={styles.publishButtonText}>
             {agentAccessState === 'approved'
               ? t('home_publish_card_title')
@@ -191,20 +196,58 @@ const ListingsScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
+      <FlatList
         style={styles.listScroll}
         contentContainerStyle={[
           styles.content,
           { paddingBottom: Math.max(insets.bottom, 20) + 20 },
         ]}
         showsVerticalScrollIndicator={false}
-      >
+        data={hydrated ? neighborhoods : []}
+        keyExtractor={name => name}
+        numColumns={2}
+        columnWrapperStyle={styles.alertGrid}
+        renderItem={({ item: name }) => {
+          const enabled = neighborhoodAlerts.some(
+            neighborhood => neighborhood.toLowerCase() === name.toLowerCase()
+          );
+          return (
+            <TouchableOpacity
+              style={[styles.alertChip, enabled && styles.alertChipActive]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: enabled }}
+              onPress={() => toggleNeighborhoodAlert(name)}
+            >
+              <Ionicons
+                name={enabled ? 'notifications' : 'notifications-outline'}
+                size={14}
+                color={enabled ? themeColors.white : themeColors.onSurfaceMuted}
+              />
+              <Text style={[styles.alertText, enabled && styles.alertTextActive]}>{name}</Text>
+            </TouchableOpacity>
+          );
+        }}
+        ListEmptyComponent={(
+          <View style={styles.section}>
+            {hydrated ? (
+              <Text style={styles.emptyText}>{t('profile_no_recent')}</Text>
+            ) : (
+              <View style={styles.alertSkeletonGrid}>
+                <Skeleton style={styles.alertSkeleton} />
+                <Skeleton style={styles.alertSkeleton} />
+                <Skeleton style={styles.alertSkeleton} />
+              </View>
+            )}
+          </View>
+        )}
+        ListHeaderComponent={(
+          <>
         <View style={styles.section}>
           <View style={styles.agentStatusHeader}>
             <Ionicons
               name={agentAccessState === 'approved' ? 'checkmark-circle' : 'information-circle'}
               size={22}
-              color={agentAccessState === 'approved' ? COLORS.accent : COLORS.primary}
+              color={agentAccessState === 'approved' ? themeColors.accent : themeColors.primary}
             />
             <Text style={styles.sectionTitle}>{t('listing_agent_access_title')}</Text>
           </View>
@@ -228,7 +271,7 @@ const ListingsScreen: React.FC = () => {
               onPress={() => void handleAgentAccessRequest()}
             >
               {requestingAgentAccess ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={themeColors.white} />
               ) : (
                 <Text style={styles.accessButtonText}>{t('listing_agent_access_request')}</Text>
               )}
@@ -251,7 +294,7 @@ const ListingsScreen: React.FC = () => {
                 onPress={() => void handleAgentAccessRequest()}
               >
                 {requestingAgentAccess ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={themeColors.white} />
                 ) : (
                   <Text style={styles.accessButtonText}>{t('listing_agent_access_retry')}</Text>
                 )}
@@ -262,17 +305,17 @@ const ListingsScreen: React.FC = () => {
 
         <View style={styles.summaryRow}>
           <View style={styles.summaryCard}>
-            <Ionicons name="home-outline" size={18} color={COLORS.primary} />
+            <Ionicons name="home-outline" size={18} color={themeColors.primary} />
             <Text style={styles.summaryValue}>{myProperties.length}</Text>
             <Text style={styles.summaryLabel}>{t('my_listings')}</Text>
           </View>
           <View style={styles.summaryCard}>
-            <Ionicons name="heart-outline" size={18} color={COLORS.primary} />
+            <Ionicons name="heart-outline" size={18} color={themeColors.primary} />
             <Text style={styles.summaryValue}>{favoriteCount}</Text>
             <Text style={styles.summaryLabel}>{t('favorites')}</Text>
           </View>
           <View style={styles.summaryCard}>
-            <Ionicons name="notifications-outline" size={18} color={COLORS.primary} />
+            <Ionicons name="notifications-outline" size={18} color={themeColors.primary} />
             <Text style={styles.summaryValue}>{neighborhoodAlerts.length}</Text>
             <Text style={styles.summaryLabel}>{t('profile_neighborhood_alerts')}</Text>
           </View>
@@ -283,85 +326,91 @@ const ListingsScreen: React.FC = () => {
           {myProperties.length === 0 ? (
             <Text style={styles.emptyText}>{t('no_listing')}</Text>
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardRow}>
-              {myProperties.map(property => {
-              const isBusy = busyListings[property.id] ?? false;
-              const isOccupied = property.status === 'occupied';
+            <FlatList
+              horizontal
+              data={myProperties}
+              keyExtractor={property => property.id}
+              nestedScrollEnabled
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.cardRow}
+              renderItem={({ item: property }) => {
+                const isBusy = busyListings[property.id] ?? false;
+                const isOccupied = property.status === 'occupied';
 
-              return (
-                <View key={property.id} style={styles.myListingCard}>
-                  <PropertyCard
-                    property={property}
-                    onPress={() => openProperty(property.id)}
-                    compact
-                  />
-                  <View style={styles.myListingActions}>
-                    {isOccupied ? (
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.actionPrimary, isBusy && styles.disabled]}
-                        disabled={isBusy}
-                        onPress={() =>
-                          confirmListingStatus(
-                            property.id,
-                            'available',
-                            t('listing_confirm_restore_title'),
-                            t('listing_confirm_restore_message')
-                          )
-                        }
-                      >
-                        {isBusy ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Text style={styles.actionTextLight}>{t('property_restore_available')}</Text>
-                        )}
-                      </TouchableOpacity>
-                    ) : (
-                      <>
+                return (
+                  <View style={styles.myListingCard}>
+                    <PropertyCard
+                      property={property}
+                      onPress={() => openProperty(property.id)}
+                      compact
+                    />
+                    <View style={styles.myListingActions}>
+                      {isOccupied ? (
                         <TouchableOpacity
-                          style={[styles.actionButton, styles.actionDanger, isBusy && styles.disabled]}
+                          style={[styles.actionButton, styles.actionPrimary, isBusy && styles.disabled]}
                           disabled={isBusy}
                           onPress={() =>
                             confirmListingStatus(
                               property.id,
-                              'occupied',
-                              t('listing_confirm_sold_title'),
-                              t('listing_confirm_sold_message'),
-                              'destructive'
+                              'available',
+                              t('listing_confirm_restore_title'),
+                              t('listing_confirm_restore_message')
                             )
                           }
                         >
                           {isBusy ? (
-                            <ActivityIndicator size="small" color="#fff" />
+                            <ActivityIndicator size="small" color={themeColors.white} />
                           ) : (
-                            <Text style={styles.actionTextLight}>{t('property_mark_sold')}</Text>
+                            <Text style={styles.actionTextLight}>{t('property_restore_available')}</Text>
                           )}
                         </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.actionButton, styles.actionWarning, isBusy && styles.disabled]}
-                          disabled={isBusy}
-                          onPress={() =>
-                            confirmListingStatus(
-                              property.id,
-                              'occupied',
-                              t('listing_confirm_occupied_title'),
-                              t('listing_confirm_occupied_message'),
-                              'destructive'
-                            )
-                          }
-                        >
-                          {isBusy ? (
-                            <ActivityIndicator size="small" color="#1f2937" />
-                          ) : (
-                            <Text style={styles.actionTextDark}>{t('property_mark_occupied')}</Text>
-                          )}
-                        </TouchableOpacity>
-                      </>
-                    )}
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            style={[styles.actionButton, styles.actionDanger, isBusy && styles.disabled]}
+                            disabled={isBusy}
+                            onPress={() =>
+                              confirmListingStatus(
+                                property.id,
+                                'occupied',
+                                t('listing_confirm_sold_title'),
+                                t('listing_confirm_sold_message'),
+                                'destructive'
+                              )
+                            }
+                          >
+                            {isBusy ? (
+                              <ActivityIndicator size="small" color={themeColors.white} />
+                            ) : (
+                              <Text style={styles.actionTextLight}>{t('property_mark_sold')}</Text>
+                            )}
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.actionButton, styles.actionWarning, isBusy && styles.disabled]}
+                            disabled={isBusy}
+                            onPress={() =>
+                              confirmListingStatus(
+                                property.id,
+                                'occupied',
+                                t('listing_confirm_occupied_title'),
+                                t('listing_confirm_occupied_message'),
+                                'destructive'
+                              )
+                            }
+                          >
+                            {isBusy ? (
+                              <ActivityIndicator size="small" color={themeColors.onSurface} />
+                            ) : (
+                              <Text style={styles.actionTextDark}>{t('property_mark_occupied')}</Text>
+                            )}
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </View>
                   </View>
-                </View>
-              );
-              })}
-            </ScrollView>
+                );
+              }}
+            />
           )}
         </View>
 
@@ -370,51 +419,31 @@ const ListingsScreen: React.FC = () => {
           {favoriteProperties.length === 0 ? (
             <Text style={styles.emptyText}>{t('no_favorite')}</Text>
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardRow}>
-              {favoriteProperties.map(property => (
+            <FlatList
+              horizontal
+              data={favoriteProperties}
+              keyExtractor={property => property.id}
+              nestedScrollEnabled
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.cardRow}
+              renderItem={({ item: property }) => (
                 <PropertyCard
-                  key={property.id}
                   property={property}
                   onPress={() => openProperty(property.id)}
                   compact
                 />
-              ))}
-            </ScrollView>
+              )}
+            />
           )}
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('profile_neighborhood_alerts')}</Text>
           <Text style={styles.helperText}>{t('profile_alert_hint')}</Text>
-          {neighborhoods.length === 0 ? (
-            <Text style={styles.emptyText}>{t('profile_no_recent')}</Text>
-          ) : (
-            <View style={styles.alertGrid}>
-              {neighborhoods.map(name => {
-              const enabled = neighborhoodAlerts.some(
-                neighborhood => neighborhood.toLowerCase() === name.toLowerCase()
-              );
-              return (
-                <TouchableOpacity
-                  key={name}
-                  style={[styles.alertChip, enabled && styles.alertChipActive]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: enabled }}
-                  onPress={() => toggleNeighborhoodAlert(name)}
-                >
-                  <Ionicons
-                    name={enabled ? 'notifications' : 'notifications-outline'}
-                    size={14}
-                    color={enabled ? '#fff' : COLORS.textMuted}
-                  />
-                  <Text style={[styles.alertText, enabled && styles.alertTextActive]}>{name}</Text>
-                </TouchableOpacity>
-              );
-              })}
-            </View>
-          )}
         </View>
-      </ScrollView>
+          </>
+        )}
+      />
     </View>
   );
 };
@@ -440,12 +469,13 @@ const baseStyles = StyleSheet.create({
     paddingBottom: 14,
   },
   title: {
+    ...typography.heroTitle,
     fontSize: 24,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: COLORS.onSurface,
   },
   subtitle: {
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     fontSize: 13,
     marginTop: 4,
   },
@@ -460,7 +490,7 @@ const baseStyles = StyleSheet.create({
     paddingVertical: 10,
   },
   publishButtonText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -473,7 +503,7 @@ const baseStyles = StyleSheet.create({
   summaryCard: {
     flex: 1,
     minHeight: 90,
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     paddingVertical: 11,
     paddingHorizontal: 5,
@@ -490,17 +520,17 @@ const baseStyles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 10,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginTop: 3,
     textAlign: 'center',
   },
   section: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    shadowColor: '#0f172a',
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.lg,
+    padding: SPACING.lg,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.06,
     shadowRadius: 14,
@@ -509,7 +539,7 @@ const baseStyles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.onSurface,
     marginBottom: 14,
   },
   agentStatusHeader: {
@@ -528,7 +558,7 @@ const baseStyles = StyleSheet.create({
     marginTop: 12,
   },
   accessButtonText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
@@ -536,12 +566,12 @@ const baseStyles = StyleSheet.create({
   rejectionReason: {
     fontSize: 12,
     lineHeight: 18,
-    color: COLORS.error,
+    color: COLORS.danger,
     marginTop: 6,
   },
   emptyText: {
     fontSize: 13,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
   },
   cardRow: {
     paddingRight: 16,
@@ -568,29 +598,29 @@ const baseStyles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   actionDanger: {
-    backgroundColor: COLORS.error,
+    backgroundColor: COLORS.danger,
   },
   actionWarning: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: COLORS.gold,
   },
   disabled: {
     opacity: 0.6,
   },
   actionTextLight: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 11,
     fontWeight: '700',
     textAlign: 'center',
   },
   actionTextDark: {
-    color: '#1f2937',
+    color: COLORS.onSurface,
     fontSize: 11,
     fontWeight: '700',
     textAlign: 'center',
   },
   helperText: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginBottom: 10,
   },
   alertGrid: {
@@ -598,13 +628,22 @@ const baseStyles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
+  alertSkeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  alertSkeleton: {
+    width: '47%',
+    height: 34,
+  },
   alertChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#f3f4f6',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.surfaceAlt,
     borderRadius: 16,
   },
   alertChipActive: {
@@ -612,11 +651,11 @@ const baseStyles = StyleSheet.create({
   },
   alertText: {
     fontSize: 12,
-    color: '#374151',
+    color: COLORS.onSurfaceMuted,
     fontWeight: '600',
   },
   alertTextActive: {
-    color: '#fff',
+    color: COLORS.white,
   },
 });
 

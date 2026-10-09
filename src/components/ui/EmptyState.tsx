@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import PrimaryButton from './PrimaryButton';
-import { useThemedStyles } from '../../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../../theme/useThemedStyles';
 
 type Props = {
   icon?: keyof typeof Ionicons.glyphMap;
@@ -26,10 +26,11 @@ const EmptyState: React.FC<Props> = ({
   children,
 }) => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   return (
     <View style={[styles.wrap, style]} accessibilityRole="text">
       <View style={styles.iconCircle}>
-        <Ionicons name={icon} size={32} color={COLORS.primary} />
+        <Ionicons name={icon} size={32} color={themeColors.primary} />
       </View>
       <Text style={styles.title}>{title}</Text>
       {description ? <Text style={styles.desc}>{description}</Text> : null}
@@ -52,20 +53,20 @@ const baseStyles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: COLORS.infoBg,
+    backgroundColor: COLORS.primaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
   title: {
     ...typography.subtitle,
-    color: COLORS.text,
+    color: COLORS.onSurface,
     textAlign: 'center',
     marginBottom: 6,
   },
   desc: {
     ...typography.body,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     textAlign: 'center',
     marginBottom: 16,
   },

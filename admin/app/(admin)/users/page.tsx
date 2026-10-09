@@ -185,7 +185,7 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Supprimer cet utilisateur ?')) return;
+    if (!window.confirm('Supprimer cet utilisateur ? Cette action est irréversible.')) return;
     setRowBusy(prev => ({ ...prev, [id]: true }));
     setError(null);
     setSuccess(null);

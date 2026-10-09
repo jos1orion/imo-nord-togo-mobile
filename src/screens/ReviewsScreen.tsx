@@ -13,7 +13,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import { canViewProperty } from '../utils/propertyVisibility';
@@ -23,6 +23,7 @@ type ReviewsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Revi
 
 const ReviewsScreen = () => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const { getPropertyReviews, addReview, getAverageRating, properties, currentUser, language, t } = useApp();
   const route = useRoute<ReviewsScreenRouteProp>();
   const navigation = useNavigation<ReviewsScreenNavigationProp>();
@@ -75,7 +76,7 @@ const ReviewsScreen = () => {
           <Ionicons
             name={i <= currentRating ? 'star' : 'star-outline'}
             size={interactive ? 30 : 20}
-            color="#FFD700"
+            color={themeColors.gold}
           />
         </TouchableOpacity>
       );
@@ -110,10 +111,15 @@ const ReviewsScreen = () => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+    >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
+          <Ionicons name="arrow-back" size={24} color={themeColors.primary} />
         </TouchableOpacity>
         <Text style={styles.title}>{t('reviews')}</Text>
         <View style={{ width: 24 }} />
@@ -194,7 +200,7 @@ const ReviewsScreen = () => {
 
         {reviews.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="star-outline" size={48} color="#ccc" />
+            <Ionicons name="star-outline" size={48} color={themeColors.borderStrong} />
             <Text style={styles.emptyText}>{t('noReviews')}</Text>
           </View>
         ) : (
@@ -208,7 +214,7 @@ const ReviewsScreen = () => {
 const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
@@ -217,7 +223,7 @@ const baseStyles = StyleSheet.create({
     padding: 15,
     backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: COLORS.borderStrong,
   },
   title: {
     fontSize: 20,
@@ -233,7 +239,7 @@ const baseStyles = StyleSheet.create({
   propertyTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: COLORS.onSurface,
     marginBottom: 10,
   },
   ratingSummary: {
@@ -246,7 +252,7 @@ const baseStyles = StyleSheet.create({
   },
   averageRating: {
     fontSize: 16,
-    color: '#666',
+    color: COLORS.onSurfaceMuted,
   },
   addReviewSection: {
     margin: 10,
@@ -273,7 +279,7 @@ const baseStyles = StyleSheet.create({
   formTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: COLORS.onSurface,
     marginBottom: 15,
   },
   ratingInput: {
@@ -281,12 +287,12 @@ const baseStyles = StyleSheet.create({
   },
   ratingLabel: {
     fontSize: 16,
-    color: '#333',
+    color: COLORS.onSurface,
     marginBottom: 10,
   },
   commentInput: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: COLORS.borderStrong,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
@@ -300,14 +306,14 @@ const baseStyles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: COLORS.surfaceAlt,
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
     marginRight: 10,
   },
   cancelButtonText: {
-    color: '#333',
+    color: COLORS.onSurface,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -319,7 +325,7 @@ const baseStyles = StyleSheet.create({
     alignItems: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: COLORS.borderStrong,
   },
   submitButtonText: {
     color: 'white',
@@ -335,12 +341,12 @@ const baseStyles = StyleSheet.create({
   reviewsTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: COLORS.onSurface,
     marginBottom: 15,
   },
   reviewItem: {
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: COLORS.surfaceAlt,
     paddingVertical: 15,
   },
   reviewHeader: {
@@ -352,20 +358,20 @@ const baseStyles = StyleSheet.create({
   reviewerName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: COLORS.onSurface,
   },
   reviewRating: {
     flexDirection: 'row',
   },
   reviewComment: {
     fontSize: 16,
-    color: '#666',
+    color: COLORS.onSurfaceMuted,
     lineHeight: 22,
     marginBottom: 8,
   },
   reviewDate: {
     fontSize: 14,
-    color: '#999',
+    color: COLORS.onSurfaceSoft,
   },
   verified: {
     color: COLORS.primary,
@@ -377,12 +383,12 @@ const baseStyles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#999',
+    color: COLORS.onSurfaceSoft,
     marginTop: 10,
   },
   error: {
     fontSize: 16,
-    color: '#ff0000',
+    color: COLORS.danger,
     textAlign: 'center',
     marginTop: 50,
   },

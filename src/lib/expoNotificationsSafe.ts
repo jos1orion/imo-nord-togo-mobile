@@ -72,6 +72,7 @@ export async function safeRegisterExpoPushToken(
     return;
   }
 
+  let token: string | undefined;
   try {
     const existing = await Notifications.getPermissionsAsync();
 
@@ -92,14 +93,9 @@ export async function safeRegisterExpoPushToken(
       projectId ? { projectId } : {}
     );
 
-    const token = tokenResponse.data;
-
-    if (!token) {
-      return;
-    }
-
-    await saveToken(token);
+    token = tokenResponse.data;
   } catch {
-    /* pas de token / pas de réseau / build sans push */
+    return;
   }
+  if (token) await saveToken(token);
 }

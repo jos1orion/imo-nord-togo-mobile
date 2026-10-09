@@ -1,12 +1,32 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  Alert,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+  ScrollView,
+  Modal,
+  FlatList,
+  Image,
+  StatusBar,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { safeImpactLight } from '../lib/expoHapticsSafe';
 import { Property, PROPERTY_TYPE_COLORS } from '../types';
-import { formatPrice } from '../data/mock-data';
+import { formatPrice } from '../utils/format';
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
+import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import LazyImage from './LazyImage';
 import { isFeaturedProperty } from '../utils/propertyVisibility';
@@ -21,8 +41,16 @@ interface PropertyCardProps {
 
 const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact = false }) => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const cardWidth = compact ? width * 0.8 : width - 32;
+  const carouselWidth = cardWidth - 2;
   const { toggleFavorite, isFavorite, propertyStats, tType, t, language } = useApp();
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const cardOpacity = useSharedValue(0);
+  const favoriteScale = useSharedValue(1);
+  const viewerRef = useRef<FlatList<string>>(null);
   const favorite = isFavorite(property.id);
   const likes = propertyStats[property.id]?.likes ?? 0;
   const statusLabel = property.status === 'occupied' ? t('status_occupied') : t('status_available');
@@ -40,24 +68,57 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
   const createdTime = new Date(property.publishedAt ?? property.createdAt).getTime();
   const isNew = Number.isFinite(createdTime) && Date.now() - createdTime < 7 * 24 * 60 * 60 * 1000;
   const isVerified = (property.listingStatus ?? 'approved') === 'approved';
+  const cardAnimatedStyle = useAnimatedStyle(() => ({ opacity: cardOpacity.value }));
+  const favoriteAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: favoriteScale.value }],
+  }));
 
   const locationLabel = [property.neighborhood, property.location].filter(Boolean).join(', ');
   const neighborhoodLabel = property.neighborhood?.trim();
-  const coverImage =
-    (property.images || []).find(
-      value => typeof value === 'string' && value.trim().length > 0 && value !== 'null'
-    ) || 'https://via.placeholder.com/400x300';
+  const images = (property.images || []).filter(
+    value => typeof value === 'string' && value.trim().length > 0 && value !== 'null'
+  );
+  const displayImages = images.length ? images : ['https://via.placeholder.com/400x300'];
+  const openViewerAt = (index: number) => {
+    setViewerIndex(index);
+    setViewerOpen(true);
+  };
+
+  useEffect(() => {
+    cardOpacity.value = withTiming(1, { duration: 260 });
+  }, [cardOpacity]);
+
+  useEffect(() => {
+    if (!viewerOpen) return;
+    requestAnimationFrame(() => viewerRef.current?.scrollToIndex({ index: viewerIndex, animated: false }));
+  }, [viewerOpen, viewerIndex]);
 
   return (
-    <TouchableOpacity
-      style={[styles.card, { width: cardWidth }, compact && styles.compactCard]}
-      onPress={onPress}
-      activeOpacity={0.9}
-      accessibilityRole="button"
-      accessibilityLabel={`${t('view_details')}: ${property.title}`}
-    >
+    <Animated.View style={[styles.card, { width: cardWidth }, compact && styles.compactCard, cardAnimatedStyle]}>
       <View style={[styles.imageContainer, compact && styles.imageContainerCompact]}>
-        <LazyImage uri={coverImage} style={styles.image} resizeMode="cover" />
+        <ScrollView
+          horizontal
+          pagingEnabled
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          onMomentumScrollEnd={event => {
+            setActiveImageIndex(Math.round(event.nativeEvent.contentOffset.x / carouselWidth));
+          }}
+        >
+          {displayImages.map((uri, index) => (
+            <TouchableOpacity
+              key={`${uri}-${index}`}
+              activeOpacity={1}
+              style={{ width: carouselWidth }}
+              onPress={() => openViewerAt(index)}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={`${property.title}, ${index + 1}/${displayImages.length}`}
+            >
+              <LazyImage uri={uri} style={styles.image} resizeMode="cover" />
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
         <View style={[styles.typeBadge, { backgroundColor: PROPERTY_TYPE_COLORS[property.type] }]}>
           <Text style={styles.typeText}>{tType(property.type)}</Text>
         </View>
@@ -69,7 +130,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
           )}
           {isVerified && (
             <View style={[styles.statusBadge, styles.statusBadgeVerified]}>
-              <Ionicons name="checkmark-circle" size={12} color={COLORS.primary} />
+              <Ionicons name="checkmark-circle" size={12} color={themeColors.primary} />
               <Text style={styles.statusBadgeText}>{t('card_badge_verified')}</Text>
             </View>
           )}
@@ -84,39 +145,68 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
           onPress={(event) => {
             event.stopPropagation?.();
             void safeImpactLight();
-            toggleFavorite(property.id);
+            favoriteScale.value = withSequence(
+              withTiming(1.2, { duration: 100 }),
+              withSpring(1, { damping: 8, stiffness: 220 })
+            );
+            void toggleFavorite(property.id).catch(error => {
+              Alert.alert(t('error'), error instanceof Error ? error.message : t('error'));
+            });
           }}
           accessibilityRole="button"
           accessibilityLabel={favorite ? t('a11y_remove_favorite') : t('a11y_add_favorite')}
         >
-          <Ionicons name={favorite ? 'heart' : 'heart-outline'} size={16} color={favorite ? COLORS.error : COLORS.textMuted} />
+          <Animated.View style={favoriteAnimatedStyle}>
+            <Ionicons name={favorite ? 'heart' : 'heart-outline'} size={16} color={favorite ? themeColors.danger : themeColors.onSurfaceMuted} />
+          </Animated.View>
         </TouchableOpacity>
         <View style={[styles.likesBadge, likes === 0 && styles.likesBadgeEmpty]}>
           <Text style={[styles.likesText, likes === 0 && styles.likesTextEmpty]}>{likes}</Text>
         </View>
         {isFeaturedProperty(property) && (
           <View style={styles.featuredBadge}>
-            <Ionicons name="star" size={12} color="#F59E0B" />
+            <Ionicons name="star" size={12} color={themeColors.gold} />
             <Text style={styles.featuredText}>{t('card_badge_top')}</Text>
           </View>
         )}
+        {displayImages.length > 1 && (
+          <>
+            <View style={styles.imageDots} pointerEvents="none">
+              {displayImages.map((_, index) => (
+                <View
+                  key={`card-dot-${index}`}
+                  style={[styles.imageDot, index === activeImageIndex && styles.imageDotActive]}
+                />
+              ))}
+            </View>
+            <View style={styles.imageCounter} pointerEvents="none">
+              <Text style={styles.imageCounterText}>{activeImageIndex + 1}/{displayImages.length}</Text>
+            </View>
+          </>
+        )}
       </View>
 
-      <View style={[styles.content, compact && styles.contentCompact]}>
+      <TouchableOpacity
+        style={[styles.content, compact && styles.contentCompact]}
+        onPress={onPress}
+        activeOpacity={0.9}
+        accessibilityRole="button"
+        accessibilityLabel={`${t('view_details')}: ${property.title}`}
+      >
         <Text style={styles.title} numberOfLines={1}>{property.title}</Text>
         <View style={styles.locationRow}>
-          <Ionicons name="location" size={14} color="#9CA3AF" />
+          <Ionicons name="location" size={14} color={themeColors.onSurfaceSoft} />
           <Text style={styles.location} numberOfLines={1}>{locationLabel}</Text>
         </View>
         {neighborhoodLabel && (
           <View style={styles.neighborhoodBadge}>
-            <Ionicons name="navigate" size={12} color={COLORS.primary} />
+            <Ionicons name="navigate" size={12} color={themeColors.primary} />
             <Text style={styles.neighborhoodBadgeText} numberOfLines={1}>{neighborhoodLabel}</Text>
           </View>
         )}
         <View style={styles.metaRow}>
           <View style={styles.metaTag}>
-            <Ionicons name="pricetag" size={12} color={COLORS.primary} />
+            <Ionicons name="pricetag" size={12} color={themeColors.primary} />
             <Text style={styles.metaTagText}>{statusLabel}</Text>
           </View>
           {!compact && publishedLabel.length > 0 && (
@@ -130,19 +220,19 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
           <View style={styles.details}>
             {property.bedrooms !== undefined && (
               <View style={styles.detailItem}>
-                <Ionicons name="bed" size={14} color="#9CA3AF" />
+                <Ionicons name="bed" size={14} color={themeColors.onSurfaceSoft} />
                 <Text style={styles.detailText}>{property.bedrooms}</Text>
               </View>
             )}
             {property.bathrooms !== undefined && (
               <View style={styles.detailItem}>
-                <Ionicons name="water" size={14} color="#9CA3AF" />
+                <Ionicons name="water" size={14} color={themeColors.onSurfaceSoft} />
                 <Text style={styles.detailText}>{property.bathrooms}</Text>
               </View>
             )}
             {property.area !== undefined && (
               <View style={styles.detailItem}>
-                <Ionicons name="resize" size={14} color="#9CA3AF" />
+                <Ionicons name="resize" size={14} color={themeColors.onSurfaceSoft} />
                 <Text style={styles.detailText}>{property.area} m2</Text>
               </View>
             )}
@@ -165,20 +255,60 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
             )}
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+      <Modal
+        visible={viewerOpen}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setViewerOpen(false)}
+      >
+        <View style={styles.viewerBackdrop}>
+          <StatusBar barStyle="light-content" />
+          <TouchableOpacity
+            style={styles.viewerClose}
+            onPress={() => setViewerOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel={t('close')}
+          >
+            <Ionicons name="close" size={24} color={themeColors.white} />
+          </TouchableOpacity>
+          <FlatList
+            ref={viewerRef}
+            data={displayImages}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(uri, index) => `property-viewer-${property.id}-${index}-${uri}`}
+            getItemLayout={(_, index) => ({
+              length: width,
+              offset: width * index,
+              index,
+            })}
+            onMomentumScrollEnd={event => {
+              setViewerIndex(Math.round(event.nativeEvent.contentOffset.x / width));
+            }}
+            renderItem={({ item }) => (
+              <View style={styles.viewerImageWrap}>
+                <Image source={{ uri: item }} style={styles.viewerImage} resizeMode="contain" />
+              </View>
+            )}
+          />
+          <Text style={styles.viewerCounter}>{viewerIndex + 1}/{displayImages.length}</Text>
+        </View>
+      </Modal>
+    </Animated.View>
   );
 };
 
 const baseStyles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 18,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
     marginHorizontal: 8,
     marginVertical: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: COLORS.text,
+    shadowColor: COLORS.onSurface,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.06,
     shadowRadius: 14,
@@ -199,6 +329,78 @@ const baseStyles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  imageDots: {
+    position: 'absolute',
+    bottom: 10,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  imageDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
+  imageDotActive: {
+    width: 16,
+    backgroundColor: COLORS.surface,
+  },
+  imageCounter: {
+    position: 'absolute',
+    right: 10,
+    bottom: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(15,23,42,0.7)',
+  },
+  imageCounterText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  viewerBackdrop: {
+    flex: 1,
+    backgroundColor: COLORS.onSurface,
+    justifyContent: 'center',
+  },
+  viewerClose: {
+    position: 'absolute',
+    top: 52,
+    right: 18,
+    zIndex: 2,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  viewerImageWrap: {
+    width,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerImage: {
+    width,
+    height: '80%',
+  },
+  viewerCounter: {
+    position: 'absolute',
+    alignSelf: 'center',
+    bottom: 36,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    color: COLORS.white,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   typeBadge: {
     position: 'absolute',
     top: 12,
@@ -208,7 +410,7 @@ const baseStyles = StyleSheet.create({
     borderRadius: 20,
   },
   typeText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -228,26 +430,26 @@ const baseStyles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   statusBadgeNew: {
     backgroundColor: 'rgba(245,158,11,0.2)',
-    borderColor: '#F59E0B',
+    borderColor: COLORS.gold,
   },
   statusBadgeVerified: {
     backgroundColor: 'rgba(37,99,235,0.15)',
-    borderColor: '#93C5FD',
+    borderColor: COLORS.info,
   },
   statusBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#111827',
+    color: COLORS.onSurface,
   },
   occupiedBadge: {
     position: 'absolute',
     bottom: 12,
     right: 12,
-    backgroundColor: '#EF4444',
+    backgroundColor: COLORS.danger,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 10,
@@ -255,7 +457,7 @@ const baseStyles = StyleSheet.create({
   occupiedText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#fff',
+    color: COLORS.white,
   },
   featuredBadge: {
     position: 'absolute',
@@ -270,7 +472,7 @@ const baseStyles = StyleSheet.create({
     gap: 4,
   },
   featuredText: {
-    color: '#F59E0B',
+    color: COLORS.gold,
     fontSize: 10,
     fontWeight: '600',
   },
@@ -288,7 +490,7 @@ const baseStyles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   favoriteButtonActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
   },
   likesBadge: {
     position: 'absolute',
@@ -305,13 +507,13 @@ const baseStyles = StyleSheet.create({
   likesText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#fff',
+    color: COLORS.white,
   },
   likesTextEmpty: {
     color: 'rgba(255,255,255,0.7)',
   },
   content: {
-    padding: 14,
+    padding: SPACING.md,
     minHeight: 148,
   },
   contentCompact: {
@@ -320,7 +522,7 @@ const baseStyles = StyleSheet.create({
   },
   title: {
     ...typography.subtitle,
-    color: COLORS.text,
+    color: COLORS.onSurface,
     marginBottom: 6,
   },
   locationRow: {
@@ -331,7 +533,7 @@ const baseStyles = StyleSheet.create({
   },
   location: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     flex: 1,
   },
   neighborhoodBadge: {
@@ -364,7 +566,7 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: COLORS.infoBg,
+    backgroundColor: COLORS.primaryContainer,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
@@ -376,7 +578,7 @@ const baseStyles = StyleSheet.create({
   },
   metaDate: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: COLORS.onSurfaceSoft,
     maxWidth: 110,
     textAlign: 'right',
   },
@@ -393,7 +595,7 @@ const baseStyles = StyleSheet.create({
   },
   detailText: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
   },
   priceRow: {
     flexDirection: 'row',
@@ -420,7 +622,7 @@ const baseStyles = StyleSheet.create({
   detailsButtonText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#fff',
+    color: COLORS.white,
   },
 });
 

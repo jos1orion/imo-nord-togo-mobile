@@ -14,7 +14,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import EmptyState from '../components/ui/EmptyState';
@@ -25,6 +25,7 @@ type MessagesScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Mes
 
 const MessagesScreen = () => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const { chats, currentUser, users, t, language } = useApp();
   const navigation = useNavigation<MessagesScreenNavigationProp>();
   const insets = useSafeAreaInsets();
@@ -55,6 +56,7 @@ const MessagesScreen = () => {
   const renderChatItem = ({ item }: { item: typeof userChats[0] }) => {
     const otherUserId = item.participants.find(id => id !== currentUser?.id);
     const otherUser = users.find(u => u.id === otherUserId);
+    const unreadCount = currentUser ? item.unreadCount[currentUser.id] ?? 0 : 0;
 
     return (
       <TouchableOpacity
@@ -65,10 +67,14 @@ const MessagesScreen = () => {
         onPress={() => handleOpenChat(item)}
       >
         <View style={styles.chatHeader}>
-          <Ionicons name="person-circle" size={40} color={COLORS.primary} />
+          <View style={styles.chatAvatar}>
+            <Ionicons name="person" size={19} color={themeColors.primary} />
+          </View>
           <View style={styles.chatInfo}>
-            <Text style={styles.userName}>{otherUser?.name || t('messages_user_fallback')}</Text>
-            <Text style={styles.lastMessage} numberOfLines={1}>
+            <Text style={[styles.userName, unreadCount > 0 && styles.userNameUnread]}>
+              {otherUser?.name || t('messages_user_fallback')}
+            </Text>
+            <Text style={[styles.lastMessage, unreadCount > 0 && styles.lastMessageUnread]} numberOfLines={1}>
               {item.lastMessage?.content || t('messages_new_conversation')}
             </Text>
           </View>
@@ -80,11 +86,11 @@ const MessagesScreen = () => {
                   )
                 : ''}
             </Text>
-            {item.unreadCount[currentUser?.id || ''] > 0 && (
+            {unreadCount > 0 ? (
               <View style={styles.unreadBadge}>
-                <Text style={styles.unreadText}>{item.unreadCount[currentUser?.id || '']}</Text>
+                <Text style={styles.unreadText}>{unreadCount}</Text>
               </View>
-            )}
+            ) : <Ionicons name="chevron-forward" size={17} color={themeColors.onSurfaceMuted} />}
           </View>
         </View>
       </TouchableOpacity>
@@ -102,14 +108,24 @@ const MessagesScreen = () => {
       </View>
 
       <View style={styles.hero}>
-        <View style={styles.heroIcon}>
-          <Ionicons name="headset" size={26} color={COLORS.primary} />
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroIcon}>
+            <Ionicons name="headset" size={25} color={themeColors.brandAccent} />
+          </View>
+          <View style={styles.heroAccent}>
+            <Ionicons name="sparkles" size={14} color={themeColors.brandAccent} />
+          </View>
         </View>
         <Text style={styles.heroTitle}>{t('support_heading')}</Text>
         <Text style={styles.heroDescription}>{t('support_description')}</Text>
       </View>
 
-      <Text style={styles.sectionTitle}>{t('support_choose_contact')}</Text>
+      <View style={styles.sectionHeading}>
+        <View style={styles.sectionHeadingIcon}>
+          <Ionicons name="chatbubbles-outline" size={17} color={themeColors.primary} />
+        </View>
+        <Text style={styles.sectionTitle}>{t('support_choose_contact')}</Text>
+      </View>
       <TouchableOpacity
         style={styles.contactCard}
         activeOpacity={0.8}
@@ -117,14 +133,16 @@ const MessagesScreen = () => {
         onPress={() => void openSupportLink(`mailto:${getContactEmail()}`)}
       >
         <View style={[styles.contactIcon, styles.emailIcon]}>
-          <Ionicons name="mail-outline" size={22} color={COLORS.primary} />
+          <Ionicons name="mail-outline" size={22} color={themeColors.primary} />
         </View>
         <View style={styles.contactInfo}>
           <Text style={styles.contactTitle}>{t('contact_email')}</Text>
           <Text style={styles.contactDescription}>{t('support_email_description')}</Text>
           <Text style={styles.contactDetail}>{getContactEmail()}</Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+        <View style={styles.contactAction}>
+          <Ionicons name="arrow-forward" size={17} color={themeColors.primary} />
+        </View>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -134,25 +152,32 @@ const MessagesScreen = () => {
         onPress={() => void openSupportLink(getWhatsAppUrl())}
       >
         <View style={[styles.contactIcon, styles.whatsappIcon]}>
-          <Ionicons name="logo-whatsapp" size={22} color="#15803D" />
+          <Ionicons name="logo-whatsapp" size={22} color={themeColors.success} />
         </View>
         <View style={styles.contactInfo}>
           <Text style={styles.contactTitle}>{t('contact_whatsapp')}</Text>
           <Text style={styles.contactDescription}>{t('support_whatsapp_description')}</Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+        <View style={[styles.contactAction, styles.whatsappAction]}>
+          <Ionicons name="arrow-forward" size={17} color={themeColors.success} />
+        </View>
       </TouchableOpacity>
 
-      <Text style={[styles.sectionTitle, styles.conversationsTitle]}>
-        {t('support_conversations')}
-      </Text>
+      <View style={[styles.conversationsHeading, styles.conversationsTitle]}>
+        <Text style={styles.sectionTitle}>{t('support_conversations')}</Text>
+        {userChats.length > 0 && (
+          <View style={styles.conversationCount}>
+            <Text style={styles.conversationCountText}>{userChats.length}</Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={userChats.sort((a, b) =>
+        data={[...userChats].sort((a, b) =>
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         )}
         renderItem={renderChatItem}
@@ -188,21 +213,22 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   header: {
-    paddingBottom: 20,
+    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontSize: 27,
+    fontWeight: '800',
+    color: COLORS.onSurface,
+    letterSpacing: -0.5,
   },
   availability: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    backgroundColor: COLORS.successBg,
+    backgroundColor: COLORS.successContainer,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
@@ -211,117 +237,190 @@ const baseStyles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: '#16A34A',
+    backgroundColor: COLORS.accent,
   },
   availabilityText: {
-    color: '#166534',
+    color: COLORS.onSuccessContainer,
     fontSize: 12,
     fontWeight: '600',
   },
   hero: {
-    backgroundColor: COLORS.infoBg,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 24,
+    backgroundColor: COLORS.brand,
+    borderRadius: 19,
+    padding: 16,
+    marginBottom: 18,
     borderWidth: 1,
-    borderColor: '#DBEAFE',
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
   },
   heroIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.card,
-    marginBottom: 16,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  heroAccent: {
+    width: 29,
+    height: 29,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(244,199,107,0.14)',
   },
   heroTitle: {
-    color: COLORS.text,
-    fontSize: 21,
-    fontWeight: '700',
-    marginBottom: 7,
+    color: COLORS.white,
+    fontSize: 19,
+    lineHeight: 24,
+    fontWeight: '800',
+    marginBottom: 6,
   },
   heroDescription: {
-    color: COLORS.textMuted,
-    fontSize: 14,
-    lineHeight: 21,
+    color: COLORS.onBrandMuted,
+    fontSize: 12,
+    lineHeight: 18,
+    maxWidth: 300,
+  },
+  sectionHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 9,
+  },
+  sectionHeadingIcon: {
+    width: 31,
+    height: 31,
+    borderRadius: 10,
+    backgroundColor: COLORS.primaryContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionTitle: {
-    color: COLORS.text,
+    color: COLORS.onSurface,
     fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 12,
+    fontWeight: '800',
   },
   contactCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 15,
-    marginBottom: 10,
+    padding: 14,
+    marginBottom: 11,
+    minHeight: 94,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   },
   contactIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+    width: 48,
+    height: 48,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 13,
   },
   emailIcon: {
-    backgroundColor: COLORS.infoBg,
+    backgroundColor: COLORS.primaryContainer,
   },
   whatsappIcon: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: COLORS.successContainer,
   },
   contactInfo: {
     flex: 1,
-    marginRight: 10,
+    marginRight: 12,
   },
   contactTitle: {
-    color: COLORS.text,
+    color: COLORS.onSurface,
     fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 3,
+    fontWeight: '800',
+    marginBottom: 4,
   },
   contactDescription: {
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 16,
   },
   contactDetail: {
     color: COLORS.primary,
     fontSize: 12,
-    fontWeight: '600',
-    marginTop: 5,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  contactAction: {
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    backgroundColor: COLORS.primaryContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  whatsappAction: {
+    backgroundColor: COLORS.successContainer,
   },
   conversationsTitle: {
-    marginTop: 18,
-    marginBottom: 8,
+    marginTop: 21,
+    marginBottom: 10,
+  },
+  conversationsHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  conversationCount: {
+    minWidth: 30,
+    height: 30,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primaryContainer,
+  },
+  conversationCountText: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: '800',
   },
   listContent: {
     flexGrow: 1,
   },
   emptyConversations: {
-    paddingTop: 14,
-    paddingBottom: 18,
+    paddingTop: 18,
+    paddingBottom: 22,
+    marginHorizontal: 0,
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   chatList: {
     flex: 1,
   },
   chatItem: {
-    backgroundColor: COLORS.card,
-    marginHorizontal: 10,
+    backgroundColor: COLORS.surface,
+    marginHorizontal: 18,
     marginVertical: 5,
-    borderRadius: 10,
-    padding: 15,
-    elevation: 2,
-    shadowColor: COLORS.text,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+    borderRadius: 18,
+    padding: 14,
+    elevation: 1,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 9,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -329,26 +428,42 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  chatAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primaryContainer,
+  },
   chatInfo: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 12,
+    marginRight: 8,
   },
   userName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.onSurface,
+  },
+  userNameUnread: {
+    fontWeight: '800',
   },
   lastMessage: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    marginTop: 2,
+    fontSize: 12,
+    color: COLORS.onSurfaceMuted,
+    marginTop: 4,
+  },
+  lastMessageUnread: {
+    color: COLORS.onSurface,
+    fontWeight: '600',
   },
   chatMeta: {
     alignItems: 'flex-end',
   },
   timestamp: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: COLORS.onSurfaceMuted,
   },
   unreadBadge: {
     backgroundColor: COLORS.primary,
@@ -371,7 +486,7 @@ const baseStyles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginTop: 10,
   },
   loginCta: {
@@ -385,7 +500,7 @@ const baseStyles = StyleSheet.create({
     borderRadius: 999,
   },
   loginCtaText: {
-    color: '#fff',
+    color: COLORS.white,
     fontWeight: '700',
   },
 });

@@ -8,6 +8,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -15,15 +16,17 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
+import { safeImpactLight } from '../lib/expoHapticsSafe';
 
 type ChatScreenRouteProp = RouteProp<RootStackParamList, 'Chat'>;
 type ChatScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Chat'>;
 
 const ChatScreen = () => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const { getChatMessages, sendMessage, markMessagesAsRead, users, currentUser, t } = useApp();
   const route = useRoute<ChatScreenRouteProp>();
   const navigation = useNavigation<ChatScreenNavigationProp>();
@@ -38,9 +41,11 @@ const ChatScreen = () => {
 
   useEffect(() => {
     if (currentUser) {
-      markMessagesAsRead(chatId, currentUser.id);
+      void markMessagesAsRead(chatId, currentUser.id).catch(error => {
+        Alert.alert(t('error'), error instanceof Error ? error.message : t('error'));
+      });
     }
-  }, [chatId, currentUser, markMessagesAsRead]);
+  }, [chatId, currentUser, markMessagesAsRead, t]);
 
   useEffect(() => {
     // Scroll to bottom when new messages arrive
@@ -51,13 +56,18 @@ const ChatScreen = () => {
     }
   }, [messages]);
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!currentUser) {
       return;
     }
     if (messageText.trim()) {
-      void sendMessage(otherUserId, messageText.trim());
-      setMessageText('');
+      try {
+        await sendMessage(otherUserId, messageText.trim());
+        setMessageText('');
+        void safeImpactLight();
+      } catch (error) {
+        Alert.alert(t('error'), error instanceof Error ? error.message : t('error'));
+      }
     }
   };
 
@@ -80,13 +90,13 @@ const ChatScreen = () => {
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
       >
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={22} color={COLORS.primary} />
+            <Ionicons name="arrow-back" size={22} color={themeColors.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{otherUserName}</Text>
           <View style={{ width: 24 }} />
@@ -101,6 +111,7 @@ const ChatScreen = () => {
           style={styles.messagesList}
           contentContainerStyle={styles.messagesContainer}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         />
 
@@ -111,7 +122,7 @@ const ChatScreen = () => {
             value={messageText}
             onChangeText={setMessageText}
             placeholder={currentUser ? t('typeMessage') : t('chat_placeholder_login')}
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={themeColors.onSurfaceMuted}
             multiline
             editable={!!currentUser}
             maxLength={500}
@@ -121,7 +132,7 @@ const ChatScreen = () => {
             onPress={handleSendMessage}
             disabled={!messageText.trim() || !currentUser}
           >
-            <Ionicons name="send" size={18} color="#fff" />
+            <Ionicons name="send" size={18} color={themeColors.white} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -143,14 +154,14 @@ const baseStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 15,
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: COLORS.onSurface,
   },
   messagesList: {
     flex: 1,
@@ -170,7 +181,7 @@ const baseStyles = StyleSheet.create({
   },
   otherMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -182,7 +193,7 @@ const baseStyles = StyleSheet.create({
     color: 'white',
   },
   otherMessageText: {
-    color: COLORS.text,
+    color: COLORS.onSurface,
   },
   timestamp: {
     fontSize: 12,
@@ -193,13 +204,13 @@ const baseStyles = StyleSheet.create({
     textAlign: 'right',
   },
   otherTimestamp: {
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 10,
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.surface,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
@@ -213,7 +224,7 @@ const baseStyles = StyleSheet.create({
     marginRight: 10,
     maxHeight: 100,
     fontSize: 16,
-    color: COLORS.text,
+    color: COLORS.onSurface,
     backgroundColor: COLORS.background,
   },
   sendButton: {
@@ -225,7 +236,7 @@ const baseStyles = StyleSheet.create({
     alignItems: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: '#cbd5f5',
+    backgroundColor: COLORS.surfaceAlt,
   },
 });
 

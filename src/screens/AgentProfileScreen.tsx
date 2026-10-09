@@ -13,7 +13,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import { isPublicProperty } from '../utils/propertyVisibility';
@@ -23,6 +23,7 @@ type AgentProfileScreenNavigationProp = StackNavigationProp<RootStackParamList, 
 
 const AgentProfileScreen = () => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const { getAgentProfile, users, properties, currentUser, sendMessage, t, tType } = useApp();
   const route = useRoute<AgentProfileScreenRouteProp>();
   const navigation = useNavigation<AgentProfileScreenNavigationProp>();
@@ -32,7 +33,7 @@ const AgentProfileScreen = () => {
   const user = users.find(u => u.id === userId);
   const agentProperties = properties.filter(p => p.clientId === userId && isPublicProperty(p));
 
-  const handleContact = () => {
+  const handleContact = async () => {
     if (!currentUser) {
       Alert.alert(t('error'), t('loginRequired'));
       return;
@@ -44,10 +45,14 @@ const AgentProfileScreen = () => {
     }
 
     // Send initial message
-    const { chatId } = sendMessage(userId, t('helloAgent'));
-    InteractionManager.runAfterInteractions(() => {
-      navigation.navigate('Chat', { chatId, otherUserId: userId });
-    });
+    try {
+      const { chatId } = await sendMessage(userId, t('helloAgent'));
+      InteractionManager.runAfterInteractions(() => {
+        navigation.navigate('Chat', { chatId, otherUserId: userId });
+      });
+    } catch (error) {
+      Alert.alert(t('error'), error instanceof Error ? error.message : t('error'));
+    }
   };
 
   const renderStars = (rating: number) => {
@@ -58,7 +63,7 @@ const AgentProfileScreen = () => {
           key={i}
           name={i <= rating ? 'star' : 'star-outline'}
           size={20}
-          color="#FFD700"
+          color={themeColors.gold}
         />
       );
     }
@@ -77,7 +82,7 @@ const AgentProfileScreen = () => {
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
+          <Ionicons name="arrow-back" size={24} color={themeColors.primary} />
         </TouchableOpacity>
         <Text style={styles.title}>{t('agentProfile')}</Text>
         <View style={{ width: 24 }} />
@@ -85,7 +90,7 @@ const AgentProfileScreen = () => {
 
       <View style={styles.profileCard}>
         <View style={styles.profileHeader}>
-          <Ionicons name="person-circle" size={80} color={COLORS.primary} />
+          <Ionicons name="person-circle" size={80} color={themeColors.primary} />
           <View style={styles.profileInfo}>
             <Text style={styles.name}>{user.name}</Text>
             {agentProfile?.company && (
@@ -149,7 +154,7 @@ const AgentProfileScreen = () => {
                 Alert.alert(t('call'), `${t('call')} ${user.phone}?`);
               }}
             >
-              <Ionicons name="call" size={20} color={COLORS.primary} />
+              <Ionicons name="call" size={20} color={themeColors.primary} />
               <Text style={styles.phoneButtonText}>{user.phone}</Text>
             </TouchableOpacity>
           )}
@@ -186,7 +191,7 @@ const AgentProfileScreen = () => {
 const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
@@ -195,7 +200,7 @@ const baseStyles = StyleSheet.create({
     padding: 15,
     backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: COLORS.borderStrong,
   },
   title: {
     fontSize: 20,
@@ -220,11 +225,11 @@ const baseStyles = StyleSheet.create({
   name: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: COLORS.onSurface,
   },
   company: {
     fontSize: 16,
-    color: '#666',
+    color: COLORS.onSurfaceMuted,
     marginTop: 2,
   },
   rating: {
@@ -235,7 +240,7 @@ const baseStyles = StyleSheet.create({
   ratingText: {
     marginLeft: 5,
     fontSize: 14,
-    color: '#666',
+    color: COLORS.onSurfaceMuted,
   },
   section: {
     marginBottom: 20,
@@ -243,12 +248,12 @@ const baseStyles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: COLORS.onSurface,
     marginBottom: 10,
   },
   bio: {
     fontSize: 16,
-    color: '#666',
+    color: COLORS.onSurfaceMuted,
     lineHeight: 24,
   },
   stats: {
@@ -266,7 +271,7 @@ const baseStyles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 14,
-    color: '#666',
+    color: COLORS.onSurfaceMuted,
     marginTop: 2,
   },
   specialties: {
@@ -274,7 +279,7 @@ const baseStyles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   specialtyTag: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: COLORS.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 15,
@@ -283,7 +288,7 @@ const baseStyles = StyleSheet.create({
   },
   specialtyText: {
     fontSize: 14,
-    color: '#333',
+    color: COLORS.onSurface,
   },
   contactSection: {
     marginTop: 20,
@@ -330,11 +335,11 @@ const baseStyles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: COLORS.surfaceAlt,
   },
   propertyTitle: {
     fontSize: 16,
-    color: '#333',
+    color: COLORS.onSurface,
     flex: 1,
   },
   propertyPrice: {
@@ -344,7 +349,7 @@ const baseStyles = StyleSheet.create({
   },
   error: {
     fontSize: 16,
-    color: '#ff0000',
+    color: COLORS.danger,
     textAlign: 'center',
     marginTop: 50,
   },

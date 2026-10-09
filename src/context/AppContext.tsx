@@ -35,11 +35,11 @@ import {
   Contract,
   Payment,
   TenantDocument,
-  MortgageCalculator,
   AppNotification,
 } from '../types';
 import { Language, TranslationKey, setCurrentLanguage, translate, translateStatus, translateType } from '../i18n';
 import { isExpiredProperty, isPublicProperty } from '../utils/propertyVisibility';
+import { isDirectPublishingEnabled } from '../lib/publishing';
 
 interface AppContextType {
   properties: Property[];
@@ -84,11 +84,11 @@ interface AppContextType {
   deleteProperty: (id: string) => Promise<void>;
   addClient: (client: Omit<Client, 'id' | 'createdAt'>) => Promise<Client>;
   updateClient: (id: string, updates: Partial<Omit<Client, 'id' | 'createdAt'>>) => Promise<void>;
-  addNeighborhood: (name: string) => void;
+  addNeighborhood: (name: string) => Promise<void>;
   updateNeighborhood: (oldName: string, newName: string) => Promise<void>;
-  removeNeighborhood: (name: string) => void;
+  removeNeighborhood: (name: string) => Promise<void>;
   addMyPropertyId: (id: string) => void;
-  toggleFavorite: (id: string) => void;
+  toggleFavorite: (id: string) => Promise<void>;
   isFavorite: (id: string) => boolean;
   addSavedSearch: (data: Omit<SavedSearch, 'id' | 'createdAt'>) => void;
   removeSavedSearch: (id: string) => void;
@@ -125,8 +125,8 @@ interface AppContextType {
   payments: Payment[];
   tenantDocuments: TenantDocument[];
   notifications: AppNotification[];
-  markNotificationRead: (id: string) => void;
-  clearNotifications: () => void;
+  markNotificationRead: (id: string) => Promise<void>;
+  clearNotifications: () => Promise<void>;
   addTenantDocumentRecord: (doc: TenantDocument) => void;
   addContract: (data: Omit<Contract, 'id' | 'createdAt'>) => Promise<Contract>;
   updateContract: (id: string, updates: Partial<Omit<Contract, 'id' | 'createdAt'>>) => Promise<void>;
@@ -135,11 +135,12 @@ interface AppContextType {
   updatePayment: (id: string, updates: Partial<Omit<Payment, 'id' | 'createdAt'>>) => Promise<void>;
   updatePaymentStatus: (id: string, status: Payment['status']) => Promise<void>;
   // Messaging functions
-  sendMessage: (receiverId: string, content: string, propertyId?: string) => { message: Message; chatId: string };
+  sendMessage: (receiverId: string, content: string, propertyId?: string) => Promise<{ message: Message; chatId: string }>;
   getChatMessages: (chatId: string) => Message[];
-  markMessagesAsRead: (chatId: string, userId: string) => void;
+  markMessagesAsRead: (chatId: string, userId: string) => Promise<void>;
   // Review functions
   addReview: (propertyId: string, rating: number, comment: string) => Promise<Review>;
+  setReviewVerified: (id: string, verified: boolean) => Promise<void>;
   getPropertyReviews: (propertyId: string) => Review[];
   getAverageRating: (propertyId: string) => number;
   // Agent profile functions
@@ -157,6 +158,7 @@ interface AppContextType {
   isPremium: (propertyId: string) => boolean;
   // Commission system
   createCommissionRule: (data: Omit<CommissionRule, 'id'>) => CommissionRule;
+  toggleCommissionRule: (id: string) => void;
   calculateCommission: (propertyId: string, salePrice: number) => number;
   // Transactions
   createTransaction: (data: Omit<Transaction, 'id' | 'createdAt'>) => Transaction;
@@ -164,8 +166,6 @@ interface AppContextType {
   // Documents
   addDocument: (data: Omit<Document, 'id' | 'uploadedAt'>) => Document;
   getPropertyDocuments: (propertyId: string) => Document[];
-  // Mortgage calculator
-  calculateMortgage: (data: Omit<MortgageCalculator, 'monthlyPayment' | 'totalPayment' | 'totalInterest'>) => MortgageCalculator;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -432,6 +432,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const visitRecorded = useRef(false);
   const listingStatusRef = useRef<Record<string, ListingStatus | undefined>>({});
   const remoteNotificationIdsRef = useRef<Set<string>>(new Set());
+  const suspendedAccountNotice = useRef<string | null>(null);
 
   useEffect(() => {
     const loadPersisted = async () => {
@@ -656,7 +657,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     role: User['role'] = 'USER',
     agentStatus: User['agentStatus'] = 'none',
     agentRejectionReason?: string | null,
-    profile?: { full_name?: string | null; phone?: string | null }
+    profile?: {
+      full_name?: string | null;
+      phone?: string | null;
+      account_status?: 'active' | 'suspended' | 'pending' | null;
+    }
   ): User => {
     const email = String(user.email || '').trim();
     const metadata = user.user_metadata ?? {};
@@ -677,6 +682,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       verified: user.email_confirmed_at ? true : false,
       isAdmin: role === 'ADMIN',
       role,
+      accountStatus:
+        profile?.account_status === 'suspended' || profile?.account_status === 'pending'
+          ? profile.account_status
+          : 'active',
       agentStatus,
       agentRejectionReason: agentRejectionReason ?? null,
     });
@@ -689,9 +698,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     const { data, error } = await supabase
       .from('profiles')
-      .select('full_name, phone, role, agent_status, agent_rejection_reason')
+      .select('full_name, phone, role, account_status, agent_status, agent_rejection_reason')
       .eq('id', authUser.id)
       .maybeSingle();
+    if (!error && data?.account_status === 'suspended') {
+      setCurrentUser(null);
+      if (suspendedAccountNotice.current !== authUser.id) {
+        suspendedAccountNotice.current = authUser.id;
+        Alert.alert(
+          language === 'en' ? 'Account suspended' : 'Compte suspendu',
+          language === 'en'
+            ? 'An administrator has suspended this account. Contact support for assistance.'
+            : 'Un administrateur a suspendu ce compte. Contactez le support pour obtenir de l’aide.'
+        );
+      }
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) console.error('Unable to sign out suspended account.', signOutError.message);
+      return;
+    }
+    suspendedAccountNotice.current = null;
     // Failing closed prevents a temporary profile/RLS error from granting admin access.
     setCurrentUser(mapAuthUser(
       authUser,
@@ -700,7 +725,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       error ? null : data?.agent_rejection_reason,
       error || !data ? undefined : data
     ));
-  }, [mapAuthUser]);
+  }, [language, mapAuthUser]);
 
   const notifyLocal = useCallback(async (title: string, body: string) => {
     const notification: AppNotification = {
@@ -746,32 +771,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (hydrated) void storage.setItem(STORAGE_KEYS.notifications, JSON.stringify(notifications));
   }, [notifications, hydrated]);
 
-  const markNotificationRead = useCallback((id: string) => {
-    setNotifications(prev => prev.map(item => item.id === id ? { ...item, read: true } : item));
+  const markNotificationRead = useCallback(async (id: string) => {
     if (remoteNotificationIdsRef.current.has(id)) {
-      void supabase.from('notifications').update({ read: true }).eq('id', id).then(({ error }) => {
-        if (error) console.warn('Notification read update error:', error.message);
-      });
+      const { error } = await supabase.from('notifications').update({ read: true }).eq('id', id);
+      if (error) throw error;
     }
+    setNotifications(prev => prev.map(item => item.id === id ? { ...item, read: true } : item));
   }, []);
 
-  const clearNotifications = useCallback(() => {
-    setNotifications([]);
+  const clearNotifications = useCallback(async () => {
     if (currentUser?.id) {
-      void supabase.from('notifications').delete().eq('user_id', currentUser.id).then(({ error }) => {
-        if (error) console.warn('Notifications delete error:', error.message);
-      });
+      const { error } = await supabase.from('notifications').delete().eq('user_id', currentUser.id);
+      if (error) throw error;
     }
+    setNotifications([]);
   }, [currentUser]);
 
   const registerPushToken = useCallback(async () => {
     if (!currentUser) return;
     await safeRegisterExpoPushToken(async token => {
-      await supabase.from('user_push_tokens').upsert({
+      const { error } = await supabase.from('user_push_tokens').upsert({
         user_id: currentUser.id,
         token,
         updated_at: new Date().toISOString(),
       });
+      if (error) throw error;
     });
   }, [currentUser]);
 
@@ -825,7 +849,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   useEffect(() => {
     if (!currentUser) return;
-    registerPushToken();
+    void registerPushToken().catch(error => {
+      console.warn('Push token registration failed:', error);
+    });
   }, [currentUser, registerPushToken]);
 
     const resolveAuthUserId = useCallback(async () => {
@@ -978,7 +1004,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             return Array.from(merged.values());
           });
         }
-        const { data: tenants } = await supabase.from('tenants').select('*');
+        const { data: tenants, error: tenantsError } = await supabase.from('tenants').select('*');
+        if (tenantsError) throw tenantsError;
         if (tenants) {
           const mappedTenants: Client[] = tenants.map(t => ({
             id: t.id,
@@ -989,10 +1016,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }));
           setClients(mappedTenants);
         }
-        const { data: contractRows } = await supabase
+        const { data: contractRows, error: contractsError } = await supabase
           .from('contracts')
           .select('*')
           .order('created_at', { ascending: false });
+        if (contractsError) throw contractsError;
         if (contractRows) {
           const mappedContracts: Contract[] = contractRows.map(c => ({
             id: c.id,
@@ -1006,10 +1034,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }));
           setContracts(mappedContracts);
         }
-        const { data: paymentRows } = await supabase
+        const { data: paymentRows, error: paymentsError } = await supabase
           .from('payments')
           .select('*')
           .order('created_at', { ascending: false });
+        if (paymentsError) throw paymentsError;
         if (paymentRows) {
           const mappedPayments: Payment[] = paymentRows.map(p => ({
             id: p.id,
@@ -1022,10 +1051,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }));
           setPayments(mappedPayments);
         }
-        const { data: docRows } = await supabase
+        const { data: docRows, error: documentsError } = await supabase
           .from('tenant_documents')
           .select('*')
           .order('created_at', { ascending: false });
+        if (documentsError) throw documentsError;
         if (docRows) {
           const mappedDocs: TenantDocument[] = docRows.map(d => ({
             id: d.id,
@@ -1152,14 +1182,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${currentUser.id}` },
           payload => {
-            const next = payload.new as { role?: User['role']; agent_status?: User['agentStatus']; agent_rejection_reason?: string | null } | null;
+            const next = payload.new as {
+              role?: User['role'];
+              account_status?: User['accountStatus'];
+              agent_status?: User['agentStatus'];
+              agent_rejection_reason?: string | null;
+            } | null;
             const previous = payload.old as { role?: User['role']; agent_status?: User['agentStatus'] } | null;
             if (!next) return;
+
+            if (next.account_status === 'suspended') {
+              setCurrentUser(null);
+              if (suspendedAccountNotice.current !== currentUser.id) {
+                suspendedAccountNotice.current = currentUser.id;
+                Alert.alert(
+                  language === 'en' ? 'Account suspended' : 'Compte suspendu',
+                  language === 'en'
+                    ? 'An administrator has suspended this account. Contact support for assistance.'
+                    : 'Un administrateur a suspendu ce compte. Contactez le support pour obtenir de l’aide.'
+                );
+              }
+              void supabase.auth.signOut().then(({ error }) => {
+                if (error) console.error('Unable to sign out suspended account.', error.message);
+              });
+              return;
+            }
 
             setCurrentUser(prev => prev ? {
               ...prev,
               role: next.role ?? prev.role,
-              isAdmin: next.role === 'ADMIN',
+              isAdmin: (next.role ?? prev.role) === 'ADMIN',
+              accountStatus: next.account_status ?? prev.accountStatus,
               agentStatus: next.agent_status ?? prev.agentStatus,
               agentRejectionReason: next.agent_rejection_reason ?? prev.agentRejectionReason,
             } : prev);
@@ -1175,7 +1228,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return () => {
         supabase.removeChannel(channel);
       };
-    }, [hydrated, currentUser, notifyLocal]);
+    }, [hydrated, currentUser, language, notifyLocal]);
 
   const setFilters = (updates: Partial<SearchFilters>) => {
     setFiltersState(prev => ({ ...prev, ...updates }));
@@ -1197,6 +1250,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     propertyData: Omit<Property, 'id' | 'createdAt' | 'updatedAt'>,
     ownerId?: string
   ) => {
+    const submittedAt = new Date().toISOString();
+    const listingStatus =
+      propertyData.listingStatus ??
+      (isDirectPublishingEnabled() && currentUser?.accountStatus === 'active' ? 'approved' : 'pending');
     const contactName = propertyData.client?.name?.trim() || currentUser?.name?.trim() || null;
     const contactPhone = propertyData.client?.phone?.trim() || currentUser?.phone?.trim() || null;
     const contactEmail = propertyData.client?.email?.trim() || currentUser?.email?.trim() || null;
@@ -1209,8 +1266,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       neighborhood: propertyData.neighborhood ?? null,
       description: propertyData.description ?? null,
       status: propertyData.status,
-      listing_status: propertyData.listingStatus ?? 'pending',
-      submitted_at: new Date().toISOString(),
+      listing_status: listingStatus,
+      submitted_at: submittedAt,
+      approved_at: listingStatus === 'approved' ? submittedAt : null,
+      published_at: listingStatus === 'approved' ? submittedAt : null,
       owner_id: ownerId ?? currentUser?.id ?? null,
       featured: propertyData.featured ?? false,
       area: propertyData.area ?? null,
@@ -1234,6 +1293,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (updates.description !== undefined) payload.description = updates.description ?? null;
     if (updates.status !== undefined) payload.status = updates.status;
     if (updates.listingStatus !== undefined) payload.listing_status = updates.listingStatus ?? null;
+    if (updates.listingStatus !== undefined) {
+      const isApproved = updates.listingStatus === 'approved';
+      const now = isApproved ? new Date().toISOString() : null;
+      payload.approved_at = now;
+      payload.published_at = now;
+    }
     if (updates.rejectionReason !== undefined) payload.rejection_reason = updates.rejectionReason ?? null;
     if (updates.area !== undefined) payload.area = updates.area ?? null;
     if (updates.bedrooms !== undefined) payload.bedrooms = updates.bedrooms ?? null;
@@ -1271,17 +1336,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
 
       const uploaded: string[] = [];
+      const uploadedStoragePaths: string[] = [];
+      const insertedImageUrls: string[] = [];
+      const failures: string[] = [];
       for (const rawUri of uris) {
         if (!rawUri) continue;
         if (rawUri.startsWith('http')) {
-          uploaded.push(rawUri);
+          const { error: insertError } = await supabase
+            .from('property_images')
+            .insert({ property_id: propertyId, url: rawUri });
+          if (insertError) {
+            console.warn('Insert existing property image failed', {
+              error: insertError.message,
+              propertyId,
+              url: rawUri,
+            });
+            failures.push(insertError.message);
+          } else {
+            uploaded.push(rawUri);
+            insertedImageUrls.push(rawUri);
+          }
           continue;
         }
+        let sourceUriToDelete: string | null = null;
         try {
           const uri = await ensureFileUri(rawUri);
+          if (rawUri.startsWith('content://')) sourceUriToDelete = uri;
           const info = await FileSystem.getInfoAsync(uri);
           if (!info.exists) {
-            console.warn('Upload skipped, file not found', { uri, propertyId });
+            failures.push('Une photo sélectionnée est introuvable sur le téléphone.');
             continue;
           }
           const dimensions = await new Promise<{ width: number; height: number } | null>(resolve => {
@@ -1306,31 +1389,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             throw new Error('Chaque image doit faire 10 Mo maximum après compression.');
           }
 
-          const ext = 'jpg';
-          const path = `${resolvedOwnerId}/${propertyId}/${Date.now()}-${Math.random()
-            .toString(36)
-            .slice(2)}.${ext}`;
-
           const contentType = 'image/jpeg';
-
-          // Signed upload to avoid Blob/ArrayBuffer limitations in Expo Go
-          const { data: signed, error: signedError } = await supabase
-            .storage
-            .from('property-images')
-            .createSignedUploadUrl(path);
-
-          if (signedError || !signed?.signedUrl) {
-            console.warn('Signed upload URL error', {
-              error: signedError?.message ?? signedError,
-              path,
-              propertyId,
-            });
-            await FileSystem.deleteAsync(uploadUri, { idempotent: true });
-            continue;
-          }
-
           let uploadOk = false;
+          let lastUploadFailure = '';
+          let successfulPath = '';
+          const attemptedPaths: string[] = [];
           for (let attempt = 1; attempt <= 2; attempt += 1) {
+            const path = `${resolvedOwnerId}/${propertyId}/${Date.now()}-${Math.random()
+              .toString(36)
+              .slice(2)}.jpg`;
+            let signed: { signedUrl: string; token: string; path: string } | null = null;
+            let signedError: { message: string } | null = null;
+            try {
+              const result = await supabase
+                .storage
+                .from('property-images')
+                .createSignedUploadUrl(path);
+              signed = result.data;
+              signedError = result.error;
+            } catch (error) {
+              lastUploadFailure = error instanceof Error
+                ? error.message
+                : 'Impossible de préparer l’envoi d’une photo.';
+              console.warn('Signed upload URL exception', { error, path, propertyId });
+              break;
+            }
+            if (signedError || !signed?.signedUrl) {
+              lastUploadFailure = signedError?.message ?? 'Impossible de préparer l’envoi d’une photo.';
+              console.warn('Signed upload URL error', {
+                error: signedError?.message ?? signedError,
+                path,
+                propertyId,
+              });
+              break;
+            }
+            attemptedPaths.push(path);
             try {
               const uploadResult = await FileSystem.uploadAsync(signed.signedUrl, uploadUri, {
                 httpMethod: 'PUT',
@@ -1341,7 +1434,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 },
               });
               uploadOk = uploadResult.status >= 200 && uploadResult.status < 300;
+              if (uploadOk) {
+                successfulPath = path;
+                break;
+              }
               if (!uploadOk) {
+                const responseBody = uploadResult.body?.trim();
+                lastUploadFailure = [
+                  `Échec de l’envoi de la photo (HTTP ${uploadResult.status}).`,
+                  responseBody ? responseBody.slice(0, 300) : '',
+                ].filter(Boolean).join(' ');
                 console.warn('Signed upload failed', {
                   attempt,
                   status: uploadResult.status,
@@ -1349,8 +1451,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   path,
                   propertyId,
                 });
+                const retryableStatus =
+                  uploadResult.status === 408 ||
+                  uploadResult.status === 429 ||
+                  uploadResult.status >= 500;
+                if (!retryableStatus) break;
               }
             } catch (uploadError) {
+              lastUploadFailure = uploadError instanceof Error
+                ? uploadError.message
+                : 'La connexion a interrompu l’envoi de la photo.';
               console.warn('Signed upload exception', {
                 attempt,
                 error: uploadError,
@@ -1358,18 +1468,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 propertyId,
               });
             }
-            if (uploadOk) break;
-            await new Promise(resolve => setTimeout(resolve, 800 * attempt));
+            if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 800 * attempt));
           }
 
-          await FileSystem.deleteAsync(uploadUri, { idempotent: true });
+          uploadedStoragePaths.push(...(uploadOk ? [successfulPath] : attemptedPaths));
+          try {
+            await FileSystem.deleteAsync(uploadUri, { idempotent: true });
+          } catch (cleanupError) {
+            console.warn('Unable to remove the optimized temporary image.', cleanupError);
+          }
           if (!uploadOk) {
+            failures.push(lastUploadFailure || 'L’envoi d’une photo a échoué. Vérifiez votre connexion et réessayez.');
             continue;
           }
 
-          const { data } = supabase.storage.from('property-images').getPublicUrl(path);
+          const failedAttemptPaths = attemptedPaths.filter(path => path !== successfulPath);
+          if (failedAttemptPaths.length) {
+            const { error: cleanupError } = await supabase.storage
+              .from('property-images')
+              .remove(failedAttemptPaths);
+            if (cleanupError) {
+              console.warn('Unable to clean up retried property image uploads.', cleanupError);
+            }
+          }
+          const { data } = supabase.storage.from('property-images').getPublicUrl(successfulPath);
           if (data?.publicUrl) {
-            uploaded.push(data.publicUrl);
             const { error: insertError } = await supabase
               .from('property_images')
               .insert({ property_id: propertyId, url: data.publicUrl });
@@ -1379,14 +1502,51 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 propertyId,
                 url: data.publicUrl,
               });
+              failures.push(insertError.message);
+              continue;
             }
+            uploaded.push(data.publicUrl);
+            insertedImageUrls.push(data.publicUrl);
+          } else {
+            failures.push('Impossible de récupérer l’adresse d’une photo envoyée.');
           }
         } catch (err) {
           console.warn('Upload image exception', {
             error: err,
             propertyId,
           });
+          failures.push(err instanceof Error ? err.message : 'Une photo n’a pas pu être envoyée.');
+        } finally {
+          if (sourceUriToDelete) {
+            try {
+              await FileSystem.deleteAsync(sourceUriToDelete, { idempotent: true });
+            } catch (cleanupError) {
+              console.warn('Unable to remove the temporary source image.', cleanupError);
+            }
+          }
         }
+      }
+      if (failures.length) {
+        if (insertedImageUrls.length) {
+          const { error: cleanupError } = await supabase
+            .from('property_images')
+            .delete()
+            .eq('property_id', propertyId)
+            .in('url', insertedImageUrls);
+          if (cleanupError) {
+            console.warn('Unable to clean up partially saved property images.', cleanupError);
+          }
+        }
+        if (uploadedStoragePaths.length) {
+          const { error: cleanupError } = await supabase
+            .storage
+            .from('property-images')
+            .remove(uploadedStoragePaths);
+          if (cleanupError) {
+            console.warn('Unable to clean up partially uploaded property images.', cleanupError);
+          }
+        }
+        throw new Error([...new Set(failures)].join('\n'));
       }
       return uploaded;
     },
@@ -1419,11 +1579,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
 
     const base = mapPropertyRow(data);
-      const uploadedImages = propertyData.images?.length
-        ? await uploadPropertyImages(base.id, propertyData.images, ownerId)
-        : [];
+      let uploadedImages: string[] = [];
+      try {
+        uploadedImages = propertyData.images?.length
+          ? await uploadPropertyImages(base.id, propertyData.images, ownerId)
+          : [];
+      } catch (uploadError) {
+        const { error: cleanupError } = await supabase.from('properties').delete().eq('id', base.id);
+        if (cleanupError) {
+          console.warn('Unable to remove property after image upload failed.', cleanupError);
+        }
+        throw uploadError;
+      }
       if (propertyData.images?.length && uploadedImages.length === 0) {
-        await supabase.from('properties').delete().eq('id', base.id);
+        const { error: cleanupError } = await supabase.from('properties').delete().eq('id', base.id);
+        if (cleanupError) {
+          console.warn('Unable to remove property without uploaded images.', cleanupError);
+        }
         throw new Error("Aucune image n'a pu être envoyée. Réessayez.");
       }
     const next: Property = {
@@ -1442,23 +1614,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
       setProperties(prev => dedupeProperties([next, ...prev]));
-    addNeighborhood(next.neighborhood ?? next.location);
+    void addNeighborhood(next.neighborhood ?? next.location).catch(error => {
+      console.warn('Unable to save the property neighborhood:', error);
+    });
     return next;
     }, [resolveAuthUserId, uploadPropertyImages, omitUnsupportedPropertyColumns]);
 
     const updateProperty = useCallback(async (id: string, updates: Partial<Omit<Property, 'id' | 'createdAt'>>) => {
     let payload = toDbPropertyUpdates(updates);
-    while (true) {
-      const { error } = await supabase.from('properties').update(payload).eq('id', id);
-      if (!error) break;
+      let updatedProperty: { id: string } | null = null;
+      while (true) {
+        const result = await supabase
+          .from('properties')
+          .update(payload)
+          .eq('id', id)
+          .select('id')
+          .maybeSingle();
+        updatedProperty = result.data;
+        if (!result.error) break;
 
-      const missingColumn = extractMissingPropertiesColumn(error.message);
-      if (!missingColumn || !(missingColumn in payload)) {
-        throw error;
-      }
+        const missingColumn = extractMissingPropertiesColumn(result.error.message);
+        if (!missingColumn || !(missingColumn in payload)) {
+          throw result.error;
+        }
 
       unsupportedPropertyColumnsRef.current.add(missingColumn);
       payload = omitUnsupportedPropertyColumns(payload);
+    }
+    if (!updatedProperty) {
+      throw new Error('L’annonce n’a pas été modifiée. Vérifiez vos droits ou réessayez.');
     }
     setProperties(prev =>
       prev.map(p =>
@@ -1466,7 +1650,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       )
     );
     if (updates.neighborhood || updates.location) {
-      addNeighborhood((updates.neighborhood ?? updates.location) as string);
+      void addNeighborhood((updates.neighborhood ?? updates.location) as string).catch(error => {
+        console.warn('Unable to save the property neighborhood:', error);
+      });
     }
   }, [omitUnsupportedPropertyColumns]);
 
@@ -1650,22 +1836,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTenantDocuments(prev => [doc, ...prev]);
   };
 
-  const addNeighborhood = (name: string) => {
+  const addNeighborhood = async (name: string) => {
     const cleaned = name.trim();
     if (!cleaned) return;
+    const { error } = await supabase
+      .from('neighborhoods')
+      .upsert({ name: cleaned }, { onConflict: 'name' });
+    if (error) throw error;
     setNeighborhoods(prev => {
       const exists = prev.some(n => n.toLowerCase() === cleaned.toLowerCase());
       return exists ? prev : [...prev, cleaned];
     });
-    void (async () => {
-      try {
-        await supabase
-          .from('neighborhoods')
-          .upsert({ name: cleaned }, { onConflict: 'name' });
-      } catch {
-        // ignore network errors for offline mode
-      }
-    })();
   };
 
   const updateNeighborhood = async (oldName: string, newName: string) => {
@@ -1703,17 +1884,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
   };
 
-  const removeNeighborhood = (name: string) => {
+  const removeNeighborhood = async (name: string) => {
     const usageCount = properties.filter(
       p => (p.neighborhood ?? '').toLowerCase() === name.toLowerCase()
     ).length;
     if (usageCount > 0) {
-      Alert.alert(
-        'Quartier utilise',
-        `Ce quartier est utilise par ${usageCount} bien(s). Deplacez-les avant suppression.`
-      );
-      return;
+      throw new Error(`Neighborhood "${name}" is used by ${usageCount} property(ies).`);
     }
+    const { error: propertiesError } = await supabase
+      .from('properties')
+      .update({ neighborhood: null })
+      .eq('neighborhood', name);
+    if (propertiesError) throw propertiesError;
+    const { error: deleteError } = await supabase.from('neighborhoods').delete().eq('name', name);
+    if (deleteError) throw deleteError;
     setNeighborhoods(prev => prev.filter(n => n.toLowerCase() !== name.toLowerCase()));
     setProperties(prev =>
       prev.map(p =>
@@ -1722,40 +1906,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           : p
       )
     );
-    void (async () => {
-      try {
-        await supabase.from('neighborhoods').delete().eq('name', name);
-        await supabase.from('properties').update({ neighborhood: null }).eq('neighborhood', name);
-      } catch {
-        // ignore network errors for offline mode
-      }
-    })();
   };
 
   const addMyPropertyId = (id: string) => {
     setMyPropertyIds(prev => (prev.includes(id) ? prev : [id, ...prev]));
   };
 
-  const toggleFavorite = (id: string) => {
-    setFavorites(prev => {
-      const wasFavorite = prev.includes(id);
-      if (currentUser?.id) {
-        if (wasFavorite) {
-          supabase.from('favorites').delete().match({ user_id: currentUser.id, property_id: id });
-        } else {
-          supabase.from('favorites').insert({ user_id: currentUser.id, property_id: id });
-        }
-      }
-      setPropertyStats(statsPrev => {
-        const current = statsPrev[id] || { views: 0, contacts: 0, shares: 0, likes: 0 };
-        const currentLikes = typeof current.likes === 'number' ? current.likes : 0;
-        const nextLikes = Math.max(0, currentLikes + (wasFavorite ? -1 : 1));
-        return {
-          ...statsPrev,
-          [id]: { ...current, likes: nextLikes },
-        };
-      });
-      return wasFavorite ? prev.filter(x => x !== id) : [id, ...prev];
+  const toggleFavorite = async (id: string) => {
+    const wasFavorite = favorites.includes(id);
+    if (currentUser?.id) {
+      const result = wasFavorite
+        ? await supabase.from('favorites').delete().match({ user_id: currentUser.id, property_id: id })
+        : await supabase.from('favorites').insert({ user_id: currentUser.id, property_id: id });
+      if (result.error) throw result.error;
+    }
+    setFavorites(prev => wasFavorite ? prev.filter(x => x !== id) : [id, ...prev]);
+    setPropertyStats(statsPrev => {
+      const current = statsPrev[id] || { views: 0, contacts: 0, shares: 0, likes: 0 };
+      const currentLikes = typeof current.likes === 'number' ? current.likes : 0;
+      return {
+        ...statsPrev,
+        [id]: { ...current, likes: Math.max(0, currentLikes + (wasFavorite ? -1 : 1)) },
+      };
     });
   };
 
@@ -2042,50 +2214,50 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Enhanced features implementations
 
   // Messaging functions
-  const sendMessage = useCallback((receiverId: string, content: string, propertyId?: string): { message: Message; chatId: string } => {
+  const sendMessage = useCallback(async (receiverId: string, content: string, propertyId?: string): Promise<{ message: Message; chatId: string }> => {
     if (!currentUser) throw new Error('User not logged in');
 
-    const message: Message = {
-      id: Date.now().toString(),
-      senderId: currentUser.id,
-      receiverId,
-      propertyId,
-      content,
-      timestamp: new Date().toISOString(),
-      read: false,
-      type: propertyId ? 'property_link' : 'text',
-    };
+    const existingChat = chats.find(chat =>
+      chat.participants.includes(currentUser.id) && chat.participants.includes(receiverId)
+    );
+    const chatId = existingChat?.id ?? Date.now().toString();
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        sender_id: currentUser.id,
+        receiver_id: receiverId,
+        property_id: propertyId ?? null,
+        content,
+        read: false,
+        type: propertyId ? 'property_link' : 'text',
+      })
+      .select()
+      .single();
+    if (error) throw error;
 
-    let resolvedChatId = '';
-
+    const message = mapMessageRow(data);
     setMessages(prev => [...prev, message]);
-
     setChats(prev => {
-      const existingChat = prev.find(chat =>
-        chat.participants.includes(currentUser!.id) && chat.participants.includes(receiverId)
+      const currentChat = prev.find(chat =>
+        chat.participants.includes(currentUser.id) && chat.participants.includes(receiverId)
       );
-
-      if (existingChat) {
-        resolvedChatId = existingChat.id;
-        return prev.map(chat =>
-          chat.id === existingChat.id
-            ? {
-                ...chat,
-                lastMessage: message,
-                updatedAt: message.timestamp,
-                unreadCount: {
-                  ...chat.unreadCount,
-                  [receiverId]: (chat.unreadCount[receiverId] || 0) + 1,
-                },
-              }
-            : chat
+      if (currentChat) {
+        return prev.map(chat => chat.id === currentChat.id
+          ? {
+              ...chat,
+              lastMessage: message,
+              updatedAt: message.timestamp,
+              unreadCount: {
+                ...chat.unreadCount,
+                [receiverId]: (chat.unreadCount[receiverId] || 0) + 1,
+              },
+            }
+          : chat
         );
       }
-
-      resolvedChatId = Date.now().toString();
       const newChat: Chat = {
-        id: resolvedChatId,
-        participants: [currentUser!.id, receiverId],
+        id: chatId,
+        participants: [currentUser.id, receiverId],
         propertyId,
         lastMessage: message,
         updatedAt: message.timestamp,
@@ -2093,18 +2265,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
       return [...prev, newChat];
     });
-
-    supabase.from('messages').insert({
-      sender_id: currentUser.id,
-      receiver_id: receiverId,
-      property_id: propertyId ?? null,
-      content,
-      read: false,
-      type: propertyId ? 'property_link' : 'text',
-    });
-
-    return { message, chatId: resolvedChatId };
-  }, [currentUser]);
+    return { message, chatId };
+  }, [chats, currentUser]);
 
   const getChatMessages = useCallback((chatId: string): Message[] => {
     const chat = chats.find(c => c.id === chatId);
@@ -2116,22 +2278,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [chats, messages]);
 
-  const markMessagesAsRead = useCallback((chatId: string, userId: string) => {
-    setChats(prev =>
-      prev.map(chat =>
-        chat.id === chatId
-          ? { ...chat, unreadCount: { ...chat.unreadCount, [userId]: 0 } }
-          : chat
-      )
-    );
+  const markMessagesAsRead = useCallback(async (chatId: string, userId: string) => {
     const chat = chats.find(c => c.id === chatId);
     const otherUserId = chat?.participants.find(id => id !== userId);
-    if (otherUserId) {
-      supabase
+    if (!chat || !otherUserId || chat.unreadCount[userId] === 0) return;
+    const { error } = await supabase
         .from('messages')
         .update({ read: true })
         .match({ receiver_id: userId, sender_id: otherUserId });
-    }
+    if (error) throw error;
+    setChats(prev =>
+      prev.map(item =>
+        item.id === chatId
+          ? { ...item, unreadCount: { ...item.unreadCount, [userId]: 0 } }
+          : item
+      )
+    );
   }, [chats]);
 
   // Review functions
@@ -2147,6 +2309,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setReviews(prev => [review, ...prev.filter(item => item.id !== review.id)]);
     return review;
   }, [currentUser]);
+
+  const setReviewVerified = useCallback(async (id: string, verified: boolean) => {
+    const { error } = await supabase.from('reviews').update({ verified }).eq('id', id);
+    if (error) throw error;
+    setReviews(previous => previous.map(review =>
+      review.id === id ? { ...review, verified } : review
+    ));
+  }, []);
 
   const getPropertyReviews = useCallback((propertyId: string): Review[] => {
     return reviews.filter(r => r.propertyId === propertyId)
@@ -2267,6 +2437,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return rule;
   }, []);
 
+  const toggleCommissionRule = useCallback((id: string) => {
+    setCommissionRules(previous => previous.map(rule =>
+      rule.id === id ? { ...rule, active: !rule.active } : rule
+    ));
+  }, []);
+
   const calculateCommission = useCallback((propertyId: string, salePrice: number): number => {
     const property = properties.find(p => p.id === propertyId);
     if (!property) return 0;
@@ -2325,27 +2501,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return documents.filter(d => d.propertyId === propertyId)
       .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
   }, [documents]);
-
-  // Mortgage calculator
-  const calculateMortgage = useCallback((data: Omit<MortgageCalculator, 'monthlyPayment' | 'totalPayment' | 'totalInterest'>): MortgageCalculator => {
-    const { propertyPrice, downPayment, interestRate, loanTerm } = data;
-    const loanAmount = propertyPrice - downPayment;
-    const monthlyRate = interestRate / 100 / 12;
-    const numberOfPayments = loanTerm * 12;
-
-    const monthlyPayment = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
-                          (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
-
-    const totalPayment = monthlyPayment * numberOfPayments;
-    const totalInterest = totalPayment - loanAmount;
-
-    return {
-      ...data,
-      monthlyPayment,
-      totalPayment,
-      totalInterest,
-    };
-  }, []);
 
   return (
     <AppContext.Provider
@@ -2446,6 +2601,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         getChatMessages,
         markMessagesAsRead,
         addReview,
+        setReviewVerified,
         getPropertyReviews,
         getAverageRating,
         createAgentProfile,
@@ -2459,12 +2615,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         getPremiumFeatures,
         isPremium,
         createCommissionRule,
+        toggleCommissionRule,
         calculateCommission,
         createTransaction,
         updateTransactionStatus,
         addDocument,
         getPropertyDocuments,
-        calculateMortgage,
       }}
     >
       {children}

@@ -110,7 +110,7 @@ const baseStyles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   rootDark: {
-    backgroundColor: '#0F172A',
+    backgroundColor: COLORS.background,
   },
   skip: {
     alignSelf: 'flex-end',
@@ -130,28 +130,28 @@ const baseStyles = StyleSheet.create({
   step: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginBottom: 12,
   },
   stepDark: {
-    color: '#94A3B8',
+    color: COLORS.onSurfaceMuted,
   },
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: COLORS.text,
+    color: COLORS.onSurface,
     marginBottom: 12,
   },
   titleDark: {
-    color: '#F1F5F9',
+    color: COLORS.surfaceAlt,
   },
   body: {
     fontSize: 16,
     lineHeight: 24,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
   },
   bodyDark: {
-    color: '#CBD5E1',
+    color: COLORS.onSurfaceMuted,
   },
   dots: {
     flexDirection: 'row',

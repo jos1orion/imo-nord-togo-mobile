@@ -17,7 +17,7 @@ import type {
 } from 'expo-speech-recognition';
 import COLORS from '../theme/colors';
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 
 const noopEmitter = {
   addListener: () => ({ remove: () => {} }),
@@ -47,6 +47,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   onSearch,
 }) => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const { language, t } = useApp();
   const speechModule = useMemo(loadSpeechRecognitionModule, []);
   const speechEventEmitter = (speechModule ?? noopEmitter) as unknown as Parameters<
@@ -217,7 +218,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress={handleSearch} style={styles.searchButton}>
-        <Ionicons name="search" size={20} color="#9CA3AF" />
+        <Ionicons name="search" size={20} color={themeColors.onSurfaceSoft} />
       </TouchableOpacity>
       <View
         style={styles.inputWrap}
@@ -228,7 +229,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
           value={value}
           onChangeText={onChangeText}
           placeholder=""
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={themeColors.onSurfaceMuted}
           returnKeyType="search"
           onSubmitEditing={handleSearch}
         />
@@ -256,18 +257,18 @@ const SearchBar: React.FC<SearchBarProps> = ({
           <Ionicons
             name={isListening ? 'mic' : 'mic-outline'}
             size={18}
-            color={isListening ? COLORS.primary : '#9CA3AF'}
+            color={isListening ? themeColors.primary : themeColors.onSurfaceSoft}
           />
         </TouchableOpacity>
       )}
       {value.length > 0 && (
         <TouchableOpacity onPress={() => onChangeText('')} style={styles.clearButton}>
-          <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+          <Ionicons name="close-circle" size={18} color={themeColors.onSurfaceSoft} />
         </TouchableOpacity>
       )}
       {isListening && (
         <View style={styles.voiceIndicator}>
-          <Ionicons name="mic" size={12} color={COLORS.primary} />
+          <Ionicons name="mic" size={12} color={themeColors.primary} />
           <Text style={styles.voiceIndicatorText}>{t('voice_search_listening')}</Text>
         </View>
       )}
@@ -279,12 +280,12 @@ const baseStyles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F7FA',
+    backgroundColor: COLORS.background,
     borderRadius: 14,
     paddingHorizontal: 12,
     height: 48,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   searchButton: {
     paddingRight: 8,
@@ -297,7 +298,7 @@ const baseStyles = StyleSheet.create({
   },
   input: {
     fontSize: 15,
-    color: '#111827',
+    color: COLORS.onSurface,
   },
   placeholderWrap: {
     position: 'absolute',
@@ -305,7 +306,7 @@ const baseStyles = StyleSheet.create({
   },
   placeholderText: {
     fontSize: 15,
-    color: '#9CA3AF',
+    color: COLORS.onSurfaceSoft,
   },
   voiceButton: {
     padding: 4,
@@ -325,9 +326,9 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
     borderWidth: 1,
-    borderColor: '#DBEAFE',
+    borderColor: COLORS.infoContainer,
   },
   voiceIndicatorText: {
     fontSize: 11,

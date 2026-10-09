@@ -18,7 +18,7 @@ export default function PublicationsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const filter = searchParams.get('filter');
-  const { data, loading } = useSupabaseTable<PublicationRow>('publications', {
+  const { data, loading, error, reload } = useSupabaseTable<PublicationRow>('publications', {
     select: '*, properties(title, location)',
     orderBy: 'created_at',
   });
@@ -50,10 +50,32 @@ export default function PublicationsPage() {
           </button>
         ))}
       </div>
-      {loading ? <div className="card">Chargement...</div> : (
+      {loading ? <div className="card">Chargement...</div> : error ? (
+        <div className="card">
+          <div className="alert">
+            Impossible de charger les publications : {error}
+          </div>
+          <p>
+            Verifiez que la table « publications » existe et que les droits d’accès sont configurés.
+            La migration <code>docs/supabase-admin-platform.sql</code> crée cette table et reprend
+            les biens déjà enregistrés.
+          </p>
+          <button className="ghost-button" onClick={() => void reload()}>
+            Réessayer
+          </button>
+        </div>
+      ) : (
         <DataTable
           rows={rows}
-          emptyLabel="Aucune publication. Exécutez docs/supabase-admin-platform.sql."
+          emptyLabel={
+            data.length === 0
+              ? 'Aucune publication enregistrée. Si des biens existent, vérifiez la migration docs/supabase-admin-platform.sql.'
+              : filter === 'expiring'
+                ? 'Aucune publication n’expire dans les trois prochains jours.'
+                : status === 'ALL'
+                  ? 'Aucune publication enregistrée.'
+                  : `Aucune publication avec le statut « ${status} ».`
+          }
           columns={[
             { key: 'id', label: 'ID', render: row => row.id.slice(0, 8) },
             { key: 'title', label: 'Bien', render: row => row.properties?.title ?? row.property_id.slice(0, 8) },

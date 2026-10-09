@@ -78,6 +78,7 @@ export default function NeighborhoodsPage() {
       alert(`Ce quartier est utilise par ${count} bien(s). Deplacez-les avant suppression.`);
       return;
     }
+    if (!window.confirm(`Supprimer le quartier « ${row.name} » ? Cette action est irréversible.`)) return;
     const { error } = await supabase.from('neighborhoods').delete().eq('id', row.id);
     if (error) {
       alert(`Erreur suppression: ${error.message}`);

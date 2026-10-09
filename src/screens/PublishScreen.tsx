@@ -10,6 +10,7 @@ import {
   TextInput,
   Alert,
   Image,
+  Keyboard,
   ActivityIndicator,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -24,10 +25,12 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
 import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { supabase } from '../lib/supabase';
+import { isDirectPublishingEnabled } from '../lib/publishing';
 import { PROPERTY_TYPE_COLORS, Property, PropertyType } from '../types';
 import COLORS from '../theme/colors';
+import { safeImpactLight } from '../lib/expoHapticsSafe';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 type PublishRouteProp = RouteProp<RootStackParamList, 'Publish'>;
@@ -40,8 +43,21 @@ const PUBLISH_GUIDE_STEPS = [
   { title: 'publish_guide_step_3_title', body: 'publish_guide_step_3_body' },
 ] as const;
 
+const getPublishErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message.trim()) return error.message.trim();
+  if (typeof error === 'string' && error.trim()) return error.trim();
+  if (typeof error === 'object' && error !== null) {
+    const messages = ['message', 'details', 'hint']
+      .map(key => Reflect.get(error, key))
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+    if (messages.length) return [...new Set(messages)].join('\n');
+  }
+  return fallback;
+};
+
 const PublishScreen: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<PublishRouteProp>();
@@ -55,6 +71,7 @@ const PublishScreen: React.FC = () => {
     t,
     tType,
     theme,
+    language,
   } = useApp();
   const isDark = theme === 'dark';
   const editingProperty = route.params?.propertyId
@@ -66,7 +83,11 @@ const PublishScreen: React.FC = () => {
   const [publishGuideStep, setPublishGuideStep] = useState<PublishGuideStep | null>(null);
   const [draftImages, setDraftImages] = useState<string[]>([]);
   const [step, setStep] = useState(0);
+  const [neighborhoodPickerOpen, setNeighborhoodPickerOpen] = useState(false);
+  const [neighborhoodQuery, setNeighborhoodQuery] = useState('');
+  const [customNeighborhood, setCustomNeighborhood] = useState(false);
   const checkedGuideSteps = useRef(new Set<number>());
+  const submitInProgress = useRef(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -83,6 +104,28 @@ const PublishScreen: React.FC = () => {
     bathrooms: '',
     amenities: '',
   });
+  const availableNeighborhoods = useMemo(
+    () => [...new Map(neighborhoods.map(name => [name.trim().toLocaleLowerCase(), name.trim()]))
+      .values()]
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, language === 'en' ? 'en' : 'fr', { sensitivity: 'base' })),
+    [language, neighborhoods]
+  );
+  const filteredNeighborhoods = useMemo(() => {
+    const query = neighborhoodQuery.trim().toLocaleLowerCase();
+    return query
+      ? availableNeighborhoods.filter(name => name.toLocaleLowerCase().includes(query))
+      : availableNeighborhoods;
+  }, [availableNeighborhoods, neighborhoodQuery]);
+
+  useEffect(() => {
+    const neighborhood = formData.location.trim().toLocaleLowerCase();
+    if (!neighborhood) return;
+    setCustomNeighborhood(Boolean(
+      availableNeighborhoods.length > 0 &&
+      !availableNeighborhoods.some(name => name.toLocaleLowerCase() === neighborhood)
+    ));
+  }, [availableNeighborhoods, formData.location]);
 
   const hasDraftContent = (data: typeof formData, images: string[]) => {
     const contactFields = new Set(['clientName', 'clientPhone', 'clientEmail']);
@@ -162,6 +205,7 @@ const PublishScreen: React.FC = () => {
             setDraftLoaded(true);
             return;
           }
+          void safeImpactLight();
           Alert.alert(
             'Brouillon disponible',
             'Voulez-vous reprendre votre annonce en cours ?',
@@ -324,6 +368,7 @@ const PublishScreen: React.FC = () => {
     });
     setDraftImages([]);
     setStep(0);
+    setCustomNeighborhood(false);
     if (draftKey) void AsyncStorage.removeItem(draftKey);
   };
 
@@ -342,6 +387,7 @@ const PublishScreen: React.FC = () => {
   }, []);
 
   const goStep = (next: number) => {
+    Keyboard.dismiss();
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setStep(next);
   };
@@ -349,7 +395,7 @@ const PublishScreen: React.FC = () => {
   const numericInput = (value: string) => value.replace(/[^\d]/g, '');
 
   const handleSubmit = async () => {
-    if (submitting) return;
+    if (submitting || submitInProgress.current) return;
     const priceValue = parseInt(formData.price, 10);
     const contactName = formData.clientName.trim() || currentUser?.name?.trim() || t('publish_advertiser');
     const contactPhone = formData.clientPhone.trim() || currentUser?.phone?.trim() || '';
@@ -359,6 +405,7 @@ const PublishScreen: React.FC = () => {
       Number.isNaN(priceValue) ||
       priceValue <= 0 ||
       !formData.city.trim() ||
+      !formData.location.trim() ||
       !contactPhone
     ) {
       Alert.alert(t('error'), t('publish_required_error'));
@@ -370,24 +417,29 @@ const PublishScreen: React.FC = () => {
       return;
     }
 
-    if (!currentUser) {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) {
+    submitInProgress.current = true;
+    setSubmitting(true);
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      const authenticatedUser = data.user;
+      if (!authenticatedUser) {
         Alert.alert(t('loginRequired'), t('publish_login_required'));
         navigation.navigate('MainTabs', { screen: 'Profile' });
         return;
       }
-    }
-    if (!currentUser || (currentUser.role !== 'AGENT' && currentUser.role !== 'ADMIN')) {
-      Alert.alert(
-        'Compte agent non validé',
-        'Votre demande agent doit être validée par un administrateur avant la publication.'
-      );
-      return;
-    }
+      const directPublishing = isDirectPublishingEnabled();
+      if (
+        !directPublishing &&
+        (!currentUser || (currentUser.role !== 'AGENT' && currentUser.role !== 'ADMIN'))
+      ) {
+        Alert.alert(
+          'Compte agent non validé',
+          'Votre demande agent doit être validée par un administrateur avant la publication.'
+        );
+        return;
+      }
 
-    setSubmitting(true);
-    try {
       const propertyData: Omit<Property, 'id' | 'createdAt' | 'updatedAt'> = {
         title: formData.title.trim(),
         description: formData.description.trim(),
@@ -399,7 +451,7 @@ const PublishScreen: React.FC = () => {
         city: formData.city.trim(),
         images: draftImages,
         status: 'available',
-        listingStatus: 'pending',
+        listingStatus: directPublishing ? 'approved' : 'pending',
         amenities: formData.amenities
           .split(',')
           .map(a => a.trim())
@@ -407,9 +459,9 @@ const PublishScreen: React.FC = () => {
         bedrooms: formData.bedrooms ? parseInt(formData.bedrooms, 10) : undefined,
         bathrooms: formData.bathrooms ? parseInt(formData.bathrooms, 10) : undefined,
         featured: false,
-        clientId: currentUser?.id ?? '',
+        clientId: authenticatedUser.id,
         client: {
-          id: currentUser?.id ?? `local-${Date.now()}`,
+          id: authenticatedUser.id,
           name: contactName,
           email: contactEmail,
           phone: contactPhone,
@@ -417,20 +469,28 @@ const PublishScreen: React.FC = () => {
         },
       };
       if (editingProperty) {
-        await updateProperty(editingProperty.id, { ...propertyData, listingStatus: 'pending', rejectionReason: null });
+        await updateProperty(editingProperty.id, {
+          ...propertyData,
+          listingStatus: directPublishing ? 'approved' : 'pending',
+          rejectionReason: null,
+        });
         addMyPropertyId(editingProperty.id);
       } else {
         const created = await addProperty(propertyData);
         addMyPropertyId(created.id);
       }
 
-      Alert.alert(t('publish_success_title'), t('publish_success_message'));
+      Alert.alert(
+        directPublishing ? t('publish_direct_success_title') : t('publish_success_title'),
+        directPublishing ? t('publish_direct_success_message') : t('publish_success_message')
+      );
       resetForm();
       navigation.goBack();
     } catch (e) {
-      const message = e instanceof Error ? e.message : t('publish_unknown_error');
+      const message = getPublishErrorMessage(e, t('publish_unknown_error'));
       Alert.alert(t('error'), message);
     } finally {
+      submitInProgress.current = false;
       setSubmitting(false);
     }
   };
@@ -441,24 +501,32 @@ const PublishScreen: React.FC = () => {
       t('publish_step_photos'),
       t('publish_step_location'),
       t('publish_step_contact'),
+      t('publish_step_review'),
     ][step] || t('publish_step_listing');
   }, [step, t]);
 
   const canContinue = useMemo(() => {
     if (step === 0) {
-      return formData.title.trim().length > 0 && !!parseInt(formData.price, 10);
+      return formData.title.trim().length > 0 && (parseInt(formData.price, 10) || 0) > 0;
     }
     if (step === 1) {
       return draftImages.length > 0;
     }
     if (step === 2) {
-      return formData.city.trim().length > 0;
+      return formData.city.trim().length > 0 && formData.location.trim().length > 0;
     }
     if (step === 3) {
       return formData.clientPhone.trim().length > 0;
     }
     if (step === 4) {
-      return Boolean(formData.title.trim() && formData.city.trim() && draftImages.length);
+      return Boolean(
+        formData.title.trim() &&
+        formData.city.trim() &&
+        formData.location.trim() &&
+        (parseInt(formData.price, 10) || 0) > 0 &&
+        formData.clientPhone.trim() &&
+        draftImages.length
+      );
     }
     return true;
   }, [step, formData, draftImages]);
@@ -471,7 +539,7 @@ const PublishScreen: React.FC = () => {
     >
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color="#111827" />
+          <Ionicons name="arrow-back" size={22} color={themeColors.onSurface} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('publish_title')}</Text>
       </View>
@@ -480,13 +548,13 @@ const PublishScreen: React.FC = () => {
         style={styles.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}
         contentContainerStyle={styles.contentContainer}
       >
         <View style={styles.stepHeader}>
           <Text style={styles.stepTitle}>{t('publish_step').replace('{{step}}', String(step + 1))}  |  {stepLabel}</Text>
           <View style={styles.stepDots}>
-            {[0, 1, 2, 3].map(i => (
+            {[0, 1, 2, 3, 4].map(i => (
               <View key={i} style={[styles.stepDot, step >= i && styles.stepDotActive]} />
             ))}
           </View>
@@ -523,7 +591,7 @@ const PublishScreen: React.FC = () => {
                   ]}
                   onPress={() => setFormData({ ...formData, type: type as PropertyType })}
                 >
-                  <Text style={[styles.typeOptionText, formData.type === type && { color: '#fff' }]}>
+                  <Text style={[styles.typeOptionText, formData.type === type && { color: themeColors.white }]}>
                     {tType(type)}
                   </Text>
                 </TouchableOpacity>
@@ -534,9 +602,11 @@ const PublishScreen: React.FC = () => {
             <TextInput
               style={styles.input}
               value={formData.price}
-              onChangeText={text => setFormData({ ...formData, price: text })}
+              onChangeText={text => setFormData(previous => ({ ...previous, price: numericInput(text) }))}
               placeholder={t('publish_price_placeholder')}
-              keyboardType="numeric"
+              keyboardType="number-pad"
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
             />
           </>
         )}
@@ -549,11 +619,11 @@ const PublishScreen: React.FC = () => {
             </Text>
             <View style={styles.photoActions}>
               <TouchableOpacity style={styles.photoButton} onPress={addImageFromCamera}>
-                <Ionicons name="camera" size={18} color={COLORS.primary} />
+                <Ionicons name="camera" size={18} color={themeColors.primary} />
                 <Text style={styles.photoButtonText}>{t('publish_camera')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.photoButton} onPress={addImageFromLibrary}>
-                <Ionicons name="images" size={18} color={COLORS.primary} />
+                <Ionicons name="images" size={18} color={themeColors.primary} />
                 <Text style={styles.photoButtonText}>{t('publish_gallery')}</Text>
               </TouchableOpacity>
             </View>
@@ -569,21 +639,21 @@ const PublishScreen: React.FC = () => {
                         onPress={() => moveImage(uri, 'left')}
                         accessibilityLabel="Déplacer la photo vers la gauche"
                       >
-                        <Ionicons name="chevron-back" size={13} color="#fff" />
+                        <Ionicons name="chevron-back" size={13} color={themeColors.white} />
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.photoOrderButton}
                         onPress={() => moveImage(uri, 'right')}
                         accessibilityLabel={t('publish_move_photo_right')}
                       >
-                        <Ionicons name="chevron-forward" size={13} color="#fff" />
+                        <Ionicons name="chevron-forward" size={13} color={themeColors.white} />
                       </TouchableOpacity>
                     </View>
                     <TouchableOpacity
                       style={styles.photoRemove}
                       onPress={() => setDraftImages(prev => prev.filter(x => x !== uri))}
                     >
-                      <Ionicons name="close" size={14} color="#fff" />
+                      <Ionicons name="close" size={14} color={themeColors.white} />
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -607,66 +677,75 @@ const PublishScreen: React.FC = () => {
               placeholder={t('publish_city_placeholder')}
             />
 
-            {neighborhoods.length > 0 && (
-              <View style={styles.neighborhoodPicker}>
-                <Text style={styles.neighborhoodPickerLabel}>{t('publish_choose_neighborhood')}</Text>
-                <View style={styles.neighborhoodPickerList}>
-                  {neighborhoods.map(name => (
-                    <TouchableOpacity
-                      key={name}
-                      style={[
-                        styles.neighborhoodPickerChip,
-                        formData.location === name && styles.neighborhoodPickerChipActive,
-                      ]}
-                      onPress={() => setFormData({ ...formData, location: name })}
-                    >
-                      <Text
-                        style={[
-                          styles.neighborhoodPickerText,
-                          formData.location === name && styles.neighborhoodPickerTextActive,
-                        ]}
-                      >
-                        {name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
             <Text style={styles.inputLabel}>{t('publish_neighborhood_label')}</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.location}
-              onChangeText={text => setFormData({ ...formData, location: text })}
-              placeholder={t('publish_neighborhood_placeholder')}
-            />
+            {availableNeighborhoods.length > 0 ? (
+              <>
+                <TouchableOpacity
+                  style={[styles.input, styles.neighborhoodSelect]}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setNeighborhoodQuery('');
+                    setNeighborhoodPickerOpen(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={formData.location || t('publish_choose_neighborhood')}
+                >
+                  <Text style={formData.location ? styles.neighborhoodSelected : styles.neighborhoodPlaceholder}>
+                    {formData.location || t('publish_choose_neighborhood')}
+                  </Text>
+                  <Ionicons name="chevron-down" size={18} color={themeColors.onSurfaceMuted} />
+                </TouchableOpacity>
+                {customNeighborhood && (
+                  <TextInput
+                    style={styles.input}
+                    value={formData.location}
+                    onChangeText={text => setFormData(previous => ({ ...previous, location: text }))}
+                    placeholder={t('publish_neighborhood_placeholder')}
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
+                )}
+              </>
+            ) : (
+              <TextInput
+                style={styles.input}
+                value={formData.location}
+                onChangeText={text => setFormData(previous => ({ ...previous, location: text }))}
+                placeholder={t('publish_neighborhood_placeholder')}
+              />
+            )}
 
             <Text style={styles.inputLabel}>{t('publish_area_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.area}
-              onChangeText={text => setFormData({ ...formData, area: text })}
+              onChangeText={text => setFormData(previous => ({ ...previous, area: numericInput(text) }))}
               placeholder={t('publish_area_placeholder')}
-              keyboardType="numeric"
+              keyboardType="number-pad"
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
             />
 
             <Text style={styles.inputLabel}>{t('publish_bedrooms_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.bedrooms}
-              onChangeText={text => setFormData({ ...formData, bedrooms: text })}
+              onChangeText={text => setFormData(previous => ({ ...previous, bedrooms: numericInput(text) }))}
               placeholder={t('publish_bedrooms_placeholder')}
-              keyboardType="numeric"
+              keyboardType="number-pad"
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
             />
 
             <Text style={styles.inputLabel}>{t('publish_bathrooms_label')}</Text>
             <TextInput
               style={styles.input}
               value={formData.bathrooms}
-              onChangeText={text => setFormData({ ...formData, bathrooms: text })}
+              onChangeText={text => setFormData(previous => ({ ...previous, bathrooms: numericInput(text) }))}
               placeholder={t('publish_bathrooms_placeholder')}
-              keyboardType="numeric"
+              keyboardType="number-pad"
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
             />
 
             <Text style={styles.inputLabel}>{t('publish_amenities_label')}</Text>
@@ -708,17 +787,44 @@ const PublishScreen: React.FC = () => {
               autoCapitalize="none"
             />
 
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>{t('publish_summary')}</Text>
-              <Text style={styles.summaryText}>{formData.title || t('publish_untitled')}</Text>
-              <Text style={styles.summarySub}>
-                {formData.location || t('publish_neighborhood_fallback')}  |  {formData.city || t('publish_city_fallback')}
-              </Text>
-              <Text style={styles.summaryPrice}>
-                {formData.price ? `${formData.price} FCFA` : t('publish_price_to_define')}
-              </Text>
-            </View>
           </>
+        )}
+
+        {step === 4 && (
+          <View style={[styles.reviewCard, isDark && styles.reviewCardDark]}>
+            <Text style={styles.reviewTitle}>{t('publish_summary')}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.reviewPhotos}>
+              {draftImages.map((uri, index) => (
+                <Image key={`${uri}-${index}`} source={{ uri }} style={styles.reviewPhoto} />
+              ))}
+            </ScrollView>
+            <Text style={[styles.reviewPropertyTitle, isDark && styles.reviewTextDark]}>{formData.title}</Text>
+            <Text style={styles.reviewType}>{tType(formData.type)}</Text>
+            <Text style={styles.reviewPrice}>
+              {`${parseInt(formData.price, 10).toLocaleString(language === 'en' ? 'en' : 'fr')} FCFA`}
+            </Text>
+            <View style={styles.reviewDivider} />
+            <Text style={styles.reviewSectionTitle}>{t('publish_review_location')}</Text>
+            <Text style={styles.reviewText}>{`${formData.location}, ${formData.city}`}</Text>
+            <Text style={styles.reviewSectionTitle}>{t('publish_review_details')}</Text>
+            <Text style={styles.reviewText}>{formData.description.trim() || t('publish_no_description')}</Text>
+            {formData.area && <Text style={styles.reviewText}>{t('publish_review_area').replace('{{value}}', formData.area)}</Text>}
+            {(formData.bedrooms || formData.bathrooms) && (
+              <Text style={styles.reviewText}>
+                {[
+                  formData.bedrooms && t('publish_review_bedrooms').replace('{{value}}', formData.bedrooms),
+                  formData.bathrooms && t('publish_review_bathrooms').replace('{{value}}', formData.bathrooms),
+                ].filter(Boolean).join(' · ')}
+              </Text>
+            )}
+            {!!formData.amenities.trim() && <Text style={styles.reviewText}>{formData.amenities.trim()}</Text>}
+            <Text style={styles.reviewSectionTitle}>{t('publish_review_contact')}</Text>
+            <Text style={styles.reviewText}>{formData.clientName.trim() || currentUser?.name || t('publish_advertiser')}</Text>
+            <Text style={styles.reviewText}>{formData.clientPhone.trim() || currentUser?.phone}</Text>
+            {!!(formData.clientEmail.trim() || currentUser?.email) && (
+              <Text style={styles.reviewText}>{formData.clientEmail.trim() || currentUser?.email}</Text>
+            )}
+          </View>
         )}
 
         <View style={[styles.bottomPadding, { height: 120 + insets.bottom }]} />
@@ -746,13 +852,85 @@ const PublishScreen: React.FC = () => {
             disabled={!canContinue || submitting}
           >
             {submitting ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={themeColors.white} />
             ) : (
-              <Text style={styles.submitText}>{step < 3 ? t('publish_continue') : t('publish_submit')}</Text>
+              <Text style={styles.submitText}>{step < 4 ? t('publish_continue') : t('publish_submit')}</Text>
             )}
           </TouchableOpacity>
         </View>
       </View>
+      <Modal
+        visible={neighborhoodPickerOpen}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setNeighborhoodPickerOpen(false)}
+      >
+        <Pressable
+          style={styles.neighborhoodModalBackdrop}
+          onPress={() => setNeighborhoodPickerOpen(false)}
+        >
+          <Pressable
+            style={[styles.neighborhoodModal, isDark && styles.neighborhoodModalDark]}
+            onPress={event => event.stopPropagation()}
+          >
+            <View style={styles.neighborhoodModalHeader}>
+              <Text style={[styles.neighborhoodModalTitle, isDark && styles.reviewTextDark]}>
+                {t('publish_choose_neighborhood')}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setNeighborhoodPickerOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel={t('close')}
+              >
+                <Ionicons name="close" size={24} color={isDark ? themeColors.surfaceAlt : themeColors.onSurface} />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.neighborhoodSearch}
+              value={neighborhoodQuery}
+              onChangeText={setNeighborhoodQuery}
+              placeholder={t('publish_search_neighborhood')}
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {filteredNeighborhoods.map(name => (
+                <TouchableOpacity
+                  key={name}
+                  style={styles.neighborhoodOption}
+                  onPress={() => {
+                    setFormData(previous => ({ ...previous, location: name }));
+                    setCustomNeighborhood(false);
+                    setNeighborhoodPickerOpen(false);
+                    setNeighborhoodQuery('');
+                  }}
+                >
+                  <Text style={[styles.neighborhoodOptionText, isDark && styles.reviewTextDark]}>{name}</Text>
+                  {formData.location === name && <Ionicons name="checkmark" size={20} color={themeColors.primary} />}
+                </TouchableOpacity>
+              ))}
+              {filteredNeighborhoods.length === 0 && (
+                <Text style={styles.neighborhoodEmpty}>{t('publish_no_neighborhood_match')}</Text>
+              )}
+              <TouchableOpacity
+                style={styles.neighborhoodOption}
+                onPress={() => {
+                  setFormData(previous => ({ ...previous, location: '' }));
+                  setCustomNeighborhood(true);
+                  setNeighborhoodPickerOpen(false);
+                  setNeighborhoodQuery('');
+                }}
+              >
+                <Text style={[styles.neighborhoodOptionText, styles.neighborhoodCustomText]}>
+                  {t('publish_enter_custom_neighborhood')}
+                </Text>
+                <Ionicons name="create-outline" size={18} color={themeColors.primary} />
+              </TouchableOpacity>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
       {publishGuideStep !== null && (
         <Modal
           visible
@@ -770,7 +948,7 @@ const PublishScreen: React.FC = () => {
               style={[styles.guideCard, isDark && styles.guideCardDark]}
             >
               <View style={[styles.guideIcon, isDark && styles.guideIconDark]}>
-                <Ionicons name="create-outline" size={24} color={isDark ? '#93C5FD' : COLORS.primary} />
+                <Ionicons name="create-outline" size={24} color={isDark ? themeColors.info : themeColors.primary} />
               </View>
               <Text style={styles.guideProgress}>
                 {t('publish_guide_progress')
@@ -785,7 +963,7 @@ const PublishScreen: React.FC = () => {
               </Text>
               {publishGuideStep === 0 && (
                 <View style={[styles.guideAccountNote, isDark && styles.guideAccountNoteDark]}>
-                  <Ionicons name="information-circle-outline" size={18} color={isDark ? '#93C5FD' : COLORS.primary} />
+                  <Ionicons name="information-circle-outline" size={18} color={isDark ? themeColors.info : themeColors.primary} />
                   <Text style={[styles.guideAccountText, isDark && styles.guideTextDark]}>
                     {t(
                       currentUser?.role === 'AGENT' || currentUser?.role === 'ADMIN'
@@ -836,7 +1014,7 @@ const baseStyles = StyleSheet.create({
     gap: 12,
     padding: 16,
     paddingTop: 50,
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
@@ -853,7 +1031,7 @@ const baseStyles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.onSurface,
     flex: 1,
   },
   guideOverlay: {
@@ -868,10 +1046,10 @@ const baseStyles = StyleSheet.create({
     alignSelf: 'center',
     padding: 24,
     borderRadius: 24,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
   },
   guideCardDark: {
-    backgroundColor: '#1F2937',
+    backgroundColor: COLORS.onSurface,
   },
   guideIcon: {
     width: 48,
@@ -879,11 +1057,11 @@ const baseStyles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
     marginBottom: 16,
   },
   guideIconDark: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: COLORS.surfaceAlt,
   },
   guideProgress: {
     color: COLORS.primary,
@@ -894,22 +1072,22 @@ const baseStyles = StyleSheet.create({
     marginBottom: 8,
   },
   guideTitle: {
-    color: COLORS.text,
+    color: COLORS.onSurface,
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 10,
   },
   guideTextDark: {
-    color: '#F9FAFB',
+    color: COLORS.surfaceAlt,
   },
   guideBody: {
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     fontSize: 14,
     lineHeight: 22,
     marginBottom: 18,
   },
   guideBodyDark: {
-    color: '#D1D5DB',
+    color: COLORS.borderStrong,
   },
   guideAccountNote: {
     flexDirection: 'row',
@@ -917,15 +1095,15 @@ const baseStyles = StyleSheet.create({
     gap: 8,
     padding: 12,
     borderRadius: 12,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
     marginBottom: 20,
   },
   guideAccountNoteDark: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: COLORS.surfaceAlt,
   },
   guideAccountText: {
     flex: 1,
-    color: COLORS.text,
+    color: COLORS.onSurface,
     fontSize: 13,
     lineHeight: 19,
   },
@@ -938,7 +1116,7 @@ const baseStyles = StyleSheet.create({
     marginBottom: 10,
   },
   guidePrimaryText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -947,11 +1125,11 @@ const baseStyles = StyleSheet.create({
     padding: 8,
   },
   guideSkipText: {
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     fontSize: 13,
   },
   guideSkipTextDark: {
-    color: '#D1D5DB',
+    color: COLORS.borderStrong,
   },
   clearDraftButton: {
     width: 36,
@@ -959,7 +1137,7 @@ const baseStyles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FEE2E2',
+    backgroundColor: COLORS.dangerContainer,
   },
   content: {
     flex: 1,
@@ -971,12 +1149,12 @@ const baseStyles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.text,
+    color: COLORS.onSurface,
     marginBottom: 8,
   },
   photoHint: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginBottom: 12,
   },
   stepHeader: {
@@ -985,14 +1163,14 @@ const baseStyles = StyleSheet.create({
   stepTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.onSurface,
     marginBottom: 8,
   },
   progressTrack: {
     height: 5,
     borderRadius: 3,
     overflow: 'hidden',
-    backgroundColor: COLORS.borderSoft,
+    backgroundColor: COLORS.borderStrong,
     marginBottom: 10,
   },
   progressFill: {
@@ -1014,14 +1192,27 @@ const baseStyles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 12,
     padding: 12,
     fontSize: 15,
-    color: COLORS.text,
+    color: COLORS.onSurface,
     marginBottom: 14,
+  },
+  neighborhoodSelect: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  neighborhoodSelected: {
+    color: COLORS.onSurface,
+    fontSize: 15,
+  },
+  neighborhoodPlaceholder: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 15,
   },
   textArea: {
     minHeight: 90,
@@ -1086,7 +1277,7 @@ const baseStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   photoMainHint: {
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     fontSize: 12,
     lineHeight: 17,
     marginBottom: 14,
@@ -1107,41 +1298,67 @@ const baseStyles = StyleSheet.create({
   },
   typeOptionText: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     fontWeight: '600',
   },
-  neighborhoodPicker: {
-    marginBottom: 10,
+  neighborhoodModalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
   },
-  neighborhoodPickerLabel: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginBottom: 8,
+  neighborhoodModal: {
+    maxHeight: '82%',
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 18,
+    paddingTop: 20,
+    paddingBottom: 28,
   },
-  neighborhoodPickerList: {
+  neighborhoodModalDark: {
+    backgroundColor: COLORS.onSurface,
+  },
+  neighborhoodModalHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
   },
-  neighborhoodPickerChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  neighborhoodModalTitle: {
+    color: COLORS.onSurface,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  neighborhoodSearch: {
     backgroundColor: COLORS.background,
-    borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.border,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 15,
+    color: COLORS.onSurface,
+    marginBottom: 10,
   },
-  neighborhoodPickerChipActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+  neighborhoodOption: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
   },
-  neighborhoodPickerText: {
-    fontSize: 12,
-    color: COLORS.textMuted,
+  neighborhoodOptionText: {
+    color: COLORS.onSurface,
+    fontSize: 15,
+  },
+  neighborhoodCustomText: {
+    color: COLORS.primary,
     fontWeight: '600',
   },
-  neighborhoodPickerTextActive: {
-    color: '#fff',
+  neighborhoodEmpty: {
+    color: COLORS.onSurfaceMuted,
+    textAlign: 'center',
+    paddingVertical: 18,
   },
   bottomPadding: {
     height: 120,
@@ -1153,7 +1370,7 @@ const baseStyles = StyleSheet.create({
     right: 0,
     padding: 16,
     paddingBottom: 28,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
@@ -1174,7 +1391,7 @@ const baseStyles = StyleSheet.create({
     opacity: 0.5,
   },
   secondaryText: {
-    color: COLORS.text,
+    color: COLORS.onSurface,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1189,42 +1406,76 @@ const baseStyles = StyleSheet.create({
     opacity: 0.7,
   },
   submitText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 15,
     fontWeight: '700',
   },
-  summaryCard: {
-    marginTop: 12,
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    padding: 12,
+  reviewCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
+    marginBottom: 16,
   },
-  summaryTitle: {
-    fontSize: 12,
-    fontWeight: '700',
+  reviewCardDark: {
+    backgroundColor: COLORS.onSurface,
+    borderColor: COLORS.onSurfaceMuted,
+  },
+  reviewTitle: {
     color: COLORS.primary,
-    marginBottom: 6,
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 12,
   },
-  summaryText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
+  reviewPhotos: {
+    marginBottom: 12,
   },
-  summarySub: {
-    fontSize: 12,
-    color: COLORS.textMuted,
+  reviewPhoto: {
+    width: 112,
+    height: 84,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  reviewPropertyTitle: {
+    color: COLORS.onSurface,
+    fontSize: 18,
+    fontWeight: '800',
     marginTop: 4,
   },
-  summaryPrice: {
+  reviewType: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 13,
+    marginTop: 4,
+  },
+  reviewPrice: {
+    color: COLORS.primary,
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 6,
+  },
+  reviewDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: COLORS.border,
+    marginVertical: 14,
+  },
+  reviewSectionTitle: {
+    color: COLORS.onSurface,
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.primary,
-    marginTop: 8,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  reviewText: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  reviewTextDark: {
+    color: COLORS.surfaceAlt,
   },
   previewCard: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -1233,11 +1484,11 @@ const baseStyles = StyleSheet.create({
   previewTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: COLORS.text,
+    color: COLORS.onSurface,
   },
   previewHint: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginTop: 5,
     marginBottom: 14,
   },
@@ -1254,7 +1505,7 @@ const baseStyles = StyleSheet.create({
   previewPropertyTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: COLORS.text,
+    color: COLORS.onSurface,
   },
   previewPrice: {
     fontSize: 17,
@@ -1264,13 +1515,13 @@ const baseStyles = StyleSheet.create({
   },
   previewMeta: {
     fontSize: 13,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginTop: 5,
   },
   previewDescription: {
     fontSize: 14,
     lineHeight: 20,
-    color: COLORS.text,
+    color: COLORS.onSurface,
     marginTop: 14,
   },
   previewDetails: {
@@ -1282,7 +1533,7 @@ const baseStyles = StyleSheet.create({
   },
   previewDetail: {
     fontSize: 13,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
   },
   previewContact: {
     marginTop: 16,
@@ -1293,13 +1544,13 @@ const baseStyles = StyleSheet.create({
   previewContactTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.onSurface,
     marginBottom: 5,
   },
   locationPrivacyHint: {
     fontSize: 12,
     lineHeight: 18,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginTop: -2,
     marginBottom: 8,
   },

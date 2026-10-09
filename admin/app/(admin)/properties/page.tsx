@@ -311,6 +311,10 @@ export default function PropertiesPage() {
   };
 
   const handleDelete = async (propertyId: string) => {
+    const propertyTitle = properties.find(property => property.id === propertyId)?.title;
+    if (!window.confirm(`Supprimer le bien « ${propertyTitle ?? 'sélectionné'} » ? Cette action est irréversible.`)) {
+      return;
+    }
     const { error } = await supabase.from('properties').delete().eq('id', propertyId);
     if (error) {
       alert(`Erreur suppression: ${error.message}`);
@@ -324,6 +328,9 @@ export default function PropertiesPage() {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
     if (action === 'delete') {
+      if (!window.confirm(`Supprimer définitivement les ${ids.length} biens sélectionnés ? Cette action est irréversible.`)) {
+        return;
+      }
       const { error } = await supabase.from('properties').delete().in('id', ids);
       if (error) {
         alert(`Erreur suppression: ${error.message}`);

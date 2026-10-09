@@ -90,6 +90,7 @@ export interface User {
   verified: boolean;
   isAdmin?: boolean;
   role?: 'USER' | 'ADMIN' | 'AGENT' | 'ACCOUNTANT';
+  accountStatus?: 'active' | 'suspended' | 'pending';
   agentStatus?: 'none' | 'pending' | 'approved' | 'rejected';
   agentRejectionReason?: string | null;
   createdAt?: string;
@@ -249,16 +250,6 @@ export interface Transaction {
   status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
   createdAt: string;
   completedAt?: string;
-}
-
-export interface MortgageCalculator {
-  propertyPrice: number;
-  downPayment: number;
-  interestRate: number;
-  loanTerm: number; // years
-  monthlyPayment: number;
-  totalPayment: number;
-  totalInterest: number;
 }
 
 export interface Document {

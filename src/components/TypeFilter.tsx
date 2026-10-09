@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -59,7 +59,7 @@ const baseStyles = StyleSheet.create({
   container: {
     marginVertical: 0,
     paddingVertical: 6,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.surfaceAlt,
   },
   content: {
     paddingHorizontal: 12,
@@ -68,11 +68,11 @@ const baseStyles = StyleSheet.create({
   chip: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     borderRadius: 20,
     marginHorizontal: 4,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.borderStrong,
   },
   chipActive: {
     backgroundColor: COLORS.primary,
@@ -80,10 +80,10 @@ const baseStyles = StyleSheet.create({
   chipText: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#475569',
+    color: COLORS.onSurfaceMuted,
   },
   chipTextActive: {
-    color: '#fff',
+    color: COLORS.white,
     fontWeight: '600',
   },
 });

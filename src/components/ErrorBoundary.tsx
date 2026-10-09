@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import COLORS from '../theme/colors';
+import { THEME_PALETTES } from '../theme/colors';
 import { getCurrentLanguage, translate } from '../i18n';
 
 type Props = { children: ReactNode };
@@ -106,49 +106,49 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    backgroundColor: COLORS.background,
+    backgroundColor: THEME_PALETTES.light.background,
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text,
+    color: THEME_PALETTES.light.onSurface,
     marginBottom: 8,
     textAlign: 'center',
   },
   body: {
     fontSize: 14,
-    color: COLORS.textMuted,
+    color: THEME_PALETTES.light.onSurfaceMuted,
     textAlign: 'center',
     marginBottom: 20,
   },
   button: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: THEME_PALETTES.light.primary,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 999,
     marginTop: 12,
   },
   buttonText: {
-    color: '#fff',
+    color: THEME_PALETTES.light.onBrand,
     fontWeight: '700',
     fontSize: 15,
   },
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: THEME_PALETTES.light.border,
   },
   secondaryButtonText: {
-    color: COLORS.text,
+    color: THEME_PALETTES.light.onSurface,
   },
   details: {
     alignSelf: 'stretch',
     maxHeight: 240,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: THEME_PALETTES.light.border,
     borderRadius: 12,
-    backgroundColor: '#00000008',
+    backgroundColor: THEME_PALETTES.light.overlay,
   },
   detailsInner: {
     padding: 12,
@@ -156,6 +156,6 @@ const styles = StyleSheet.create({
   detailsText: {
     fontSize: 12,
     lineHeight: 16,
-    color: COLORS.text,
+    color: THEME_PALETTES.light.onSurface,
   },
 });

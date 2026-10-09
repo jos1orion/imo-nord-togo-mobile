@@ -36,6 +36,9 @@ create table if not exists public.profiles (
   role public.user_role not null default 'USER',
   account_status text not null default 'active'
     constraint profiles_account_status_check check (account_status in ('active', 'suspended', 'pending')),
+  agent_status text not null default 'none'
+    constraint profiles_agent_status_check check (agent_status in ('none', 'pending', 'approved', 'rejected')),
+  agent_rejection_reason text,
   created_at timestamptz not null default now()
 );
 
@@ -162,6 +165,11 @@ create or replace function public.apply_property_lifecycle() returns trigger lan
 begin
   if tg_op = 'INSERT' then
     new.submitted_at := coalesce(new.submitted_at, now());
+    if new.listing_status = 'approved' then
+      new.approved_at := coalesce(new.approved_at, now());
+      new.published_at := coalesce(new.published_at, now());
+      new.expires_at := coalesce(new.expires_at, now() + interval '30 days');
+    end if;
     if new.featured then new.featured_start_at := now(); new.featured_end_at := now() + interval '7 days'; end if;
   elsif new.listing_status = 'approved' and old.listing_status is distinct from 'approved' then
     new.approved_at := coalesce(new.approved_at, now()); new.published_at := now();
@@ -230,20 +238,109 @@ create policy "properties_select_public_or_owner" on public.properties for selec
   or owner_id = auth.uid() or public.is_admin()
 );
 create policy "properties_insert_own_pending" on public.properties for insert with check (
-  owner_id = auth.uid() and listing_status = 'pending' and coalesce(featured, false) = false
+  owner_id = auth.uid()
+  and coalesce(featured, false) = false
+  and exists (
+    select 1 from public.profiles profile
+    where profile.id = auth.uid()
+      and profile.account_status = 'active'
+      and (
+        (
+          now() < timestamptz '2027-04-08 00:00:00+00'
+          and listing_status = 'approved'
+        )
+        or (
+          now() >= timestamptz '2027-04-08 00:00:00+00'
+          and profile.role in ('ADMIN', 'AGENT')
+          and (profile.role = 'ADMIN' or profile.agent_status = 'approved')
+          and listing_status = 'pending'
+        )
+      )
+  )
 );
 create policy "properties_update_own_private" on public.properties for update
-using (owner_id = auth.uid() and listing_status in ('pending', 'rejected'))
-with check (owner_id = auth.uid() and listing_status in ('pending', 'rejected') and coalesce(featured, false) = false);
-create policy "properties_delete_own_private" on public.properties for delete using (owner_id = auth.uid() and listing_status in ('pending', 'rejected'));
+using (
+  owner_id = auth.uid()
+  and (
+    listing_status in ('pending', 'rejected')
+    or (
+      listing_status = 'approved'
+      and now() < timestamptz '2027-04-08 00:00:00+00'
+      and exists (
+        select 1 from public.profiles profile
+        where profile.id = auth.uid() and profile.account_status = 'active'
+      )
+    )
+  )
+)
+with check (
+  owner_id = auth.uid()
+  and coalesce(featured, false) = false
+  and (
+    listing_status in ('pending', 'rejected')
+    or (
+      listing_status = 'approved'
+      and now() < timestamptz '2027-04-08 00:00:00+00'
+      and exists (
+        select 1 from public.profiles profile
+        where profile.id = auth.uid() and profile.account_status = 'active'
+      )
+    )
+  )
+);
+create policy "properties_delete_own_private" on public.properties for delete using (
+  public.is_admin()
+  or (
+    owner_id = auth.uid()
+    and (
+      listing_status in ('pending', 'rejected')
+      or (
+        listing_status = 'approved'
+        and now() < timestamptz '2027-04-08 00:00:00+00'
+        and created_at > now() - interval '10 minutes'
+      )
+    )
+  )
+);
 create policy "properties_admin_all" on public.properties for all using (public.is_admin()) with check (public.is_admin());
 create policy "property_images_select_visible" on public.property_images for select using (exists (
   select 1 from public.properties p where p.id = property_id and
   ((p.listing_status = 'approved' and p.status = 'available' and (p.expires_at is null or p.expires_at > now())) or p.owner_id = auth.uid() or public.is_admin())
 ));
-create policy "property_images_insert_owner" on public.property_images for insert with check (exists (
-  select 1 from public.properties p where p.id = property_id and p.owner_id = auth.uid() and p.listing_status in ('pending', 'rejected')
-) or public.is_admin());
+create policy "property_images_insert_owner" on public.property_images for insert with check (
+  public.is_admin()
+  or exists (
+    select 1
+    from public.properties p
+    join public.profiles profile on profile.id = p.owner_id
+    where p.id = property_id
+      and p.owner_id = auth.uid()
+      and profile.account_status = 'active'
+      and (
+        (
+          now() < timestamptz '2027-04-08 00:00:00+00'
+          and p.listing_status = 'approved'
+        )
+        or (
+          now() >= timestamptz '2027-04-08 00:00:00+00'
+          and profile.role in ('ADMIN', 'AGENT')
+          and (profile.role = 'ADMIN' or profile.agent_status = 'approved')
+          and p.listing_status in ('pending', 'rejected')
+        )
+      )
+  )
+);
+create policy "property_images_delete_owner" on public.property_images for delete using (
+  public.is_admin()
+  or exists (
+    select 1 from public.properties p
+    where p.id = property_id
+      and p.owner_id = auth.uid()
+      and p.listing_status = 'approved'
+      and now() < timestamptz '2027-04-08 00:00:00+00'
+      and p.created_at > now() - interval '10 minutes'
+  )
+);
 create policy "property_images_admin_delete" on public.property_images for delete using (public.is_admin());
 create policy "neighborhoods_public_read" on public.neighborhoods for select using (true);
 create policy "neighborhoods_admin_write" on public.neighborhoods for all using (public.is_admin()) with check (public.is_admin());
@@ -262,7 +359,30 @@ create policy "admin_activity_logs" on public.activity_logs for all using (publi
 -- Create these buckets in Supabase Storage before uploads: property-images (public) and tenant-documents (private).
 create policy "storage_property_images_public_read" on storage.objects for select using (bucket_id = 'property-images');
 create policy "storage_property_images_owner_insert" on storage.objects for insert with check (
-  bucket_id = 'property-images' and (storage.foldername(name))[1] = auth.uid()::text
+  bucket_id = 'property-images'
+  and (
+    public.is_admin()
+    or exists (
+      select 1
+      from public.properties p
+      join public.profiles profile on profile.id = p.owner_id
+      where p.owner_id = auth.uid()
+        and p.id::text = (storage.foldername(name))[2]
+        and profile.account_status = 'active'
+        and (
+          (
+            now() < timestamptz '2027-04-08 00:00:00+00'
+            and p.listing_status = 'approved'
+          )
+          or (
+            now() >= timestamptz '2027-04-08 00:00:00+00'
+            and profile.role in ('ADMIN', 'AGENT')
+            and (profile.role = 'ADMIN' or profile.agent_status = 'approved')
+            and p.listing_status in ('pending', 'rejected')
+          )
+        )
+    )
+  )
 );
 create policy "storage_property_images_owner_delete" on storage.objects for delete using (
   bucket_id = 'property-images' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin())

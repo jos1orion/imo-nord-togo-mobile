@@ -117,6 +117,7 @@ export default function ContractsPage() {
   };
 
   const handleDelete = async (contractId: string) => {
+    if (!window.confirm('Supprimer ce contrat ? Cette action est irréversible.')) return;
     const { error } = await supabase.from('contracts').delete().eq('id', contractId);
     if (error) {
       alert(`Erreur suppression: ${error.message}`);

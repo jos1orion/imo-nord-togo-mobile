@@ -100,6 +100,10 @@ const createNoopSupabase = (): SupabaseClient =>
       }),
       getSession: async () => ({ data: { session: null }, error: makeNotConfiguredError() }),
       getUser: async () => ({ data: { user: null }, error: makeNotConfiguredError() }),
+      setSession: async () => ({
+        data: { session: null, user: null },
+        error: makeNotConfiguredError(),
+      }),
       resetPasswordForEmail: async () => ({ data: null, error: makeNotConfiguredError() }),
       signUp: async () => ({ data: null, error: makeNotConfiguredError() }),
       signInWithPassword: async () => ({ data: null, error: makeNotConfiguredError() }),
@@ -146,29 +150,50 @@ const authCodeExchanges = new Map<
   string,
   Promise<{ error: Error | null }>
 >();
+const authTokenSessions = new Map<string, Promise<{ error: Error | null }>>();
 
 export const exchangeAuthCallback = async (url: string) => {
   const callbackUrl = new URL(url);
-  const oauthError = callbackUrl.searchParams.get('error');
+  const fragmentParams = new URLSearchParams(callbackUrl.hash.slice(1));
+  const oauthError =
+    callbackUrl.searchParams.get('error') || fragmentParams.get('error');
   if (oauthError) {
     const description =
       callbackUrl.searchParams.get('error_description') ||
+      fragmentParams.get('error_description') ||
       callbackUrl.searchParams.get('error_code') ||
+      fragmentParams.get('error_code') ||
       oauthError;
     return { error: new Error(description) };
   }
 
-  const code = callbackUrl.searchParams.get('code');
-  if (!code) return null;
+  const code =
+    callbackUrl.searchParams.get('code') || fragmentParams.get('code');
+  if (code) {
+    const existingExchange = authCodeExchanges.get(code);
+    if (existingExchange) return existingExchange;
 
-  const existingExchange = authCodeExchanges.get(code);
-  if (existingExchange) return existingExchange;
+    const exchange = supabase.auth.exchangeCodeForSession(code).then(({ error }) => ({
+      error: error ?? null,
+    }));
+    authCodeExchanges.set(code, exchange);
+    return exchange;
+  }
 
-  const exchange = supabase.auth.exchangeCodeForSession(code).then(({ error }) => ({
-    error: error ?? null,
-  }));
-  authCodeExchanges.set(code, exchange);
-  return exchange;
+  const accessToken =
+    callbackUrl.searchParams.get('access_token') || fragmentParams.get('access_token');
+  const refreshToken =
+    callbackUrl.searchParams.get('refresh_token') || fragmentParams.get('refresh_token');
+  if (!accessToken || !refreshToken) return null;
+
+  const existingSession = authTokenSessions.get(accessToken);
+  if (existingSession) return existingSession;
+
+  const session = supabase.auth
+    .setSession({ access_token: accessToken, refresh_token: refreshToken })
+    .then(({ error }) => ({ error: error ?? null }));
+  authTokenSessions.set(accessToken, session);
+  return session;
 };
 
 if (!isSupabaseConfigured) {

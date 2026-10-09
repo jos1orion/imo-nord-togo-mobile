@@ -3,18 +3,27 @@ import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
 
 const NotificationsScreen: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const navigation = useNavigation();
   const { notifications, markNotificationRead, clearNotifications, language, t } = useApp();
+
+  const showActionError = (error: unknown) => {
+    Alert.alert(t('error'), error instanceof Error ? error.message : t('error'));
+  };
 
   const handleClear = () => {
     Alert.alert(t('notifications_clear_title'), t('notifications_clear_message'), [
       { text: t('cancel'), style: 'cancel' },
-      { text: t('profile_clear_history'), style: 'destructive', onPress: clearNotifications },
+      {
+        text: t('profile_clear_history'),
+        style: 'destructive',
+        onPress: () => { void clearNotifications().catch(showActionError); },
+      },
     ]);
   };
 
@@ -22,7 +31,7 @@ const NotificationsScreen: React.FC = () => {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.text} />
+          <Ionicons name="arrow-back" size={22} color={themeColors.onSurface} />
         </TouchableOpacity>
         <Text style={styles.title}>{t('notifications_title')}</Text>
         {notifications.length > 0 ? (
@@ -36,7 +45,7 @@ const NotificationsScreen: React.FC = () => {
         {notifications.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
-              <Ionicons name="notifications-off-outline" size={30} color={COLORS.primary} />
+              <Ionicons name="notifications-off-outline" size={30} color={themeColors.primary} />
             </View>
             <Text style={styles.emptyTitle}>{t('notifications_empty_title')}</Text>
             <Text style={styles.emptyText}>{t('notifications_empty_message')}</Text>
@@ -46,14 +55,14 @@ const NotificationsScreen: React.FC = () => {
             <TouchableOpacity
               key={notification.id}
               style={[styles.item, !notification.read && styles.itemUnread]}
-              onPress={() => markNotificationRead(notification.id)}
+              onPress={() => { void markNotificationRead(notification.id).catch(showActionError); }}
               activeOpacity={0.8}
             >
               <View style={[styles.itemIcon, notification.read && styles.itemIconRead]}>
                 <Ionicons
                   name={notification.read ? 'checkmark' : 'ellipse'}
                   size={notification.read ? 17 : 10}
-                  color="#fff"
+                  color={themeColors.white}
                 />
               </View>
               <View style={styles.itemContent}>
@@ -86,7 +95,7 @@ const baseStyles = StyleSheet.create({
     paddingTop: 50,
     paddingHorizontal: 16,
     paddingBottom: 14,
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
@@ -100,9 +109,9 @@ const baseStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  title: { flex: 1, marginLeft: 12, fontSize: 19, fontWeight: '700', color: COLORS.text },
+  title: { flex: 1, marginLeft: 12, fontSize: 19, fontWeight: '700', color: COLORS.onSurface },
   headerSpacer: { width: 42 },
-  clearText: { color: COLORS.error, fontSize: 14, fontWeight: '700' },
+  clearText: { color: COLORS.danger, fontSize: 14, fontWeight: '700' },
   content: { padding: 16, paddingBottom: 32 },
   emptyState: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 90 },
   emptyIcon: {
@@ -111,21 +120,21 @@ const baseStyles = StyleSheet.create({
     borderRadius: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.infoBg,
+    backgroundColor: COLORS.primaryContainer,
     marginBottom: 16,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 8 },
-  emptyText: { textAlign: 'center', lineHeight: 21, color: COLORS.textMuted },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.onSurface, marginBottom: 8 },
+  emptyText: { textAlign: 'center', lineHeight: 21, color: COLORS.onSurfaceMuted },
   item: {
     flexDirection: 'row',
     padding: 14,
     marginBottom: 10,
     borderRadius: 14,
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  itemUnread: { borderColor: COLORS.primary, backgroundColor: COLORS.infoBg },
+  itemUnread: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryContainer },
   itemIcon: {
     width: 28,
     height: 28,
@@ -136,11 +145,11 @@ const baseStyles = StyleSheet.create({
     marginRight: 12,
     marginTop: 1,
   },
-  itemIconRead: { backgroundColor: COLORS.textMuted },
+  itemIconRead: { backgroundColor: COLORS.onSurfaceMuted },
   itemContent: { flex: 1 },
-  itemTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
-  itemBody: { fontSize: 14, lineHeight: 20, color: COLORS.textMuted },
-  date: { marginTop: 8, fontSize: 12, color: COLORS.textMuted },
+  itemTitle: { fontSize: 15, fontWeight: '700', color: COLORS.onSurface, marginBottom: 4 },
+  itemBody: { fontSize: 14, lineHeight: 20, color: COLORS.onSurfaceMuted },
+  date: { marginTop: 8, fontSize: 12, color: COLORS.onSurfaceMuted },
   unreadIndicator: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginLeft: 8, marginTop: 5 },
 });
 

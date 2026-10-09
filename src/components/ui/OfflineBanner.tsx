@@ -4,10 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../../theme/colors';
 import { useApp } from '../../context/AppContext';
 import { safeGetNetworkStateAsync } from '../../lib/expoNetworkSafe';
-import { useThemedStyles } from '../../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../../theme/useThemedStyles';
 
 const OfflineBanner: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const { t } = useApp();
   const [offline, setOffline] = useState(false);
 
@@ -39,7 +40,7 @@ const OfflineBanner: React.FC = () => {
 
   return (
     <View style={styles.bar} accessibilityRole="alert">
-      <Ionicons name="cloud-offline-outline" size={18} color="#92400E" style={styles.icon} />
+      <Ionicons name="cloud-offline-outline" size={18} color={themeColors.onWarningContainer} style={styles.icon} />
       <Text style={styles.text}>{t('offline_message')}</Text>
     </View>
   );
@@ -50,17 +51,17 @@ const baseStyles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.warningBg,
+    backgroundColor: COLORS.warningContainer,
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#FCD34D',
+    borderBottomColor: COLORS.onWarningContainer,
   },
   text: {
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
-    color: '#92400E',
+    color: COLORS.onWarningContainer,
   },
 });
 

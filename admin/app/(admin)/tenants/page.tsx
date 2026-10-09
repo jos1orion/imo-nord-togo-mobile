@@ -94,6 +94,7 @@ export default function TenantsPage() {
   };
 
   const handleDelete = async (tenantId: string) => {
+    if (!window.confirm('Supprimer ce locataire ? Cette action est irréversible.')) return;
     const { error } = await supabase.from('tenants').delete().eq('id', tenantId);
     if (error) {
       alert(`Erreur suppression: ${error.message}`);

@@ -9,7 +9,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import COLORS from '../theme/colors';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 
 type LazyImageProps = {
   uri: string;
@@ -23,6 +23,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
   resizeMode = 'cover',
 }) => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const [loaded, setLoaded] = useState(false);
 
   return (
@@ -36,7 +37,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
 
       {!loaded && (
         <View style={styles.placeholder}>
-          <ActivityIndicator color={COLORS.primary} />
+          <ActivityIndicator color={themeColors.primary} />
         </View>
       )}
     </View>

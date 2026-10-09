@@ -20,12 +20,14 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { PROPERTY_TYPE_COLORS } from '../types';
-import { formatPrice } from '../data/mock-data';
+import { formatPrice } from '../utils/format';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import { canViewProperty, isPublicProperty } from '../utils/propertyVisibility';
+import { RADIUS, SPACING } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 const { width } = Dimensions.get('window');
 
@@ -34,6 +36,7 @@ type DetailRouteProp = RouteProp<RootStackParamList, 'PropertyDetail'>;
 
 const PropertyDetailScreen: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
+  const themeColors = useThemeColors();
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const route = useRoute<DetailRouteProp>();
@@ -285,7 +288,6 @@ const PropertyDetailScreen: React.FC = () => {
           onMomentumScrollEnd={event => {
             const index = Math.round(event.nativeEvent.contentOffset.x / width);
             setActiveImageIndex(index);
-            openViewerAt(index);
           }}
           scrollEventThrottle={16}
           >
@@ -300,14 +302,18 @@ const PropertyDetailScreen: React.FC = () => {
           </ScrollView>
         <View style={styles.imageOverlay}>
           <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
-            <Ionicons name="arrow-back" size={24} color="#111827" />
+            <Ionicons name="arrow-back" size={24} color={themeColors.onSurface} />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.favoriteButton, favorite && styles.favoriteButtonActive]}
-            onPress={() => toggleFavorite(property.id)}
+            onPress={() => {
+              void toggleFavorite(property.id).catch(error => {
+                Alert.alert(t('error'), error instanceof Error ? error.message : t('error'));
+              });
+            }}
           >
-            <Ionicons name={favorite ? 'heart' : 'heart-outline'} size={20} color={favorite ? '#EF4444' : '#111827'} />
+            <Ionicons name={favorite ? 'heart' : 'heart-outline'} size={20} color={favorite ? themeColors.danger : themeColors.onSurface} />
           </TouchableOpacity>
 
           <View style={[styles.typeBadge, { backgroundColor: PROPERTY_TYPE_COLORS[property.type] }]}>
@@ -357,7 +363,7 @@ const PropertyDetailScreen: React.FC = () => {
             <View style={styles.detailInfo}>
               <Text style={styles.detailTitle}>{property.title}</Text>
               <View style={styles.locationRow}>
-                <Ionicons name="location" size={14} color="#9CA3AF" />
+                <Ionicons name="location" size={14} color={themeColors.onSurfaceSoft} />
                 <Text style={styles.location}>
                   {[property.neighborhood, property.location].filter(Boolean).join(', ') || t('property_location_unknown')}
                 </Text>
@@ -372,19 +378,19 @@ const PropertyDetailScreen: React.FC = () => {
           <View style={styles.badgeRow}>
             {property.featured && (
               <View style={[styles.tagBadge, styles.tagFeatured]}>
-                <Ionicons name="star" size={12} color="#F59E0B" />
+                <Ionicons name="star" size={12} color={themeColors.gold} />
                 <Text style={styles.tagText}>{t('card_badge_top')}</Text>
               </View>
             )}
             {isVerified && (
               <View style={[styles.tagBadge, styles.tagVerified]}>
-                <Ionicons name="checkmark-circle" size={12} color={COLORS.primary} />
+                <Ionicons name="checkmark-circle" size={12} color={themeColors.primary} />
                 <Text style={styles.tagText}>{t('card_badge_verified')}</Text>
               </View>
             )}
             {isNew && (
               <View style={[styles.tagBadge, styles.tagNew]}>
-                <Ionicons name="sparkles" size={12} color="#F59E0B" />
+                <Ionicons name="sparkles" size={12} color={themeColors.gold} />
                 <Text style={styles.tagText}>{t('card_badge_new')}</Text>
               </View>
             )}
@@ -399,19 +405,19 @@ const PropertyDetailScreen: React.FC = () => {
           <View style={styles.detailStats}>
             {property.bedrooms !== undefined && (
               <View style={styles.detailStat}>
-                <Ionicons name="bed" size={16} color={COLORS.primary} />
+                <Ionicons name="bed" size={16} color={themeColors.primary} />
                 <Text style={styles.detailStatText}>{property.bedrooms} {t('property_bedrooms')}</Text>
               </View>
             )}
             {property.bathrooms !== undefined && (
               <View style={styles.detailStat}>
-                <Ionicons name="water" size={16} color={COLORS.primary} />
+                <Ionicons name="water" size={16} color={themeColors.primary} />
                 <Text style={styles.detailStatText}>{property.bathrooms} {t('property_bathrooms')}</Text>
               </View>
             )}
             {property.area !== undefined && (
               <View style={styles.detailStat}>
-                <Ionicons name="resize" size={16} color={COLORS.primary} />
+                <Ionicons name="resize" size={16} color={themeColors.primary} />
                 <Text style={styles.detailStatText}>{property.area} m2</Text>
               </View>
             )}
@@ -432,16 +438,16 @@ const PropertyDetailScreen: React.FC = () => {
             </Text>
             <View style={styles.ownerActions}>
               <TouchableOpacity style={styles.ownerActionPrimary} onPress={() => handleMarkOccupied('sold')}>
-                <Ionicons name="cash" size={16} color="#fff" />
+                <Ionicons name="cash" size={16} color={themeColors.white} />
                 <Text style={styles.ownerActionTextPrimary}>{t('property_mark_sold')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.ownerActionPrimary} onPress={() => handleMarkOccupied('occupied')}>
-                <Ionicons name="home" size={16} color="#fff" />
+                <Ionicons name="home" size={16} color={themeColors.white} />
                 <Text style={styles.ownerActionTextPrimary}>{t('property_mark_occupied')}</Text>
               </TouchableOpacity>
               {property.status === 'occupied' && (
                 <TouchableOpacity style={styles.ownerActionGhost} onPress={handleMarkAvailable}>
-                  <Ionicons name="refresh" size={16} color={COLORS.primary} />
+                  <Ionicons name="refresh" size={16} color={themeColors.primary} />
                   <Text style={styles.ownerActionTextGhost}>{t('property_restore_available')}</Text>
                 </TouchableOpacity>
               )}
@@ -483,7 +489,7 @@ const PropertyDetailScreen: React.FC = () => {
           <View style={styles.amenities}>
             {property.amenities.map((amenity, index) => (
               <View key={index} style={styles.amenityChip}>
-                <Ionicons name="checkmark-circle" size={16} color={COLORS.primary} />
+                <Ionicons name="checkmark-circle" size={16} color={themeColors.primary} />
                 <Text style={styles.amenityText}>{amenity}</Text>
               </View>
             ))}
@@ -499,7 +505,7 @@ const PropertyDetailScreen: React.FC = () => {
               style={[styles.contactButton, styles.contactButtonPrimary]}
               onPress={handleContactAgent}
             >
-              <Ionicons name="call" size={18} color="#fff" />
+              <Ionicons name="call" size={18} color={themeColors.white} />
               <Text style={[styles.contactButtonText, styles.contactButtonTextOnPrimary]}>
                 {t('call_agency')}
               </Text>
@@ -508,7 +514,7 @@ const PropertyDetailScreen: React.FC = () => {
               style={[styles.contactButton, styles.contactButtonAccent]}
               onPress={handleWhatsApp}
             >
-              <Ionicons name="logo-whatsapp" size={18} color="#fff" />
+              <Ionicons name="logo-whatsapp" size={18} color={themeColors.white} />
               <Text style={[styles.contactButtonText, styles.contactButtonTextOnPrimary]}>
                 WhatsApp
               </Text>
@@ -517,20 +523,11 @@ const PropertyDetailScreen: React.FC = () => {
               style={[styles.contactButton, styles.contactButtonGhost]}
               onPress={handleShare}
             >
-              <Ionicons name="share-social" size={18} color={COLORS.primary} />
+              <Ionicons name="share-social" size={18} color={themeColors.primary} />
               <Text style={styles.contactButtonText}>{t('share')}</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('MortgageCalculator')}
-            >
-              <Ionicons name="calculator" size={16} color={COLORS.primary} />
-              <Text style={styles.actionButtonText}>{t('mortgageCalculator')}</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         {similarProperties.length > 0 && (
@@ -559,15 +556,15 @@ const PropertyDetailScreen: React.FC = () => {
 
       <View style={[styles.bottomActions, { paddingBottom: Math.max(insets.bottom, 12) + 16 }]}>
         <TouchableOpacity style={styles.contactQuick} onPress={handleContactAgent}>
-          <Ionicons name="call" size={17} color={COLORS.primary} />
+          <Ionicons name="call" size={17} color={themeColors.primary} />
           <Text style={styles.contactQuickText}>{t('call')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.whatsappQuick} onPress={handleWhatsApp}>
-          <Ionicons name="logo-whatsapp" size={17} color="#fff" />
+          <Ionicons name="logo-whatsapp" size={17} color={themeColors.white} />
           <Text style={styles.whatsappQuickText}>WhatsApp</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.shareQuick} onPress={handleShare}>
-          <Ionicons name="share-social" size={17} color={COLORS.primary} />
+          <Ionicons name="share-social" size={17} color={themeColors.primary} />
           <Text style={styles.shareText}>{t('share')}</Text>
         </TouchableOpacity>
       </View>
@@ -575,7 +572,7 @@ const PropertyDetailScreen: React.FC = () => {
       {viewerOpen && (
         <View style={styles.viewerBackdrop}>
           <TouchableOpacity style={styles.viewerClose} onPress={() => setViewerOpen(false)}>
-            <Ionicons name="close" size={22} color="#fff" />
+            <Ionicons name="close" size={22} color={themeColors.white} />
           </TouchableOpacity>
           <FlatList
             ref={viewerScrollRef}
@@ -595,15 +592,9 @@ const PropertyDetailScreen: React.FC = () => {
               setViewerIndex(index);
             }}
             renderItem={({ item: uri }) => (
-              <ScrollView
-                maximumZoomScale={3}
-                minimumZoomScale={1}
-                directionalLockEnabled
-                nestedScrollEnabled
-                contentContainerStyle={styles.viewerImageWrap}
-              >
+              <View style={styles.viewerImageWrap}>
                 <Image source={{ uri }} style={styles.viewerImage} />
-              </ScrollView>
+              </View>
             )}
           />
         </View>
@@ -625,7 +616,7 @@ const baseStyles = StyleSheet.create({
   },
   errorText: {
     fontSize: 18,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
   },
   backLink: {
     fontSize: 16,
@@ -635,7 +626,7 @@ const baseStyles = StyleSheet.create({
   imageContainer: {
     height: 280,
     position: 'relative',
-    backgroundColor: COLORS.text,
+    backgroundColor: COLORS.onSurface,
   },
   image: {
     width,
@@ -660,7 +651,7 @@ const baseStyles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: 'rgba(15, 23, 42, 0.72)',
   },
-  imageCounterText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  imageCounterText: { color: COLORS.white, fontSize: 12, fontWeight: '700' },
   imageDot: {
     width: 8,
     height: 8,
@@ -668,7 +659,7 @@ const baseStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.5)',
   },
   imageDotActive: {
-    backgroundColor: '#ffffff',
+    backgroundColor: COLORS.surface,
     width: 18,
   },
   thumbsRow: {
@@ -699,7 +690,7 @@ const baseStyles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#0b0f14',
+    backgroundColor: COLORS.onSurface,
     zIndex: 20,
   },
   viewerClose: {
@@ -750,7 +741,7 @@ const baseStyles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   favoriteButtonActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
   },
   backButton: {
     width: 40,
@@ -768,7 +759,7 @@ const baseStyles = StyleSheet.create({
     borderRadius: 20,
   },
   typeText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -783,12 +774,12 @@ const baseStyles = StyleSheet.create({
   detailCard: {
     marginHorizontal: 16,
     marginTop: 4,
-    backgroundColor: COLORS.card,
-    borderRadius: 18,
-    padding: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: '#000',
+    shadowColor: COLORS.shadow,
     shadowOpacity: 0.04,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 8 },
@@ -803,9 +794,10 @@ const baseStyles = StyleSheet.create({
     flex: 1,
   },
   detailTitle: {
+    ...typography.title,
     fontSize: 20,
     fontWeight: '800',
-    color: COLORS.text,
+    color: COLORS.onSurface,
     marginBottom: 6,
   },
   locationRow: {
@@ -816,12 +808,12 @@ const baseStyles = StyleSheet.create({
   },
   location: {
     fontSize: 14,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
   },
   locationPrivacyNote: {
     fontSize: 11,
     lineHeight: 16,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginTop: -8,
     marginBottom: 8,
   },
@@ -846,32 +838,32 @@ const baseStyles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.chipBg,
+    backgroundColor: COLORS.surfaceAlt,
   },
   tagFeatured: {
-    backgroundColor: '#FFF7ED',
-    borderColor: '#FED7AA',
+    backgroundColor: COLORS.primaryContainer,
+    borderColor: COLORS.primaryContainer,
   },
   tagVerified: {
-    backgroundColor: COLORS.infoBg,
-    borderColor: COLORS.borderSoft,
+    backgroundColor: COLORS.primaryContainer,
+    borderColor: COLORS.borderStrong,
   },
   tagNew: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#FCD34D',
+    backgroundColor: COLORS.warningContainer,
+    borderColor: COLORS.onWarningContainer,
   },
   tagAvailable: {
-    backgroundColor: COLORS.successBg,
-    borderColor: '#86EFAC',
+    backgroundColor: COLORS.successContainer,
+    borderColor: COLORS.onSuccessContainer,
   },
   tagOccupied: {
-    backgroundColor: COLORS.dangerBg,
-    borderColor: '#FCA5A5',
+    backgroundColor: COLORS.dangerContainer,
+    borderColor: COLORS.onDangerContainer,
   },
   tagText: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.onSurface,
   },
   detailStats: {
     flexDirection: 'row',
@@ -882,7 +874,7 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: COLORS.chipBg,
+    backgroundColor: COLORS.surfaceAlt,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
@@ -892,7 +884,7 @@ const baseStyles = StyleSheet.create({
   detailStatText: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.text,
+    color: COLORS.onSurface,
   },
   detailActions: {
     flexDirection: 'row',
@@ -909,26 +901,26 @@ const baseStyles = StyleSheet.create({
   primaryCtaText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#fff',
+    color: COLORS.white,
   },
   section: {
     marginHorizontal: 16,
     marginTop: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: COLORS.onSurface,
     marginBottom: 12,
   },
   ownerHint: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: COLORS.onSurfaceMuted,
     marginBottom: 12,
     lineHeight: 18,
   },
@@ -949,7 +941,7 @@ const baseStyles = StyleSheet.create({
   ownerActionTextPrimary: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#fff',
+    color: COLORS.white,
   },
   ownerActionGhost: {
     flexDirection: 'row',
@@ -958,39 +950,14 @@ const baseStyles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: COLORS.infoBg,
+    backgroundColor: COLORS.primaryContainer,
     borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    borderColor: COLORS.borderStrong,
   },
   ownerActionTextGhost: {
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.primary,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 10,
-  },
-  actionButton: {
-    flex: 1,
-    minWidth: 100,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F5F7FA',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  actionButtonText: {
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '700',
   },
   statLine: {
     flexDirection: 'row',
@@ -999,16 +966,16 @@ const baseStyles = StyleSheet.create({
   },
   statLineLabel: {
     fontSize: 13,
-    color: '#6B7280',
+    color: COLORS.onSurfaceMuted,
   },
   statLineValue: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#111827',
+    color: COLORS.onSurface,
   },
   description: {
     fontSize: 14,
-    color: '#6B7280',
+    color: COLORS.onSurfaceMuted,
     lineHeight: 22,
   },
   amenities: {
@@ -1020,12 +987,12 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: COLORS.background,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   amenityText: {
     fontSize: 13,
@@ -1034,11 +1001,11 @@ const baseStyles = StyleSheet.create({
   similarCard: {
     width: 160,
     marginRight: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border,
   },
   similarImage: {
     width: '100%',
@@ -1049,7 +1016,7 @@ const baseStyles = StyleSheet.create({
   similarTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#111827',
+    color: COLORS.onSurface,
   },
   similarPrice: {
     fontSize: 12,
@@ -1061,7 +1028,7 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#ef4444',
+    backgroundColor: COLORS.danger,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
@@ -1071,11 +1038,11 @@ const baseStyles = StyleSheet.create({
   saleBannerText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#fff',
+    color: COLORS.white,
   },
   contactNote: {
     fontSize: 13,
-    color: '#6B7280',
+    color: COLORS.onSurfaceMuted,
     marginBottom: 12,
   },
   contactButtons: {
@@ -1087,7 +1054,7 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
@@ -1098,21 +1065,21 @@ const baseStyles = StyleSheet.create({
     color: COLORS.primary,
   },
   contactButtonPrimary: {
-    backgroundColor: '#1D4ED8',
+    backgroundColor: COLORS.primaryDark,
   },
   contactButtonAccent: {
-    backgroundColor: '#22C55E',
+    backgroundColor: COLORS.accent,
   },
   contactButtonGhost: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
   },
   contactButtonTextOnPrimary: {
-    color: '#fff',
+    color: COLORS.white,
   },
   ownerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.surfaceAlt,
     padding: 16,
     borderRadius: 12,
   },
@@ -1127,7 +1094,7 @@ const baseStyles = StyleSheet.create({
   ownerInitials: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#fff',
+    color: COLORS.white,
   },
   ownerInfo: {
     marginLeft: 12,
@@ -1135,11 +1102,11 @@ const baseStyles = StyleSheet.create({
   ownerName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#0F172A',
+    color: COLORS.onSurface,
   },
   ownerPhone: {
     fontSize: 14,
-    color: '#64748B',
+    color: COLORS.onSurfaceMuted,
     marginTop: 4,
   },
   bottomPadding: {
@@ -1154,9 +1121,9 @@ const baseStyles = StyleSheet.create({
     flexWrap: 'wrap',
     padding: 16,
     paddingBottom: 32,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
+    borderTopColor: COLORS.surfaceAlt,
     gap: 10,
   },
   shareButton: {
@@ -1165,7 +1132,7 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
     paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
@@ -1181,7 +1148,7 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff1f2',
+    backgroundColor: COLORS.dangerContainer,
     paddingVertical: 14,
     borderRadius: 12,
     gap: 6,
@@ -1189,7 +1156,7 @@ const baseStyles = StyleSheet.create({
   reportText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#ef4444',
+    color: COLORS.danger,
   },
   contactQuick: {
     flex: 1,
@@ -1197,7 +1164,7 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
     paddingVertical: 14,
     borderRadius: 12,
     gap: 6,
@@ -1213,19 +1180,19 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#16a34a',
+    backgroundColor: COLORS.accent,
     paddingVertical: 14,
     borderRadius: 12,
     gap: 6,
   },
-  whatsappQuickText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  whatsappQuickText: { fontSize: 13, fontWeight: '700', color: COLORS.white },
   shareQuick: {
     flex: 1,
     minWidth: 90,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
     paddingVertical: 14,
     borderRadius: 12,
     gap: 6,
@@ -1244,14 +1211,14 @@ const baseStyles = StyleSheet.create({
   backQuickText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#fff',
+    color: COLORS.white,
   },
   messageButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoContainer,
     paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
@@ -1280,7 +1247,7 @@ const baseStyles = StyleSheet.create({
   callText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#fff',
+    color: COLORS.white,
   },
   modalBackdrop: {
     flex: 1,
@@ -1291,19 +1258,19 @@ const baseStyles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 16,
   },
   modalTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: COLORS.onSurface,
     marginBottom: 12,
   },
   modalLabel: {
     fontSize: 12,
-    color: '#64748B',
+    color: COLORS.onSurfaceMuted,
     fontWeight: '600',
     marginBottom: 6,
   },
@@ -1316,7 +1283,7 @@ const baseStyles = StyleSheet.create({
   reasonChip: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: COLORS.surfaceAlt,
     borderRadius: 16,
   },
   reasonChipActive: {
@@ -1324,16 +1291,16 @@ const baseStyles = StyleSheet.create({
   },
   reasonChipText: {
     fontSize: 12,
-    color: '#374151',
+    color: COLORS.onSurfaceMuted,
     fontWeight: '600',
   },
   reasonChipTextActive: {
-    color: '#fff',
+    color: COLORS.white,
   },
   reportInput: {
     minHeight: 80,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.borderStrong,
     borderRadius: 10,
     padding: 10,
     textAlignVertical: 'top',
@@ -1348,11 +1315,11 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: COLORS.surfaceAlt,
   },
   modalCancelText: {
     fontSize: 12,
-    color: '#374151',
+    color: COLORS.onSurfaceMuted,
     fontWeight: '600',
   },
   modalSubmit: {
@@ -1363,7 +1330,7 @@ const baseStyles = StyleSheet.create({
   },
   modalSubmitText: {
     fontSize: 12,
-    color: '#fff',
+    color: COLORS.white,
     fontWeight: '700',
   },
 });
