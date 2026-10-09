@@ -57,20 +57,20 @@ Pour la connexion Google, activer le fournisseur Google dans **Authentication �
 https://<project-ref>.supabase.co/auth/v1/callback
 ```
 
-Dans **Authentication → URL Configuration → Redirect URLs** de Supabase, autoriser le callback de l’application :
+Dans **Authentication → URL Configuration → Redirect URLs** de Supabase, autoriser les callbacks HTTPS de l’application :
 
 ```text
-imonordtogo://auth/callback
+https://imo-nord-togo-mobile.vercel.app/auth/callback
 ```
 
-Ce callback est utilisé pour la connexion Google et le retour après confirmation de l’inscription. Le manifeste Android déclare le schéma `imonordtogo`; après toute modification du schéma ou des icônes, régénérer le projet natif avec `npx expo prebuild --platform android`.
+Ce callback PKCE est utilisé pour la connexion Google et le retour après confirmation de l’inscription. Android déclare un App Link HTTPS vérifié pour ce domaine. Pour activer sa vérification, le domaine doit être contrôlé par le projet et publier `/.well-known/assetlinks.json` avec `com.imonordtogo.app` et l’empreinte SHA-256 du certificat de signature réellement utilisé (EAS Play/App Signing selon le canal). Il faut aussi vérifier que le déploiement Vercel sert ce fichier sans redirection ni authentification. Régénérer le projet natif avec `npx expo prebuild --platform android` après les changements de manifeste.
 
 Le fournisseur Google doit être activé dans le projet Supabase utilisé par les environnements mobiles, et les identifiants OAuth du fournisseur doivent être valides dans Google Cloud Console.
 
 Pour la réinitialisation du mot de passe mobile, ajouter également cette URL aux **Redirect URLs** :
 
 ```text
-imonordtogo://reset-password
+https://imo-nord-togo-mobile.vercel.app/reset-password
 ```
 
 L’application ouvre cette URL depuis l’email de récupération et permet ensuite de définir un nouveau mot de passe.

@@ -15,6 +15,7 @@ Limiter les conflits de dépendances et clarifier les workflows de build/déploi
 - Ne jamais utiliser de clé Supabase **service_role** côté mobile (uniquement côté serveur, ex. routes API Next).
 - Centraliser la doc “prod” dans `docs/`.
 - SQL existant : `docs/supabase-user-role.sql` puis `docs/supabase-production-migration.sql`.
+- Les migrations exécutables et ordonnées sont aussi conservées dans `supabase/migrations/` (`0001_*.sql`, `0002_*.sql`, etc.). Les copies historiques dans `docs/` restent disponibles comme documentation ; toute nouvelle évolution SQL doit être ajoutée comme une migration numérotée.
 - Promouvoir un `ADMIN` à la main après migration. Les inscriptions sont `USER`.
 
 ## Commandes (depuis la racine)
@@ -31,4 +32,3 @@ Admin (Next.js) :
 - `npm run admin:dev`
 - `npm run admin:build`
 - `npm run admin:start`
-

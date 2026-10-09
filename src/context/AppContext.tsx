@@ -1,8 +1,8 @@
 ﻿import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { Alert, Image, Linking } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
-import * as SecureStore from 'expo-secure-store';
 import {
   authCallbackUrl,
   exchangeAuthCallback,
@@ -359,25 +359,22 @@ const buildChatsFromMessages = (items: Message[]): Chat[] => {
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );
 };
-const memoryStore = new Map<string, string>();
 const storage = {
   async getItem(key: string) {
     try {
-      const value = await SecureStore.getItemAsync(key);
-      if (value !== null) return value;
-    } catch {
-      // Ignore secure store failures and fallback to memory
+      return await AsyncStorage.getItem(key);
+    } catch (error) {
+      console.warn(`Unable to read persisted app data for "${key}".`, error);
+      throw error;
     }
-    return memoryStore.get(key) ?? null;
   },
   async setItem(key: string, value: string) {
     try {
-      await SecureStore.setItemAsync(key, value);
-      return;
-    } catch {
-      // Ignore secure store failures and fallback to memory
+      await AsyncStorage.setItem(key, value);
+    } catch (error) {
+      console.warn(`Unable to persist app data for "${key}".`, error);
+      throw error;
     }
-    memoryStore.set(key, value);
   },
   async multiGet(keys: string[]) {
     return Promise.all(keys.map(async key => [key, await storage.getItem(key)] as const));
@@ -444,7 +441,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (!raw) return fallback;
           try {
             return JSON.parse(raw) as T;
-          } catch {
+          } catch (error) {
+            console.warn(`Unable to parse persisted app data for "${key}".`, error);
             return fallback;
           }
         };
@@ -1914,12 +1912,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const toggleFavorite = async (id: string) => {
     const wasFavorite = favorites.includes(id);
-    if (currentUser?.id) {
-      const result = wasFavorite
-        ? await supabase.from('favorites').delete().match({ user_id: currentUser.id, property_id: id })
-        : await supabase.from('favorites').insert({ user_id: currentUser.id, property_id: id });
-      if (result.error) throw result.error;
-    }
     setFavorites(prev => wasFavorite ? prev.filter(x => x !== id) : [id, ...prev]);
     setPropertyStats(statsPrev => {
       const current = statsPrev[id] || { views: 0, contacts: 0, shares: 0, likes: 0 };
@@ -1929,6 +1921,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         [id]: { ...current, likes: Math.max(0, currentLikes + (wasFavorite ? -1 : 1)) },
       };
     });
+    try {
+      if (currentUser?.id) {
+        const result = wasFavorite
+          ? await supabase.from('favorites').delete().match({ user_id: currentUser.id, property_id: id })
+          : await supabase.from('favorites').insert({ user_id: currentUser.id, property_id: id });
+        if (result.error) throw result.error;
+      }
+    } catch (error) {
+      setFavorites(prev => wasFavorite ? [id, ...prev.filter(item => item !== id)] : prev.filter(item => item !== id));
+      setPropertyStats(statsPrev => {
+        const current = statsPrev[id] || { views: 0, contacts: 0, shares: 0, likes: 0 };
+        return {
+          ...statsPrev,
+          [id]: {
+            ...current,
+            likes: Math.max(0, current.likes + (wasFavorite ? 1 : -1)),
+          },
+        };
+      });
+      throw error;
+    }
   };
 
   const isFavorite = (id: string) => favorites.includes(id);
@@ -2221,22 +2234,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       chat.participants.includes(currentUser.id) && chat.participants.includes(receiverId)
     );
     const chatId = existingChat?.id ?? Date.now().toString();
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        sender_id: currentUser.id,
-        receiver_id: receiverId,
-        property_id: propertyId ?? null,
-        content,
-        read: false,
-        type: propertyId ? 'property_link' : 'text',
-      })
-      .select()
-      .single();
-    if (error) throw error;
-
-    const message = mapMessageRow(data);
-    setMessages(prev => [...prev, message]);
+    const optimisticMessage: Message = {
+      id: `pending-${Date.now()}`,
+      senderId: currentUser.id,
+      receiverId,
+      propertyId,
+      content,
+      timestamp: new Date().toISOString(),
+      read: false,
+      type: propertyId ? 'property_link' : 'text',
+    };
+    setMessages(prev => [...prev, optimisticMessage]);
     setChats(prev => {
       const currentChat = prev.find(chat =>
         chat.participants.includes(currentUser.id) && chat.participants.includes(receiverId)
@@ -2245,8 +2253,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return prev.map(chat => chat.id === currentChat.id
           ? {
               ...chat,
-              lastMessage: message,
-              updatedAt: message.timestamp,
+              lastMessage: optimisticMessage,
+              updatedAt: optimisticMessage.timestamp,
               unreadCount: {
                 ...chat.unreadCount,
                 [receiverId]: (chat.unreadCount[receiverId] || 0) + 1,
@@ -2259,13 +2267,50 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         id: chatId,
         participants: [currentUser.id, receiverId],
         propertyId,
-        lastMessage: message,
-        updatedAt: message.timestamp,
+        lastMessage: optimisticMessage,
+        updatedAt: optimisticMessage.timestamp,
         unreadCount: { [receiverId]: 1 },
       };
       return [...prev, newChat];
     });
-    return { message, chatId };
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: currentUser.id,
+          receiver_id: receiverId,
+          property_id: propertyId ?? null,
+          content,
+          read: false,
+          type: propertyId ? 'property_link' : 'text',
+        })
+        .select()
+        .single();
+      if (error) throw error;
+
+      const message = mapMessageRow(data);
+      setMessages(prev => prev.map(item => item.id === optimisticMessage.id ? message : item));
+      setChats(prev => prev.map(chat => chat.id === chatId
+        ? { ...chat, lastMessage: message, updatedAt: message.timestamp }
+        : chat
+      ));
+      return { message, chatId };
+    } catch (error) {
+      setMessages(prev => prev.filter(item => item.id !== optimisticMessage.id));
+      setChats(prev => existingChat
+        ? prev.map(chat => chat.id === existingChat.id
+            ? {
+                ...chat,
+                lastMessage: existingChat.lastMessage,
+                updatedAt: existingChat.updatedAt,
+                unreadCount: existingChat.unreadCount,
+              }
+            : chat
+          )
+        : prev.filter(chat => chat.id !== chatId)
+      );
+      throw error;
+    }
   }, [chats, currentUser]);
 
   const getChatMessages = useCallback((chatId: string): Message[] => {
@@ -2282,11 +2327,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const chat = chats.find(c => c.id === chatId);
     const otherUserId = chat?.participants.find(id => id !== userId);
     if (!chat || !otherUserId || chat.unreadCount[userId] === 0) return;
-    const { error } = await supabase
-        .from('messages')
-        .update({ read: true })
-        .match({ receiver_id: userId, sender_id: otherUserId });
-    if (error) throw error;
     setChats(prev =>
       prev.map(item =>
         item.id === chatId
@@ -2294,6 +2334,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           : item
       )
     );
+    try {
+      const { error } = await supabase
+          .from('messages')
+          .update({ read: true })
+          .match({ receiver_id: userId, sender_id: otherUserId });
+      if (error) throw error;
+    } catch (error) {
+      setChats(prev =>
+          prev.map(item =>
+            item.id === chatId
+              ? { ...item, unreadCount: { ...item.unreadCount, [userId]: chat.unreadCount[userId] } }
+              : item
+          )
+      );
+      throw error;
+    }
   }, [chats]);
 
   // Review functions

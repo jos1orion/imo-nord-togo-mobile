@@ -34,10 +34,17 @@
       "intentFilters": [
         {
           "action": "VIEW",
-          "autoVerify": false,
+          "autoVerify": true,
           "data": [
             {
-              "scheme": "imonordtogo"
+              "scheme": "https",
+              "host": "imo-nord-togo-mobile.vercel.app",
+              "pathPrefix": "/auth/callback"
+            },
+            {
+              "scheme": "https",
+              "host": "imo-nord-togo-mobile.vercel.app",
+              "pathPrefix": "/reset-password"
             }
           ],
           "category": [

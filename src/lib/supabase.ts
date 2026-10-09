@@ -12,8 +12,8 @@ export const supabaseAnonKey =
   process.env.SUPABASE_ANON_KEY ??
   '';
 
-export const authCallbackUrl = 'imonordtogo://auth/callback';
-export const resetPasswordCallbackUrl = 'imonordtogo://reset-password';
+export const authCallbackUrl = 'https://imo-nord-togo-mobile.vercel.app/auth/callback';
+export const resetPasswordCallbackUrl = 'https://imo-nord-togo-mobile.vercel.app/reset-password';
 
 const isValidHttpUrl = (value: string) => {
   if (!value) return false;
@@ -150,7 +150,6 @@ const authCodeExchanges = new Map<
   string,
   Promise<{ error: Error | null }>
 >();
-const authTokenSessions = new Map<string, Promise<{ error: Error | null }>>();
 
 export const exchangeAuthCallback = async (url: string) => {
   const callbackUrl = new URL(url);
@@ -180,20 +179,7 @@ export const exchangeAuthCallback = async (url: string) => {
     return exchange;
   }
 
-  const accessToken =
-    callbackUrl.searchParams.get('access_token') || fragmentParams.get('access_token');
-  const refreshToken =
-    callbackUrl.searchParams.get('refresh_token') || fragmentParams.get('refresh_token');
-  if (!accessToken || !refreshToken) return null;
-
-  const existingSession = authTokenSessions.get(accessToken);
-  if (existingSession) return existingSession;
-
-  const session = supabase.auth
-    .setSession({ access_token: accessToken, refresh_token: refreshToken })
-    .then(({ error }) => ({ error: error ?? null }));
-  authTokenSessions.set(accessToken, session);
-  return session;
+  return null;
 };
 
 if (!isSupabaseConfigured) {
