@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { StackNavigationProp } from '@react-navigation/stack';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -15,8 +16,11 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
+import { RootStackParamList } from '../../App';
 
-export default function ResetPasswordScreen({ navigation }: { navigation: any }) {
+type ResetPasswordNavigation = StackNavigationProp<RootStackParamList, 'ResetPassword'>;
+
+export default function ResetPasswordScreen({ navigation }: { navigation: ResetPasswordNavigation }) {
   const styles = useThemedStyles(baseStyles);
   const themeColors = useThemeColors();
   const { t } = useApp();
@@ -43,7 +47,7 @@ export default function ResetPasswordScreen({ navigation }: { navigation: any })
         return;
       }
       Alert.alert(t('reset_password_success_title'), t('reset_password_success_message'), [
-        { text: t('reset_password_sign_in'), onPress: () => navigation.navigate('MainTabs') },
+        { text: t('reset_password_sign_in'), onPress: () => navigation.navigate('MainTabs', { screen: 'Home' }) },
       ]);
     } catch {
       Alert.alert(t('reset_password_failed_title'), t('reset_password_failed_message'));

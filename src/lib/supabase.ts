@@ -41,6 +41,40 @@ const makeNotConfiguredError = () => ({
 });
 
 type NoopResult = { data: null; error: { message: string } };
+type NoopChainMethod =
+  | 'select'
+  | 'insert'
+  | 'update'
+  | 'delete'
+  | 'upsert'
+  | 'eq'
+  | 'neq'
+  | 'match'
+  | 'or'
+  | 'order'
+  | 'limit'
+  | 'range'
+  | 'in'
+  | 'contains'
+  | 'gte'
+  | 'lte'
+  | 'gt'
+  | 'lt'
+  | 'is'
+  | 'not'
+  | 'filter'
+  | 'textSearch'
+  | 'throwOnError'
+  | 'returns'
+  | 'single'
+  | 'maybeSingle';
+type NoopQueryBuilder = PromiseLike<NoopResult> & {
+  [Method in NoopChainMethod]: (...args: unknown[]) => NoopQueryBuilder;
+};
+type NoopRealtimeChannel = {
+  on: (...args: unknown[]) => NoopRealtimeChannel;
+  subscribe: (...args: unknown[]) => NoopRealtimeChannel;
+};
 
 const makeNotConfiguredResponse = async (): Promise<NoopResult> => ({
   data: null,
@@ -53,42 +87,38 @@ const makeNotConfiguredResponse = async (): Promise<NoopResult> => ({
  * even if the app calls methods like `.order()`, `.or()`, `.match()`, `.upsert()`, etc.
  */
 const createNoopQueryBuilder = () => {
-  const builder: any = {};
-
-  builder.then = (
-    resolve: (value: NoopResult) => void,
-    reject: (reason?: unknown) => void
-  ) => makeNotConfiguredResponse().then(resolve, reject);
-
-  // Common query builder chain methods used across the app.
-  const chain = () => builder;
-  builder.select = chain;
-  builder.insert = chain;
-  builder.update = chain;
-  builder.delete = chain;
-  builder.upsert = chain;
-  builder.eq = chain;
-  builder.neq = chain;
-  builder.match = chain;
-  builder.or = chain;
-  builder.order = chain;
-  builder.limit = chain;
-  builder.range = chain;
-  builder.in = chain;
-  builder.contains = chain;
-  builder.gte = chain;
-  builder.lte = chain;
-  builder.gt = chain;
-  builder.lt = chain;
-  builder.is = chain;
-  builder.not = chain;
-  builder.filter = chain;
-  builder.textSearch = chain;
-  builder.throwOnError = chain;
-  builder.returns = chain;
-  builder.single = chain;
-  builder.maybeSingle = chain;
-
+  let builder: NoopQueryBuilder;
+  const chain = (..._args: unknown[]): NoopQueryBuilder => builder;
+  builder = {
+    then: (onfulfilled, onrejected) =>
+      makeNotConfiguredResponse().then(onfulfilled, onrejected),
+    select: chain,
+    insert: chain,
+    update: chain,
+    delete: chain,
+    upsert: chain,
+    eq: chain,
+    neq: chain,
+    match: chain,
+    or: chain,
+    order: chain,
+    limit: chain,
+    range: chain,
+    in: chain,
+    contains: chain,
+    gte: chain,
+    lte: chain,
+    gt: chain,
+    lt: chain,
+    is: chain,
+    not: chain,
+    filter: chain,
+    textSearch: chain,
+    throwOnError: chain,
+    returns: chain,
+    single: chain,
+    maybeSingle: chain,
+  };
   return builder;
 };
 
@@ -111,9 +141,10 @@ const createNoopSupabase = (): SupabaseClient =>
     },
     from: () => createNoopQueryBuilder(),
     channel: () => {
-      const channel: any = {};
-      channel.on = () => channel;
-      channel.subscribe = () => channel;
+      const channel: NoopRealtimeChannel = {
+        on: () => channel,
+        subscribe: () => channel,
+      };
       return channel;
     },
     removeChannel: () => {},

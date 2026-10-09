@@ -1,4 +1,5 @@
 ﻿import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { Alert, Image, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -40,6 +41,7 @@ import {
 import { Language, TranslationKey, setCurrentLanguage, translate, translateStatus, translateType } from '../i18n';
 import { isExpiredProperty, isPublicProperty } from '../utils/propertyVisibility';
 import { isDirectPublishingEnabled } from '../lib/publishing';
+import { MessageRow, PropertyRow, ReportRow, ReviewRow } from '../types/db';
 
 interface AppContextType {
   properties: Property[];
@@ -229,12 +231,15 @@ const extractMissingPropertiesColumn = (message?: string): string | null => {
   return match?.[1] ?? null;
 };
 
-  const mapPropertyRow = (row: any): Property => {
-    const isValidImage = (value?: string | null) =>
+const listingStatuses: ListingStatus[] = ['pending', 'approved', 'rejected', 'archived'];
+
+  const mapPropertyRow = (row: PropertyRow): Property => {
+    const isValidImage = (value: string | null | undefined): value is string =>
       typeof value === 'string' && value.trim().length > 0 && value !== 'null';
     const images = Array.isArray(row?.property_images)
-      ? row.property_images.map((img: any) => img?.url).filter(isValidImage)
+      ? row.property_images.map(image => image.url).filter(isValidImage)
       : [];
+    const listingStatus = listingStatuses.find(status => status === row.listing_status) ?? 'pending';
 
   return {
     id: row.id,
@@ -251,10 +256,8 @@ const extractMissingPropertiesColumn = (message?: string): string | null => {
     longitude: row.longitude ?? undefined,
     images,
     status: row.status === 'occupied' ? 'occupied' : 'available',
-    listingStatus: ['pending', 'approved', 'rejected', 'archived'].includes(row.listing_status)
-      ? row.listing_status
-      : 'pending',
-    amenities: Array.isArray(row.amenities) ? row.amenities : [],
+    listingStatus,
+    amenities: Array.isArray(row.amenities) ? row.amenities.filter((item): item is string => typeof item === 'string') : [],
     bedrooms: row.bedrooms ?? undefined,
     bathrooms: row.bathrooms ?? undefined,
     featured: row.featured ?? false,
@@ -294,7 +297,7 @@ const dedupeProperties = (items: Property[]): Property[] => {
   });
   return Array.from(map.values());
 };
-const mapMessageRow = (row: any): Message => ({
+const mapMessageRow = (row: MessageRow): Message => ({
   id: row.id,
   senderId: row.sender_id,
   receiverId: row.receiver_id,
@@ -305,7 +308,7 @@ const mapMessageRow = (row: any): Message => ({
   type: (row.type as Message['type']) ?? 'text',
 });
 
-const mapReviewRow = (row: any): Review => ({
+const mapReviewRow = (row: ReviewRow): Review => ({
   id: row.id,
   propertyId: row.property_id,
   reviewerId: row.user_id ?? '',
@@ -317,7 +320,7 @@ const mapReviewRow = (row: any): Review => ({
   verified: row.verified ?? false,
 });
 
-const mapReportRow = (row: any): Report => ({
+const mapReportRow = (row: ReportRow): Report => ({
   id: row.id,
   propertyId: row.property_id,
   reason: row.reason as ReportReason,
@@ -651,7 +654,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // The database role is the source of truth. Never grant admin access from an email hard-coded in the APK.
   const mapAuthUser = useCallback((
-    user: any,
+    user: SupabaseAuthUser,
     role: User['role'] = 'USER',
     agentStatus: User['agentStatus'] = 'none',
     agentRejectionReason?: string | null,
@@ -689,7 +692,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   }, []);
 
-  const hydrateAuthenticatedUser = useCallback(async (authUser: any) => {
+  const hydrateAuthenticatedUser = useCallback(async (authUser: SupabaseAuthUser | null) => {
     if (!authUser) {
       setCurrentUser(null);
       return;
@@ -863,54 +866,68 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, [currentUser, hydrateAuthenticatedUser]);
 
   const reloadProperties = useCallback(async () => {
-      const { data: props, error } = await supabase
+    const pageSize = 100;
+    let rows: PropertyRow[] = [];
+    let cursor: { createdAt: string; id: string } | null = null;
+    while (true) {
+      let query = supabase
         .from('properties')
         .select('*, property_images(url)')
         .order('created_at', { ascending: false })
-        .range(0, 99);
-      if (error) {
-        console.warn('Properties fetch error', error.message);
-        setSyncError('Une erreur est survenue. Veuillez réessayer.');
-        return;
-      }
-      if (props) {
-        const mapped = dedupeProperties(props.map(mapPropertyRow));
-        const previous = listingStatusRef.current || {};
-        if (currentUser?.id) {
-          mapped.forEach(item => {
-            const prevStatus = previous[item.id];
-            if (prevStatus && prevStatus !== item.listingStatus && item.ownerId === currentUser.id) {
-              const statusLabel =
-                item.listingStatus === 'approved'
-                  ? 'approuvée'
-                  : item.listingStatus === 'rejected'
-                  ? 'refusée'
-                  : item.listingStatus === 'archived'
-                  ? 'archivée'
-                  : 'en attente';
-              notifyLocal('Annonce mise à jour', `Votre annonce "${item.title}" est ${statusLabel}.`);
-            }
-          });
-        }
-        setProperties(mapped);
-        listingStatusRef.current = mapped.reduce<Record<string, ListingStatus | undefined>>(
-          (acc, item) => {
-            acc[item.id] = item.listingStatus;
-            return acc;
-          },
-          listingStatusRef.current ?? {}
+        .order('id', { ascending: false });
+      if (cursor) {
+        query = query.or(
+          `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`
         );
-          setNeighborhoods(prev => {
-            const next = normalizeNeighborhoods(mapped.map(p => p.neighborhood ?? p.location));
-            const merged = new Map<string, string>();
-            [...prev, ...next].forEach(name => {
-              const key = name.toLowerCase();
-              if (!merged.has(key)) merged.set(key, name);
-            });
-            return Array.from(merged.values());
-          });
+      }
+      const { data, error } = await query.limit(pageSize);
+      if (error) throw error;
+      const page: PropertyRow[] = data ?? [];
+      rows = rows.concat(page);
+      if (page.length < pageSize) break;
+      const lastRow = page[page.length - 1];
+      if (!lastRow.created_at) {
+        throw new Error(`Property ${lastRow.id} is missing its created_at pagination cursor.`);
+      }
+      cursor = { createdAt: lastRow.created_at, id: lastRow.id };
+    }
+
+    const mapped = dedupeProperties(rows.map(mapPropertyRow));
+    const previous = listingStatusRef.current || {};
+    if (currentUser?.id) {
+      mapped.forEach(item => {
+        const prevStatus = previous[item.id];
+        if (prevStatus && prevStatus !== item.listingStatus && item.ownerId === currentUser.id) {
+          const statusLabel =
+            item.listingStatus === 'approved'
+              ? 'approuvée'
+              : item.listingStatus === 'rejected'
+              ? 'refusée'
+              : item.listingStatus === 'archived'
+              ? 'archivée'
+              : 'en attente';
+          notifyLocal('Annonce mise à jour', `Votre annonce "${item.title}" est ${statusLabel}.`);
         }
-      }, [currentUser, notifyLocal]);
+      });
+    }
+    setProperties(mapped);
+    listingStatusRef.current = mapped.reduce<Record<string, ListingStatus | undefined>>(
+      (acc, item) => {
+        acc[item.id] = item.listingStatus;
+        return acc;
+      },
+      listingStatusRef.current ?? {}
+    );
+    setNeighborhoods(prev => {
+      const next = normalizeNeighborhoods(mapped.map(property => property.neighborhood ?? property.location));
+      const merged = new Map<string, string>();
+      [...prev, ...next].forEach(name => {
+        const key = name.toLowerCase();
+        if (!merged.has(key)) merged.set(key, name);
+      });
+      return Array.from(merged.values());
+    });
+  }, [currentUser, notifyLocal]);
 
   const loadFavoritesFromSupabase = useCallback(async () => {
     if (!currentUser) return;
@@ -918,7 +935,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .from('favorites')
       .select('property_id')
       .eq('user_id', currentUser.id);
-    if (error) return;
+    if (error) throw error;
     if (data) {
       setFavorites(data.map(row => row.property_id));
     }
@@ -931,7 +948,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .select('*')
       .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
       .order('created_at', { ascending: true });
-    if (error) return;
+    if (error) throw error;
     if (data) {
       const mapped = data.map(mapMessageRow);
       setMessages(mapped);
@@ -944,10 +961,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .from('reviews')
       .select('*')
       .order('created_at', { ascending: false });
-    if (error) {
-      console.warn('Reviews fetch error', error.message);
-      return;
-    }
+    if (error) throw error;
     setReviews((data ?? []).map(mapReviewRow));
   }, []);
 
@@ -960,10 +974,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .from('reports')
       .select('*')
       .order('created_at', { ascending: false });
-    if (error) {
-      console.warn('Reports fetch error', error.message);
-      return;
-    }
+    if (error) throw error;
     setReports((data ?? []).map(mapReportRow));
   }, [currentUser]);
 
@@ -971,104 +982,117 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!hydrated) return;
       setSyncError(null);
       try {
-        let baseNeighborhoods: string[] | null = null;
-        const { data: neighborhoodRows, error: neighborhoodError } = await supabase
-          .from('neighborhoods')
-          .select('name')
-          .order('name', { ascending: true });
-        if (neighborhoodError) {
-          console.warn('Neighborhoods fetch error', neighborhoodError.message);
-          setSyncError('Une erreur est survenue. Veuillez réessayer.');
-        }
-        if (neighborhoodRows) {
-          baseNeighborhoods = normalizeNeighborhoods(neighborhoodRows.map(row => row.name));
-          if (baseNeighborhoods.length > 0) {
-            setNeighborhoods(baseNeighborhoods);
-          }
-        }
-        await reloadProperties();
-        await loadReviewsFromSupabase();
-        await loadReportsFromSupabase();
+        const tasks: Promise<void>[] = [
+          (async () => {
+            const { data, error } = await supabase
+              .from('neighborhoods')
+              .select('name')
+              .order('name', { ascending: true });
+            if (error) throw error;
+            const names = normalizeNeighborhoods((data ?? []).map(row => row.name));
+            if (names.length > 0) {
+              setNeighborhoods(previous => {
+                const merged = new Map(previous.map(name => [name.toLowerCase(), name]));
+                names.forEach(name => merged.set(name.toLowerCase(), name));
+                return Array.from(merged.values());
+              });
+            }
+          })(),
+          reloadProperties(),
+          loadReviewsFromSupabase(),
+          loadReportsFromSupabase(),
+          (async () => {
+            const { data, error } = await supabase.from('tenants').select('*');
+            if (error) throw error;
+            setClients((data ?? []).map(tenant => ({
+              id: tenant.id,
+              name: tenant.full_name ?? '',
+              email: tenant.email ?? '',
+              phone: tenant.phone ?? '',
+              createdAt: tenant.created_at ?? new Date().toISOString(),
+            })));
+          })(),
+        ];
+
         if (currentUser) {
-          await loadFavoritesFromSupabase();
-          await loadMessagesFromSupabase();
-          await loadNotificationsFromSupabase(currentUser.id);
+          tasks.push(
+            loadFavoritesFromSupabase(),
+            loadMessagesFromSupabase(),
+            loadNotificationsFromSupabase(currentUser.id)
+          );
         }
-        if (baseNeighborhoods && baseNeighborhoods.length > 0) {
-          setNeighborhoods(prev => {
-            const merged = new Map<string, string>();
-            prev.forEach(name => merged.set(name.toLowerCase(), name));
-            baseNeighborhoods!.forEach(name => merged.set(name.toLowerCase(), name));
-            return Array.from(merged.values());
-          });
+
+        if (currentUser?.role === 'ADMIN') {
+          tasks.push(
+            (async () => {
+              const { data, error } = await supabase
+                .from('contracts')
+                .select('*')
+                .order('created_at', { ascending: false });
+              if (error) throw error;
+              setContracts((data ?? []).map(contract => ({
+                id: contract.id,
+                propertyId: contract.property_id,
+                tenantId: contract.tenant_id,
+                startDate: contract.start_date,
+                endDate: contract.end_date,
+                rentAmount: Number(contract.rent_amount ?? 0),
+                status: contract.status,
+                createdAt: contract.created_at ?? new Date().toISOString(),
+              })));
+            })(),
+            (async () => {
+              const { data, error } = await supabase
+                .from('payments')
+                .select('*')
+                .order('created_at', { ascending: false });
+              if (error) throw error;
+              setPayments((data ?? []).map(payment => ({
+                id: payment.id,
+                contractId: payment.contract_id,
+                amount: Number(payment.amount ?? 0),
+                paidAt: payment.paid_at,
+                method: payment.method,
+                status: payment.status,
+                createdAt: payment.created_at ?? new Date().toISOString(),
+              })));
+            })(),
+            (async () => {
+              const { data, error } = await supabase
+                .from('tenant_documents')
+                .select('*')
+                .order('created_at', { ascending: false });
+              if (error) throw error;
+              setTenantDocuments((data ?? []).map(document => ({
+                id: document.id,
+                tenantId: document.tenant_id,
+                type: document.type,
+                url: document.url,
+                createdAt: document.created_at ?? new Date().toISOString(),
+              })));
+            })()
+          );
+        } else {
+          setContracts([]);
+          setPayments([]);
+          setTenantDocuments([]);
         }
-        const { data: tenants, error: tenantsError } = await supabase.from('tenants').select('*');
-        if (tenantsError) throw tenantsError;
-        if (tenants) {
-          const mappedTenants: Client[] = tenants.map(t => ({
-            id: t.id,
-            name: t.full_name ?? '',
-            email: t.email ?? '',
-            phone: t.phone ?? '',
-            createdAt: t.created_at ?? new Date().toISOString(),
-          }));
-          setClients(mappedTenants);
-        }
-        const { data: contractRows, error: contractsError } = await supabase
-          .from('contracts')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (contractsError) throw contractsError;
-        if (contractRows) {
-          const mappedContracts: Contract[] = contractRows.map(c => ({
-            id: c.id,
-            propertyId: c.property_id,
-            tenantId: c.tenant_id,
-            startDate: c.start_date,
-            endDate: c.end_date,
-            rentAmount: Number(c.rent_amount ?? 0),
-            status: c.status,
-            createdAt: c.created_at ?? new Date().toISOString(),
-          }));
-          setContracts(mappedContracts);
-        }
-        const { data: paymentRows, error: paymentsError } = await supabase
-          .from('payments')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (paymentsError) throw paymentsError;
-        if (paymentRows) {
-          const mappedPayments: Payment[] = paymentRows.map(p => ({
-            id: p.id,
-            contractId: p.contract_id,
-            amount: Number(p.amount ?? 0),
-            paidAt: p.paid_at,
-            method: p.method,
-            status: p.status,
-            createdAt: p.created_at ?? new Date().toISOString(),
-          }));
-          setPayments(mappedPayments);
-        }
-        const { data: docRows, error: documentsError } = await supabase
-          .from('tenant_documents')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (documentsError) throw documentsError;
-        if (docRows) {
-          const mappedDocs: TenantDocument[] = docRows.map(d => ({
-            id: d.id,
-            tenantId: d.tenant_id,
-            type: d.type,
-            url: d.url,
-            createdAt: d.created_at ?? new Date().toISOString(),
-          }));
-          setTenantDocuments(mappedDocs);
-        }
-      } catch (e) {
-        console.error('Failed to fetch from Supabase', e);
+
+        await Promise.all(tasks);
+      } catch (error) {
+        console.error('Failed to fetch from Supabase', error);
         setSyncError('Une erreur est survenue. Veuillez réessayer.');
       }
-    }, [hydrated, reloadProperties, loadReviewsFromSupabase, loadReportsFromSupabase, currentUser, loadFavoritesFromSupabase, loadMessagesFromSupabase]);
+    }, [
+      hydrated,
+      reloadProperties,
+      loadReviewsFromSupabase,
+      loadReportsFromSupabase,
+      currentUser,
+      loadFavoritesFromSupabase,
+      loadMessagesFromSupabase,
+      loadNotificationsFromSupabase,
+    ]);
 
     const retrySync = useCallback(() => {
       fetchData();
