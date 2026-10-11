@@ -1,0 +1,29 @@
+name: Clean up archived property images
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: property-storage-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the Supabase cleanup function
+        env:
+          ADMIN_BASE_URL: ${{ secrets.ADMIN_BASE_URL }}
+          PROPERTY_STORAGE_CLEANUP_SECRET: ${{ secrets.PROPERTY_STORAGE_CLEANUP_SECRET }}
+        run: |
+          : "${ADMIN_BASE_URL:?Configure the ADMIN_BASE_URL repository secret}"
+          : "${PROPERTY_STORAGE_CLEANUP_SECRET:?Configure the PROPERTY_STORAGE_CLEANUP_SECRET repository secret}"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "x-cleanup-secret: ${PROPERTY_STORAGE_CLEANUP_SECRET}" \
+            "${ADMIN_BASE_URL}/api/internal/cleanup-property-storage"

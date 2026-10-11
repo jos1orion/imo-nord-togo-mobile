@@ -14,20 +14,23 @@ conservés sous `docs/` ne sont plus des entrées de déploiement.
 
 1. Sauvegarder la base et vérifier quelles migrations sont déjà appliquées.
 2. Vérifier les prérequis de chaque migration, puis appliquer uniquement les
-   migrations manquantes selon leurs dépendances. Les numéros ne remplacent pas
-   l’ordre des dépendances : `0005_user_role.sql` précède
-   `0003_production.sql`, et `0004_auth_hardening.sql` nécessite
-   `0006_admin_platform.sql`. Ne pas rejouer une migration déjà appliquée.
+   migrations manquantes selon leurs dépendances. Pour une installation issue
+   des migrations du dépôt, l’ordre est : `0005_user_role.sql` (inutile sur le
+   bootstrap `0002` qui contient déjà `USER`), `0003_production.sql`,
+   `0006_admin_platform.sql`, `0004_auth_hardening.sql`, puis `0007` à `0015`
+   dans l’ordre numérique, et enfin `0017` à `0020`, puis `0021` après
+   validation des prérequis. Ne pas rejouer une migration déjà appliquée.
 3. `0001_rls.sql` est un brouillon hérité explicitement marqué : ne pas
    l’appliquer en production. Ne pas appliquer `0002_bootstrap.sql` à une base
    existante.
-4. Les migrations Storage `0017` et `0018` sont appliquées automatiquement par
-   GitHub Actions lorsqu’elles sont poussées sur `main`.
+4. Les migrations `0017` à `0020` sont appliquées automatiquement par GitHub
+   Actions lorsqu’elles sont poussées sur `main`. Le workflow attend un schéma
+   existant avec les prérequis de `0006_admin_platform.sql` ; il ne consulte pas
+   l’historique ni n’applique les migrations antérieures.
    Configurer une seule fois le secret de dépôt `SUPABASE_DB_URL` avec l’URL de
    connexion PostgreSQL du projet. Ne pas y mettre la clé `service_role`.
-   `0019_storage_api_cleanup.sql` n’est pas exécutée par ce workflow : après
-   vérification de ses prérequis, l’appliquer séparément sur une base ayant déjà
-   `0006_admin_platform.sql` et les migrations précédentes nécessaires.
+   `0021_agent_direct_publishing_now.sql` doit ensuite être appliquée séparément
+   dans le SQL Editor ; le workflow automatique ne la lance pas.
 5. Promouvoir un admin : `update public.profiles set role = 'ADMIN' where id = '<uuid>';`
 6. Vérifier le job `expire-imo-nord-listings` (pg_cron) ou le planifier à la main.
 
@@ -37,16 +40,26 @@ Après avoir confirmé les prérequis, utiliser `0002_bootstrap.sql` comme base
 initiale, puis appliquer les migrations ultérieures dans l’ordre. Ne pas
 appliquer `0001_rls.sql`. Suivre les prérequis des migrations et ne pas supposer
 que leur ordre numérique suffit pour déterminer l’ordre d’application.
-`0019_storage_api_cleanup.sql` doit être appliquée après `0006_admin_platform.sql`.
+`0019_storage_api_cleanup.sql` et `0020_property_storage_cleanup_queue.sql`
+sont appliquées par le workflow ci-dessus après les prérequis. La route serveur
+`/api/internal/cleanup-property-storage` du back-office traite ensuite la file
+via l’API Storage. Définir `PROPERTY_STORAGE_CLEANUP_SECRET` dans l’environnement
+du back-office et configurer les secrets GitHub `ADMIN_BASE_URL` (URL publique
+du back-office, sans slash final) et `PROPERTY_STORAGE_CLEANUP_SECRET`. Le
+workflow GitHub exécute le worker chaque heure. Il supprime les fichiers
+référencés lors de l’archivage ou du passage à l’état occupé, sans SQL direct
+sur `storage.objects`.
+Appliquer également `0021_agent_direct_publishing_now.sql` après `0012` pour
+activer la publication directe des agents dès le 11 octobre 2026.
 
 Les scripts SQL historiques de `docs/` ne sont pas des migrations à exécuter ;
 certains conservent des opérations de nettoyage Storage obsolètes.
 
-La migration `0013_property_reports_compatibility.sql` harmonise les anciens schémas de signalements (`reports.reporter_id`) avec le schéma utilisé par l’application (`property_reports.user_id`). Elle détecte explicitement les cas où les deux tables ou les deux colonnes existent et s’arrête plutôt que de fusionner ou supprimer des données silencieusement.
+La migration `0006_admin_platform.sql` utilise la table canonique `property_reports` partagée par le mobile et le back-office. Si seule l’ancienne table `reports` existe, elle la renomme et harmonise `reporter_id` en `user_id`; si les deux tables existent ou si le schéma est ambigu, elle s’arrête avant les autres changements. `0013_property_reports_compatibility.sql` conserve le même garde-fou pour les installations historiques.
 
 ### Publication temporaire des comptes agent
 
-Du 1er décembre 2026 au 31 mai 2027 inclus (UTC, même fuseau que le Togo), un compte utilisateur actif ayant une demande agent en attente ou refusée peut publier immédiatement. L’approbation agent redevient obligatoire à partir du 1er juin 2027. La migration `0012_temporary_agent_direct_publishing.sql` reste une migration de schéma à déployer après validation des prérequis de la base.
+Les comptes administrateur actifs peuvent publier directement sans période d’expiration. Les comptes agent actifs, y compris ceux nouvellement créés par un administrateur, publient directement du 11 octobre 2026 au 1er juin 2027 inclus (UTC, même fuseau que le Togo) ; à partir du 2 juin, leurs nouvelles annonces repassent en attente de validation. Les comptes utilisateur actifs ayant une demande agent en attente ou refusée bénéficient aussi de la publication directe du 1er décembre 2026 au 31 mai 2027. Appliquer `0012_temporary_agent_direct_publishing.sql`, puis `0021_agent_direct_publishing_now.sql`, après validation des prérequis de la base.
 
 ## Mobile (Expo / EAS)
 

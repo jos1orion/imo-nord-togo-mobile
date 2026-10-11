@@ -20,10 +20,10 @@ type ReportRow = {
 
 export default function ReportsPage() {
   const router = useRouter();
-  const { data, loading, reload } = useSupabaseTable<ReportRow>('reports', { orderBy: 'created_at' });
+  const { data, loading, reload } = useSupabaseTable<ReportRow>('property_reports', { orderBy: 'created_at' });
 
   const resolve = async (id: string) => {
-    const { error } = await supabase.from('reports').update({ status: 'RESOLVED' }).eq('id', id);
+    const { error } = await supabase.from('property_reports').update({ status: 'RESOLVED' }).eq('id', id);
     if (error) {
       alert(error.message);
       return;
@@ -47,7 +47,7 @@ export default function ReportsPage() {
         <DataTable
           loading={loading}
           rows={data}
-          emptyLabel="Aucun signalement (table reports requise)."
+          emptyLabel="Aucun signalement."
           columns={[
             { key: 'created_at', label: 'Date', render: row => formatDate(row.created_at) },
             { key: 'reason', label: 'Motif' },

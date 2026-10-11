@@ -1,6 +1,8 @@
 -- Storage objects must be deleted through the Storage API, not by deleting
--- rows from storage.objects. Keep listing images intact when a listing expires
--- or becomes occupied; visibility remains controlled by RLS.
+-- rows from storage.objects. The follow-up queue migration and server worker
+-- perform the physical cleanup after listings expire or become occupied.
+begin;
+
 drop trigger if exists properties_cleanup_inactive_images on public.properties;
 drop function if exists public.cleanup_inactive_property_images();
 
@@ -36,3 +38,5 @@ $$;
 
 revoke all on function public.expire_due_listings() from public, anon, authenticated;
 grant execute on function public.expire_due_listings() to service_role;
+
+commit;

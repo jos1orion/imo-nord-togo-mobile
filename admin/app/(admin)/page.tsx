@@ -37,7 +37,7 @@ export default function DashboardPage() {
     setLoading(true);
     const [propRes, reportRes, profileRes, logRes] = await Promise.all([
       supabase.from('properties').select('id,owner_id,status,listing_status,featured,expires_at,sold_at,rented_at'),
-      supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'OPEN'),
+      supabase.from('property_reports').select('id', { count: 'exact', head: true }).eq('status', 'OPEN'),
       supabase.from('profiles').select('id,role,account_status'),
       supabase.from('activity_logs').select('id,action,entity,created_at,actor_name').order('created_at', { ascending: false }).limit(8),
     ]);
@@ -54,7 +54,7 @@ export default function DashboardPage() {
     const channel = supabase
       .channel('dashboard-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'properties' }, loadDashboard)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, loadDashboard)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'property_reports' }, loadDashboard)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, loadDashboard)
       .subscribe();
     return () => {

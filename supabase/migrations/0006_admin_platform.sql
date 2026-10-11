@@ -1,5 +1,51 @@
 -- Imo Nord Togo — plateforme admin (biens vs publications, moderation, roles RLS).
--- A executer APRES supabase-user-role.sql et supabase-production-migration.sql.
+-- Run after the user-role and production migrations.
+
+begin;
+
+do $$
+declare
+  report_table text;
+begin
+  if to_regclass('public.property_reports') is not null
+     and to_regclass('public.reports') is not null then
+    raise exception
+      'Both public.reports and public.property_reports exist; reconcile them before applying this migration.';
+  end if;
+
+  report_table := case
+    when to_regclass('public.property_reports') is not null then 'property_reports'
+    when to_regclass('public.reports') is not null then 'reports'
+    else null
+  end;
+
+  if report_table is not null then
+    if (
+      select count(*)
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = report_table
+        and column_name in ('id', 'property_id', 'reason', 'message', 'status', 'created_at')
+    ) <> 6 then
+      raise exception
+        'The existing reports table is missing required columns; inspect it before applying this migration.';
+    end if;
+
+    if (
+      exists (
+        select 1 from information_schema.columns
+        where table_schema = 'public' and table_name = report_table and column_name = 'reporter_id'
+      ) = exists (
+        select 1 from information_schema.columns
+        where table_schema = 'public' and table_name = report_table and column_name = 'user_id'
+      )
+    ) then
+      raise exception
+        'The existing reports table must contain exactly one owner column: reporter_id or user_id.';
+    end if;
+  end if;
+end
+$$;
 
 alter table public.profiles
   add column if not exists account_status text not null default 'active';
@@ -93,15 +139,55 @@ create table if not exists public.listing_events (
 
 create index if not exists listing_events_property_idx on public.listing_events (property_id, created_at);
 
-create table if not exists public.reports (
-  id uuid primary key default gen_random_uuid(),
-  property_id uuid not null references public.properties on delete cascade,
-  reporter_id uuid references auth.users on delete set null,
-  reason text not null check (reason in ('FRAUD', 'DUPLICATE', 'INAPPROPRIATE', 'OTHER')),
-  message text not null default '',
-  status text not null default 'OPEN' check (status in ('OPEN', 'RESOLVED')),
-  created_at timestamptz not null default now()
-);
+do $$
+begin
+  if to_regclass('public.property_reports') is not null
+     and to_regclass('public.reports') is not null then
+    raise exception
+      'Both public.reports and public.property_reports exist; reconcile them before applying this migration.';
+  elsif to_regclass('public.property_reports') is null
+        and to_regclass('public.reports') is not null then
+    alter table public.reports rename to property_reports;
+  elsif to_regclass('public.property_reports') is null then
+    create table public.property_reports (
+      id uuid primary key default gen_random_uuid(),
+      property_id uuid not null references public.properties on delete cascade,
+      user_id uuid references auth.users on delete set null,
+      reason text not null check (reason in ('FRAUD', 'DUPLICATE', 'INAPPROPRIATE', 'OTHER')),
+      message text not null default '',
+      status text not null default 'OPEN' check (status in ('OPEN', 'RESOLVED')),
+      created_at timestamptz not null default now()
+    );
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'property_reports'
+      and column_name = 'reporter_id'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'property_reports'
+      and column_name = 'user_id'
+  ) then
+    alter table public.property_reports rename column reporter_id to user_id;
+  elsif exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'property_reports'
+      and column_name = 'reporter_id'
+  ) and exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'property_reports'
+      and column_name = 'user_id'
+  ) then
+    raise exception
+      'Both reporter_id and user_id exist on public.property_reports; reconcile the columns before applying this migration.';
+  end if;
+end
+$$;
 
 create table if not exists public.reviews (
   id uuid primary key default gen_random_uuid(),
@@ -283,23 +369,9 @@ grant execute on function public.expire_due_listings() to service_role;
 
 alter table public.publications enable row level security;
 alter table public.listing_events enable row level security;
-alter table public.reports enable row level security;
+alter table public.property_reports enable row level security;
 alter table public.reviews enable row level security;
 alter table public.publication_payments enable row level security;
-
-drop policy if exists "properties_select_public_or_owner" on public.properties;
-drop policy if exists "properties_insert_own_pending" on public.properties;
-create policy "properties_select_public_or_owner" on public.properties for select using (
-  (listing_status = 'approved' and status = 'available' and (expires_at is null or expires_at > now()))
-  or owner_id = auth.uid()
-  or public.is_admin()
-);
-create policy "properties_insert_own_pending" on public.properties for insert with check (
-  auth.uid() = owner_id
-  and listing_status = 'pending'
-  and coalesce(featured, false) = false
-  and public.is_active_account()
-);
 
 drop policy if exists "publications_select" on public.publications;
 drop policy if exists "publications_admin" on public.publications;
@@ -328,21 +400,22 @@ create policy "listing_events_select" on public.listing_events for select using 
 create policy "listing_events_admin" on public.listing_events for all
 using (public.is_admin()) with check (public.is_admin());
 
-drop policy if exists "reports_insert_auth" on public.reports;
-drop policy if exists "reports_select" on public.reports;
-drop policy if exists "reports_admin" on public.reports;
-create policy "reports_insert_auth" on public.reports for insert with check (auth.uid() = reporter_id);
-create policy "reports_select" on public.reports for select using (
-  reporter_id = auth.uid() or public.is_admin()
-);
-create policy "reports_admin" on public.reports for update using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "reports_owner_insert" on public.property_reports;
+drop policy if exists "reports_owner_select" on public.property_reports;
+drop policy if exists "reports_admin_update" on public.property_reports;
+drop policy if exists "reports_insert_auth" on public.property_reports;
+drop policy if exists "reports_select" on public.property_reports;
+drop policy if exists "reports_admin" on public.property_reports;
+drop policy if exists "property_reports_insert_own" on public.property_reports;
+drop policy if exists "property_reports_select_own_or_admin" on public.property_reports;
+drop policy if exists "property_reports_admin_update" on public.property_reports;
 
-drop policy if exists "reviews_select" on public.reviews;
-drop policy if exists "reviews_insert" on public.reviews;
-drop policy if exists "reviews_admin" on public.reviews;
-create policy "reviews_select" on public.reviews for select using (true);
-create policy "reviews_insert" on public.reviews for insert with check (auth.uid() = user_id);
-create policy "reviews_admin" on public.reviews for update using (public.is_admin()) with check (public.is_admin());
+create policy "property_reports_insert_own" on public.property_reports
+for insert with check (auth.uid() = user_id);
+create policy "property_reports_select_own_or_admin" on public.property_reports
+for select using (user_id = auth.uid() or public.is_admin());
+create policy "property_reports_admin_update" on public.property_reports
+for update using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists "publication_payments_finance" on public.publication_payments;
 create policy "publication_payments_finance" on public.publication_payments for all
@@ -365,3 +438,7 @@ using (public.is_admin() or public.is_accountant()) with check (public.is_admin(
 drop policy if exists "profiles_select_own_or_admin" on public.profiles;
 create policy "profiles_select_own_or_admin" on public.profiles for select
 using (id = auth.uid() or public.is_admin());
+
+notify pgrst, 'reload schema';
+
+commit;
