@@ -18,12 +18,12 @@ conservés sous `docs/` ne sont plus des entrées de déploiement.
    des migrations du dépôt, l’ordre est : `0005_user_role.sql` (inutile sur le
    bootstrap `0002` qui contient déjà `USER`), `0003_production.sql`,
    `0006_admin_platform.sql`, `0004_auth_hardening.sql`, puis `0007` à `0015`
-   dans l’ordre numérique, et enfin `0017` à `0020`, puis `0021` après
-   validation des prérequis. Ne pas rejouer une migration déjà appliquée.
+   dans l’ordre numérique, et enfin `0017` à `0020`, `0021` après `0012`, puis
+   `0022`. Ne pas rejouer une migration déjà appliquée.
 3. `0001_rls.sql` est un brouillon hérité explicitement marqué : ne pas
    l’appliquer en production. Ne pas appliquer `0002_bootstrap.sql` à une base
    existante.
-4. Les migrations `0017` à `0020` sont appliquées automatiquement par GitHub
+4. Les migrations `0017` à `0020` et `0022` sont appliquées automatiquement par GitHub
    Actions lorsqu’elles sont poussées sur `main`. Le workflow attend un schéma
    existant avec les prérequis de `0006_admin_platform.sql` ; il ne consulte pas
    l’historique ni n’applique les migrations antérieures.
@@ -51,6 +51,9 @@ référencés lors de l’archivage ou du passage à l’état occupé, sans SQL
 sur `storage.objects`.
 Appliquer également `0021_agent_direct_publishing_now.sql` après `0012` pour
 activer la publication directe des agents dès le 11 octobre 2026.
+`0022_expiration_trigger_single_sync.sql` corrige la fonction d’expiration pour
+laisser le déclencheur de synchronisation mettre à jour chaque publication une
+seule fois ; le workflow l’exécute après `0020`.
 
 Les scripts SQL historiques de `docs/` ne sont pas des migrations à exécuter ;
 certains conservent des opérations de nettoyage Storage obsolètes.

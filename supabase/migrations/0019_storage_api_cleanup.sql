@@ -14,23 +14,14 @@ set search_path = public
 as $$
 declare affected integer;
 begin
-  with expired as (
-    update public.properties
-       set listing_status = 'archived', featured = false
-     where listing_status = 'approved'
-       and status = 'available'
-       and expires_at is not null
-       and expires_at <= now()
-     returning id, current_publication_id
-  ), archived_publications as (
-    update public.publications publication
-       set status = 'archived', featured = false
-      from expired
-     where publication.id = expired.current_publication_id
-        or publication.property_id = expired.id
-    returning publication.id
-  )
-  select count(*) into affected from expired;
+  update public.properties
+     set listing_status = 'archived', featured = false
+   where listing_status = 'approved'
+     and status = 'available'
+     and expires_at is not null
+     and expires_at <= now();
+
+  get diagnostics affected = row_count;
 
   return affected;
 end;

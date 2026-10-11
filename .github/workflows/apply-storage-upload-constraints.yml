@@ -9,6 +9,7 @@ on:
       - supabase/migrations/0018_property_images_one_megabyte.sql
       - supabase/migrations/0019_storage_api_cleanup.sql
       - supabase/migrations/0020_property_storage_cleanup_queue.sql
+      - supabase/migrations/0022_expiration_trigger_single_sync.sql
       - .github/workflows/apply-storage-upload-constraints.yml
   workflow_dispatch:
 
@@ -47,4 +48,7 @@ jobs:
             "$SUPABASE_DB_URL"
           psql --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file=supabase/migrations/0020_property_storage_cleanup_queue.sql \
+            "$SUPABASE_DB_URL"
+          psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file=supabase/migrations/0022_expiration_trigger_single_sync.sql \
             "$SUPABASE_DB_URL"
