@@ -929,7 +929,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!hydrated) return;
       setSyncError(null);
       try {
-        const tasks: Promise<void>[] = [
+        // The home screen depends only on neighbourhoods and listings. Optional
+        // modules may not exist yet on an older Supabase project, so they must
+        // not make the whole catalogue appear unavailable.
+        const coreTasks: Promise<void>[] = [
           (async () => {
             const { data, error } = await supabase
               .from('neighborhoods')
@@ -946,13 +949,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
           })(),
           reloadProperties(),
+        ];
+        const optionalTasks: Promise<void>[] = [
           loadReviewsFromSupabase(),
           loadReportsFromSupabase(),
           loadBusinessFeaturesFromSupabase(),
         ];
 
         if (currentUser) {
-          tasks.push(
+          optionalTasks.push(
             loadFavoritesFromSupabase(),
             loadMessagesFromSupabase(),
             loadNotificationsFromSupabase(currentUser.id)
@@ -960,7 +965,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
 
         if (currentUser?.role === 'ADMIN') {
-          tasks.push(
+          optionalTasks.push(
             (async () => {
               const { data, error } = await supabase.from('tenants').select('*');
               if (error) throw error;
@@ -1027,7 +1032,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setTenantDocuments([]);
         }
 
-        await Promise.all(tasks);
+        await Promise.all(coreTasks);
+        const optionalResults = await Promise.allSettled(optionalTasks);
+        optionalResults.forEach(result => {
+          if (result.status === 'rejected') {
+            logger.warn('Optional Supabase module could not be loaded.', result.reason);
+          }
+        });
       } catch (error) {
         logger.error('Failed to fetch from Supabase', error);
         setSyncError('Une erreur est survenue. Veuillez réessayer.');
