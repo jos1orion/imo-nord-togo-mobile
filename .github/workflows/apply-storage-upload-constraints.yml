@@ -31,24 +31,46 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
 
-      - name: Apply storage upload constraints
+      - name: Verify database connection
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           PGSSLMODE: require
         run: |
-          : "${SUPABASE_DB_URL:?Configure the SUPABASE_DB_URL repository secret}"
-          psql --no-psqlrc --set=ON_ERROR_STOP=1 \
-            --file=supabase/migrations/0017_storage_upload_constraints.sql \
-            "$SUPABASE_DB_URL"
-          psql --no-psqlrc --set=ON_ERROR_STOP=1 \
-            --file=supabase/migrations/0018_property_images_one_megabyte.sql \
-            "$SUPABASE_DB_URL"
-          psql --no-psqlrc --set=ON_ERROR_STOP=1 \
-            --file=supabase/migrations/0019_storage_api_cleanup.sql \
-            "$SUPABASE_DB_URL"
-          psql --no-psqlrc --set=ON_ERROR_STOP=1 \
-            --file=supabase/migrations/0020_property_storage_cleanup_queue.sql \
-            "$SUPABASE_DB_URL"
+          if [ -z "${SUPABASE_DB_URL}" ]; then
+            echo "::error title=Secret SUPABASE_DB_URL absent::Ajoutez l’URL PostgreSQL Supabase dans Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          psql --no-psqlrc --set=ON_ERROR_STOP=1 --command="select 'Supabase connection OK' as status;" "$SUPABASE_DB_URL"
+
+      - name: Apply 0017 storage upload constraints
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PGSSLMODE: require
+        run: psql --no-psqlrc --set=ON_ERROR_STOP=1 --file=supabase/migrations/0017_storage_upload_constraints.sql "$SUPABASE_DB_URL"
+
+      - name: Apply 0018 property image size limit
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PGSSLMODE: require
+        run: psql --no-psqlrc --set=ON_ERROR_STOP=1 --file=supabase/migrations/0018_property_images_one_megabyte.sql "$SUPABASE_DB_URL"
+
+      - name: Apply 0019 storage cleanup function
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PGSSLMODE: require
+        run: psql --no-psqlrc --set=ON_ERROR_STOP=1 --file=supabase/migrations/0019_storage_api_cleanup.sql "$SUPABASE_DB_URL"
+
+      - name: Apply 0020 storage cleanup queue
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PGSSLMODE: require
+        run: psql --no-psqlrc --set=ON_ERROR_STOP=1 --file=supabase/migrations/0020_property_storage_cleanup_queue.sql "$SUPABASE_DB_URL"
+
+      - name: Apply 0022 expiration trigger synchronization
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PGSSLMODE: require
+        run: |
           psql --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file=supabase/migrations/0022_expiration_trigger_single_sync.sql \
             "$SUPABASE_DB_URL"

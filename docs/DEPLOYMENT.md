@@ -156,3 +156,22 @@ Premier déploiement (depuis `admin/`) :
 Production :
 
 - `vercel --prod`
+
+### Migrations Supabase via GitHub Actions
+
+Le workflow `Apply Supabase storage and cleanup migrations` applique les
+migrations Storage lorsque les fichiers SQL concernés sont modifiés sur `main`,
+ou lorsqu’il est lancé manuellement depuis l’onglet **Actions**.
+
+Avant de l’exécuter, ajouter le secret `SUPABASE_DB_URL` dans **GitHub → Settings
+→ Secrets and variables → Actions → New repository secret**. Sa valeur doit
+être l’URI de connexion PostgreSQL de ce projet Supabase (Dashboard Supabase →
+**Connect** → URI), avec le mot de passe de la base de données. Ne pas utiliser
+la clé `anon` ou `service_role` à la place et ne jamais inscrire cette URI dans
+le dépôt ou dans un fichier `.env`.
+
+Si un run échoue parce que `SUPABASE_DB_URL` est absent, configurer le secret
+puis relancer le run depuis **Actions** avec **Re-run jobs**. Le workflow vérifie
+le secret et la connexion avant d’exécuter les migrations. Une modification du
+fichier workflow déclenche aussi cette vérification ainsi que l’application des
+migrations.
