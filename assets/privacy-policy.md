@@ -20,8 +20,6 @@ Les informations servent à créer et sécuriser votre compte, publier et gérer
 
 Les annonces publiées et les coordonnées que vous choisissez d’y inclure peuvent être visibles par les utilisateurs de l’application. Nous utilisons des prestataires techniques, notamment Supabase pour l’authentification, la base de données et le stockage, ainsi que Vercel pour héberger le site web. Lorsque vous choisissez WhatsApp, l’appel ou l’e-mail, vous êtes redirigé vers le service correspondant, qui applique ses propres règles de confidentialité.
 
-Lorsque le suivi des erreurs est activé, l’application transmet à Sentry des données techniques de diagnostic, notamment les erreurs et leurs traces d’exécution ainsi que des informations sur l’application et l’appareil. Ces données servent à détecter et corriger les problèmes.
-
 ## 5. Conservation et sécurité
 
 Les données sont conservées aussi longtemps que nécessaire au fonctionnement du compte et du service, puis supprimées ou conservées uniquement lorsque cela est nécessaire pour des obligations légales, la sécurité ou le règlement de litiges. Nous mettons en œuvre des mesures raisonnables pour protéger les données, sans pouvoir garantir une sécurité absolue.

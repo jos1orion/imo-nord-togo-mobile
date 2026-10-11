@@ -79,8 +79,6 @@ Les informations servent à créer et sécuriser votre compte, publier et gérer
 
 Les annonces publiées et les coordonnées que vous choisissez d’y inclure peuvent être visibles par les utilisateurs de l’application. Nous utilisons des prestataires techniques, notamment Supabase pour l’authentification, la base de données et le stockage, ainsi que Vercel pour héberger le site web. Lorsque vous choisissez WhatsApp, l’appel ou l’e-mail, vous êtes redirigé vers le service correspondant, qui applique ses propres règles de confidentialité.
 
-Lorsque le suivi des erreurs est activé, l’application transmet à Sentry des données techniques de diagnostic, notamment les erreurs et leurs traces d’exécution ainsi que des informations sur l’application et l’appareil. Ces données servent à détecter et corriger les problèmes.
-
 5. PHOTOS ET LOCALISATION
 
 L’application accède à la caméra ou à la photothèque uniquement lorsque vous choisissez d’ajouter des photos et après autorisation de votre appareil. La ville et le quartier saisis dans une annonce servent à décrire le bien. L’application ne demande pas l’accès à la position GPS de votre appareil.
@@ -192,8 +190,6 @@ Information is used to create and secure accounts, publish and manage listings, 
 4. DATA SHARING
 
 Published listings and contact details you choose to include may be visible to app users. We use technical providers, including Supabase for authentication, database and storage, and Vercel to host the website. If you choose WhatsApp, phone or email contact, you are redirected to that service, which applies its own privacy terms.
-
-When crash reporting is enabled, the app sends technical diagnostic data to Sentry, including errors and stack traces as well as app and device information. This data is used to identify and fix problems.
 
 5. PHOTOS AND LOCATION
 
