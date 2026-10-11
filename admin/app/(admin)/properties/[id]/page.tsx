@@ -181,7 +181,7 @@ export default function PropertyDetailsPage() {
             <div className="detail-section-title">Publications (cycles 30 jours)</div>
             {publications.length === 0 ? (
               <div style={{ color: 'var(--muted)', marginTop: 8 }}>
-                Aucune ligne publications. Exécutez docs/supabase-admin-platform.sql.
+                Aucune publication. Vérifiez que supabase/migrations/0006_admin_platform.sql a été appliquée.
               </div>
             ) : (
               <div className="pub-list">

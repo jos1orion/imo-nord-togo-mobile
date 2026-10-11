@@ -339,6 +339,14 @@ const AppContent = () => {
     <PaperProvider theme={paperTheme}>
       <NavigationContainer
         ref={navigationRef}
+        linking={{
+          prefixes: ['imonordtogo://'],
+          config: {
+            screens: {
+              PropertyDetail: 'property/:propertyId',
+            },
+          },
+        }}
         theme={theme === 'dark' ? NavigationDarkTheme : NavigationLightTheme}
         onReady={() => {
           navigateToPendingResetPassword();

@@ -978,66 +978,76 @@ const PublishScreen: React.FC = () => {
           style={styles.neighborhoodModalBackdrop}
           onPress={() => setNeighborhoodPickerOpen(false)}
         >
-          <Pressable
-            style={[styles.neighborhoodModal, isDark && styles.neighborhoodModalDark]}
-            onPress={event => event.stopPropagation()}
+          <KeyboardAvoidingView
+            style={styles.neighborhoodKeyboardAvoiding}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
-            <View style={styles.neighborhoodModalHeader}>
-              <Text style={[styles.neighborhoodModalTitle, isDark && styles.reviewTextDark]}>
-                {t('publish_choose_neighborhood')}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setNeighborhoodPickerOpen(false)}
-                accessibilityRole="button"
-                accessibilityLabel={t('close')}
-              >
-                <Ionicons name="close" size={24} color={isDark ? themeColors.surfaceAlt : themeColors.onSurface} />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              style={styles.neighborhoodSearch}
-              accessibilityLabel={t('publish_search_neighborhood')}
-              value={neighborhoodQuery}
-              onChangeText={setNeighborhoodQuery}
-              placeholder={t('publish_search_neighborhood')}
-              autoCorrect={false}
-              returnKeyType="search"
-            />
-            <ScrollView keyboardShouldPersistTaps="handled">
-              {filteredNeighborhoods.map(name => (
+            <Pressable
+              style={[styles.neighborhoodModal, isDark && styles.neighborhoodModalDark]}
+              onPress={event => event.stopPropagation()}
+            >
+              <View style={styles.neighborhoodModalHeader}>
+                <Text style={[styles.neighborhoodModalTitle, isDark && styles.reviewTextDark]}>
+                  {t('publish_choose_neighborhood')}
+                </Text>
                 <TouchableOpacity
-                  key={name}
+                  onPress={() => setNeighborhoodPickerOpen(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('close')}
+                >
+                  <Ionicons name="close" size={24} color={isDark ? themeColors.surfaceAlt : themeColors.onSurface} />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={styles.neighborhoodSearch}
+                accessibilityLabel={t('publish_search_neighborhood')}
+                value={neighborhoodQuery}
+                onChangeText={setNeighborhoodQuery}
+                placeholder={t('publish_search_neighborhood')}
+                autoCorrect={false}
+                returnKeyType="search"
+              />
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              >
+                {filteredNeighborhoods.map(name => (
+                  <TouchableOpacity
+                    key={name}
+                    style={styles.neighborhoodOption}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setFormData(previous => ({ ...previous, location: name }));
+                      setCustomNeighborhood(false);
+                      setNeighborhoodPickerOpen(false);
+                      setNeighborhoodQuery('');
+                    }}
+                  >
+                    <Text style={[styles.neighborhoodOptionText, isDark && styles.reviewTextDark]}>{name}</Text>
+                    {formData.location === name && <Ionicons name="checkmark" size={20} color={themeColors.primary} />}
+                  </TouchableOpacity>
+                ))}
+                {filteredNeighborhoods.length === 0 && (
+                  <Text style={styles.neighborhoodEmpty}>{t('publish_no_neighborhood_match')}</Text>
+                )}
+                <TouchableOpacity
                   style={styles.neighborhoodOption}
                   onPress={() => {
-                    setFormData(previous => ({ ...previous, location: name }));
-                    setCustomNeighborhood(false);
+                    Keyboard.dismiss();
+                    setFormData(previous => ({ ...previous, location: '' }));
+                    setCustomNeighborhood(true);
                     setNeighborhoodPickerOpen(false);
                     setNeighborhoodQuery('');
                   }}
                 >
-                  <Text style={[styles.neighborhoodOptionText, isDark && styles.reviewTextDark]}>{name}</Text>
-                  {formData.location === name && <Ionicons name="checkmark" size={20} color={themeColors.primary} />}
+                  <Text style={[styles.neighborhoodOptionText, styles.neighborhoodCustomText]}>
+                    {t('publish_enter_custom_neighborhood')}
+                  </Text>
+                  <Ionicons name="create-outline" size={18} color={themeColors.primary} />
                 </TouchableOpacity>
-              ))}
-              {filteredNeighborhoods.length === 0 && (
-                <Text style={styles.neighborhoodEmpty}>{t('publish_no_neighborhood_match')}</Text>
-              )}
-              <TouchableOpacity
-                style={styles.neighborhoodOption}
-                onPress={() => {
-                  setFormData(previous => ({ ...previous, location: '' }));
-                  setCustomNeighborhood(true);
-                  setNeighborhoodPickerOpen(false);
-                  setNeighborhoodQuery('');
-                }}
-              >
-                <Text style={[styles.neighborhoodOptionText, styles.neighborhoodCustomText]}>
-                  {t('publish_enter_custom_neighborhood')}
-                </Text>
-                <Ionicons name="create-outline" size={18} color={themeColors.primary} />
-              </TouchableOpacity>
-            </ScrollView>
-          </Pressable>
+              </ScrollView>
+            </Pressable>
+          </KeyboardAvoidingView>
         </Pressable>
       </Modal>
       {publishGuideStep !== null && (
@@ -1427,6 +1437,10 @@ const baseStyles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
     backgroundColor: COLORS.overlayNavy55,
+  },
+  neighborhoodKeyboardAvoiding: {
+    flex: 1,
+    justifyContent: 'flex-end',
   },
   neighborhoodModal: {
     maxHeight: '82%',

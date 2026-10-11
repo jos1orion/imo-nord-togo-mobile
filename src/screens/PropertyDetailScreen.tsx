@@ -194,8 +194,11 @@ const PropertyDetailScreen: React.FC = () => {
 
   const handleShare = async () => {
     const locationLabel = [property.neighborhood, property.location].filter(Boolean).join(', ');
+    const shareUrl = `https://imo-nord-togo-mobile.vercel.app/property/${encodeURIComponent(property.id)}`;
     await Share.share({
-      message: `${property.title} - ${formatPrice(property.price)} - ${locationLabel}`,
+      title: property.title,
+      message: `${property.title} - ${formatPrice(property.price)} - ${locationLabel}\n${shareUrl}`,
+      url: shareUrl,
     });
     trackShare(property.id);
   };

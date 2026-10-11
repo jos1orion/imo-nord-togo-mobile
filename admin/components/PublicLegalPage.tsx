@@ -41,6 +41,11 @@ const documents: Record<LegalDocument, { title: string; intro: string; sections:
           'Les annonces publiées et les coordonnées que vous choisissez d’y inclure peuvent être visibles par les utilisateurs de l’application. Nous utilisons des prestataires techniques, notamment Supabase pour l’authentification, la base de données et le stockage, ainsi que Vercel pour héberger le site web. Ces prestataires traitent les données nécessaires à leurs services. Lorsque vous choisissez WhatsApp, l’appel ou l’e-mail, vous êtes redirigé vers le service correspondant, qui applique ses propres règles de confidentialité. / Published listings and contact details you choose to include may be visible to app users. We use technical providers, including Supabase for authentication, database and storage, and Vercel to host the website. These providers process data needed to provide their services. If you choose WhatsApp, phone or email contact, you are redirected to that service, which applies its own privacy terms.',
       },
       {
+        title: 'Rapports d’erreur | Crash reports',
+        body:
+          'Lorsque le suivi des erreurs est activé, l’application transmet à Sentry des données techniques de diagnostic, notamment les erreurs et leurs traces d’exécution ainsi que des informations sur l’application et l’appareil. Ces données servent à détecter et corriger les problèmes. / When crash reporting is enabled, the app sends technical diagnostic data to Sentry, including errors and stack traces as well as app and device information. This data is used to identify and fix problems.',
+      },
+      {
         title: 'Conservation et sécurité | Retention and security',
         body:
           'Les données sont conservées aussi longtemps que nécessaire au fonctionnement du compte et du service, puis supprimées ou conservées uniquement lorsque cela est nécessaire pour des obligations légales, la sécurité ou le règlement de litiges. Nous mettons en œuvre des mesures raisonnables pour protéger les données, sans pouvoir garantir une sécurité absolue. / Data is kept for as long as needed to operate the account and service, then deleted or retained only where needed for legal obligations, security or dispute resolution. We use reasonable safeguards, but cannot guarantee absolute security.',

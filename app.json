@@ -26,7 +26,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/kara-immo-icon.png",
-        "backgroundColor": "#2563EB"
+        "backgroundColor": "#C2410C"
       },
       "package": "com.imonordtogo.app",
       "versionCode": 2,
@@ -51,6 +51,19 @@
           "data": [
             {
               "scheme": "imonordtogo",
+              "host": "property"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "imonordtogo",
               "host": "reset-password"
             }
           ],
@@ -63,6 +76,11 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
+      ],
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
       ]
     },
     "web": {
@@ -81,7 +99,7 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#2563EB"
+          "color": "#C2410C"
         }
       ],
       [
@@ -100,7 +118,11 @@
         {
           "image": "./assets/kara-immo-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#FFFFFF"
+          "backgroundColor": "#FAF7F2",
+          "dark": {
+            "image": "./assets/kara-immo-icon.png",
+            "backgroundColor": "#0F172A"
+          }
         }
       ],
       [

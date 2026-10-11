@@ -45,7 +45,7 @@ const accessToken = async () => {
   const refreshed = await supabase.auth.refreshSession();
   if (refreshed.error) throw refreshed.error;
   if (!refreshed.data.session?.access_token) {
-    throw new Error('Votre session administrateur a expirÃ©. Reconnectez-vous.');
+    throw new Error('Votre session administrateur a expiré. Reconnectez-vous.');
   }
   return refreshed.data.session.access_token;
 };
@@ -68,7 +68,7 @@ const requestAdminApi = async <T,>(
   try {
     payload = JSON.parse(responseText) as { error?: string } & T;
   } catch {
-    throw new Error(`RÃ©ponse invalide du back-office (${response.status}).`);
+    throw new Error(`Réponse invalide du back-office (${response.status}).`);
   }
 
   if (response.status === 401 && retryUnauthorized) {
@@ -79,7 +79,7 @@ const requestAdminApi = async <T,>(
     }
   }
   if (!response.ok) {
-    throw new Error(payload.error || `RequÃªte au back-office refusÃ©e (${response.status}).`);
+    throw new Error(payload.error || `Requête au back-office refusée (${response.status}).`);
   }
   return payload;
 };
@@ -122,7 +122,7 @@ export const fetchAdminAccounts = async (): Promise<User[]> => {
       `/api/admin/users?page=${page}&pageSize=${pageSize}`,
     );
     if (!Array.isArray(result.users) || typeof result.total !== 'number') {
-      throw new Error('La liste des comptes renvoyÃ©e par le back-office est invalide.');
+      throw new Error('La liste des comptes renvoyée par le back-office est invalide.');
     }
     accounts.push(...result.users.map(mapAccount));
     total = result.total;

@@ -109,6 +109,16 @@ imo-nord-togo-mobile/
 | `CAMERA` | Prendre des photos de propriétés |
 | `RECORD_AUDIO` | Utiliser la recherche vocale |
 
+## Suivi des crashs
+
+Le suivi distant utilise Sentry et reste désactivé tant que
+`EXPO_PUBLIC_SENTRY_DSN` n'est pas configuré. Après création du projet Sentry,
+définissez cette variable dans l'environnement EAS de production avant de
+construire la version destinée à la diffusion. Pour rendre les traces lisibles,
+configurez aussi `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` et `SENTRY_PROJECT` dans EAS
+afin que le plugin Sentry puisse téléverser les source maps. Aucun AAB n'est
+nécessaire pour cette configuration.
+
 ## 📞 Contact
 
 - **Email** : [kondgbandi@gmail.com](mailto:kondgbandi@gmail.com)

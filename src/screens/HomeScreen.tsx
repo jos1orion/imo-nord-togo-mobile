@@ -6,11 +6,16 @@ import {
   ScrollView,
   FlatList,
   TouchableOpacity,
+  Pressable,
+  Modal,
+  Keyboard,
+  KeyboardAvoidingView,
   Dimensions,
   StatusBar,
   TextInput,
   InteractionManager,
   LayoutAnimation,
+  Platform,
   ImageBackground,
 } from 'react-native';
 import { AppAlert as Alert } from '../components/ui/appAlertService';
@@ -672,59 +677,115 @@ const HomeScreen: React.FC = () => {
             </View>
           </View>
           {neighborhoodOpen && (
-            <View style={styles.dropdownPanel}>
-              <View style={styles.dropdownSearchRow}>
-                <Ionicons name="search" size={14} color={themeColors.onSurfaceMuted} />
-                <TextInput
-                  style={styles.dropdownSearchInput}
-                  value={neighborhoodQuery}
-                  onChangeText={setNeighborhoodQuery}
-                  placeholder={t('filter_search_neighborhood_ph')}
-                  placeholderTextColor={themeColors.onSurfaceMuted}
-                />
-              </View>
-              <ScrollView
-                style={styles.dropdownList}
-                nestedScrollEnabled
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
+            <Modal
+              visible
+              transparent
+              animationType="slide"
+              statusBarTranslucent
+              onRequestClose={() => setNeighborhoodOpen(false)}
+            >
+              <Pressable
+                style={styles.neighborhoodModalBackdrop}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setNeighborhoodOpen(false);
+                }}
               >
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setSelectedNeighborhood(null);
-                    setNeighborhoodOpen(false);
-                  }}
+                <KeyboardAvoidingView
+                  style={styles.neighborhoodKeyboardAvoiding}
+                  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 >
-                  <Text style={styles.dropdownItemText}>{t('home_all_neighborhoods')}</Text>
-                </TouchableOpacity>
-                {filteredNeighborhoods.map(name => (
-                  <TouchableOpacity
-                    key={name}
-                    style={[
-                      styles.dropdownItem,
-                      selectedNeighborhood === name && styles.dropdownItemActive,
-                    ]}
-                    onPress={() => {
-                      setSelectedNeighborhood(name);
-                      setNeighborhoodOpen(false);
-                    }}
+                  <Pressable
+                    style={[styles.neighborhoodModal, { backgroundColor: themeColors.surface }]}
+                    onPress={event => event.stopPropagation()}
                   >
-                    <Text
-                      style={[
-                        styles.dropdownItemText,
-                        selectedNeighborhood === name && styles.dropdownItemTextActive,
-                      ]}
+                    <View style={styles.neighborhoodModalHeader}>
+                      <Text style={[styles.neighborhoodModalTitle, { color: themeColors.onSurface }]}>
+                        {t('filter_label_neighborhood')}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setNeighborhoodOpen(false);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('close')}
+                      >
+                        <Ionicons name="close" size={24} color={themeColors.onSurface} />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={[styles.dropdownSearchRow, { backgroundColor: themeColors.background }]}>
+                      <Ionicons name="search" size={14} color={themeColors.onSurfaceMuted} />
+                      <TextInput
+                        style={[styles.dropdownSearchInput, { color: themeColors.onSurface }]}
+                        value={neighborhoodQuery}
+                        onChangeText={setNeighborhoodQuery}
+                        placeholder={t('filter_search_neighborhood_ph')}
+                        placeholderTextColor={themeColors.onSurfaceMuted}
+                        autoCorrect={false}
+                        returnKeyType="search"
+                      />
+                    </View>
+                    <ScrollView
+                      style={styles.neighborhoodModalList}
+                      nestedScrollEnabled
+                      keyboardShouldPersistTaps="handled"
+                      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
                     >
-                      {name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-                {filteredNeighborhoods.length === 0 && (
-                  <Text style={styles.dropdownEmpty}>{t('home_no_neighborhoods')}</Text>
-                )}
-              </ScrollView>
-            </View>
+                      <TouchableOpacity
+                        style={[styles.dropdownItem, styles.neighborhoodModalOption]}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setSelectedNeighborhood(null);
+                          setNeighborhoodOpen(false);
+                        }}
+                      >
+                        <Text style={[
+                          styles.dropdownItemText,
+                          { color: themeColors.onSurfaceMuted },
+                          !selectedNeighborhood && { color: themeColors.primary },
+                        ]}>
+                          {t('home_all_neighborhoods')}
+                        </Text>
+                      </TouchableOpacity>
+                      {filteredNeighborhoods.map(name => (
+                        <TouchableOpacity
+                          key={name}
+                          style={[
+                            styles.dropdownItem,
+                            styles.neighborhoodModalOption,
+                            selectedNeighborhood === name && { backgroundColor: themeColors.infoContainer },
+                          ]}
+                          onPress={() => {
+                            Keyboard.dismiss();
+                            setSelectedNeighborhood(name);
+                            setNeighborhoodOpen(false);
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.dropdownItemText,
+                              { color: themeColors.onSurfaceMuted },
+                              selectedNeighborhood === name && { color: themeColors.primary },
+                            ]}
+                          >
+                            {name}
+                          </Text>
+                          {selectedNeighborhood === name && (
+                            <Ionicons name="checkmark" size={18} color={themeColors.primary} />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                      {filteredNeighborhoods.length === 0 && (
+                        <Text style={[styles.dropdownEmpty, { color: themeColors.onSurfaceMuted }]}>
+                          {t('home_no_neighborhoods')}
+                        </Text>
+                      )}
+                    </ScrollView>
+                  </Pressable>
+                </KeyboardAvoidingView>
+              </Pressable>
+            </Modal>
           )}
           <View style={styles.filterRow}>
             <View style={styles.filterField}>
@@ -1542,13 +1603,41 @@ const baseStyles = StyleSheet.create({
     color: COLORS.onSurface,
     fontWeight: '600',
   },
-  dropdownPanel: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 10,
+  neighborhoodModalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: COLORS.overlayNavy55,
+  },
+  neighborhoodKeyboardAvoiding: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  neighborhoodModal: {
+    maxHeight: '82%',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 18,
+    paddingTop: 20,
+    paddingBottom: 28,
+  },
+  neighborhoodModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  neighborhoodModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  neighborhoodModalList: {
+    marginTop: 8,
+    maxHeight: 220,
+  },
+  neighborhoodModalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   dropdownSearchRow: {
     flexDirection: 'row',
@@ -1566,25 +1655,15 @@ const baseStyles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.onSurface,
   },
-  dropdownList: {
-    marginTop: 8,
-    maxHeight: 220,
-  },
   dropdownItem: {
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 8,
   },
-  dropdownItemActive: {
-    backgroundColor: COLORS.infoContainer,
-  },
   dropdownItemText: {
     fontSize: 12,
     color: COLORS.onSurfaceMuted,
     fontWeight: '600',
-  },
-  dropdownItemTextActive: {
-    color: COLORS.primary,
   },
   dropdownEmpty: {
     fontSize: 11,

@@ -61,7 +61,7 @@ const LegalScreen: React.FC<LegalScreenProps> = ({ type, onClose }) => {
 const privacyContentFr = `
 POLITIQUE DE CONFIDENTIALITÉ - IMO NORD TOGO
 
-Dernière mise à jour : 30 septembre 2026
+Dernière mise à jour : 11 octobre 2026
 
 1. INTRODUCTION
 
@@ -78,6 +78,8 @@ Les informations servent à créer et sécuriser votre compte, publier et gérer
 4. PARTAGE DES INFORMATIONS
 
 Les annonces publiées et les coordonnées que vous choisissez d’y inclure peuvent être visibles par les utilisateurs de l’application. Nous utilisons des prestataires techniques, notamment Supabase pour l’authentification, la base de données et le stockage, ainsi que Vercel pour héberger le site web. Lorsque vous choisissez WhatsApp, l’appel ou l’e-mail, vous êtes redirigé vers le service correspondant, qui applique ses propres règles de confidentialité.
+
+Lorsque le suivi des erreurs est activé, l’application transmet à Sentry des données techniques de diagnostic, notamment les erreurs et leurs traces d’exécution ainsi que des informations sur l’application et l’appareil. Ces données servent à détecter et corriger les problèmes.
 
 5. PHOTOS ET LOCALISATION
 
@@ -173,7 +175,7 @@ Imo Nord Togo - votre partenaire immobilier a Kara.
 const privacyContentEn = `
 PRIVACY POLICY - IMO NORD TOGO
 
-Last updated: September 30, 2026
+Last updated: October 11, 2026
 
 1. INTRODUCTION
 
@@ -190,6 +192,8 @@ Information is used to create and secure accounts, publish and manage listings, 
 4. DATA SHARING
 
 Published listings and contact details you choose to include may be visible to app users. We use technical providers, including Supabase for authentication, database and storage, and Vercel to host the website. If you choose WhatsApp, phone or email contact, you are redirected to that service, which applies its own privacy terms.
+
+When crash reporting is enabled, the app sends technical diagnostic data to Sentry, including errors and stack traces as well as app and device information. This data is used to identify and fix problems.
 
 5. PHOTOS AND LOCATION
 

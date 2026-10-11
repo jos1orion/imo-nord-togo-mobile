@@ -6,6 +6,7 @@ import DataTable from '../../../components/DataTable';
 import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { formatDate } from '../../../lib/format';
+import { useCurrentTime } from '../../../lib/useCurrentTime';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import type { Publication } from '../../../lib/types';
 
@@ -18,6 +19,7 @@ const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
 export default function PublicationsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const currentTime = useCurrentTime();
   const filter = searchParams.get('filter');
   const { data, loading, error, reload } = useSupabaseTable<PublicationRow>('publications', {
     select: '*, properties(title, location)',
@@ -26,17 +28,16 @@ export default function PublicationsPage() {
   const [status, setStatus] = useState('ALL');
 
   const rows = useMemo(() => {
-    const now = Date.now();
     return data.filter(row => {
       if (status !== 'ALL' && row.status !== status) return false;
       if (filter === 'expiring') {
-        if (!row.expires_at || row.status !== 'approved') return false;
-        const ms = new Date(row.expires_at).getTime() - now;
+        if (currentTime === null || !row.expires_at || row.status !== 'approved') return false;
+        const ms = new Date(row.expires_at).getTime() - currentTime;
         return ms >= 0 && ms <= THREE_DAYS;
       }
       return true;
     });
-  }, [data, status, filter]);
+  }, [data, status, filter, currentTime]);
 
   return (
     <div className="grid">
@@ -57,9 +58,9 @@ export default function PublicationsPage() {
             Impossible de charger les publications : {error}
           </div>
           <p>
-            Verifiez que la table « publications » existe et que les droits d’accès sont configurés.
-            La migration <code>docs/supabase-admin-platform.sql</code> crée cette table et reprend
-            les biens déjà enregistrés.
+            Vérifiez que la table « publications » existe et que les droits d’accès sont configurés.
+            La migration <code>supabase/migrations/0006_admin_platform.sql</code> la crée et reprend
+            les biens déjà enregistrés. Ne la relancez pas si elle a déjà été appliquée.
           </p>
           <button className="ghost-button" onClick={() => void reload()}>
             Réessayer
@@ -71,7 +72,7 @@ export default function PublicationsPage() {
           rows={rows}
           emptyLabel={
             data.length === 0
-              ? 'Aucune publication enregistrée. Si des biens existent, vérifiez la migration docs/supabase-admin-platform.sql.'
+              ? 'Aucune publication enregistrée. Si des biens existent, vérifiez que supabase/migrations/0006_admin_platform.sql a été appliquée.'
               : filter === 'expiring'
                 ? 'Aucune publication n’expire dans les trois prochains jours.'
                 : status === 'ALL'

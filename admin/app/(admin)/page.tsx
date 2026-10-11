@@ -7,6 +7,7 @@ import StatCard from '../../components/StatCard';
 import ActivityFeed from '../../components/ActivityFeed';
 import { supabase } from '../../lib/supabaseClient';
 import { formatDate } from '../../lib/format';
+import { useCurrentTime } from '../../lib/useCurrentTime';
 import { useSession } from '../../lib/useSession';
 
 type PropertyRow = {
@@ -27,6 +28,7 @@ const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
 export default function DashboardPage() {
   const router = useRouter();
   const { profile } = useSession();
+  const currentTime = useCurrentTime();
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [reportsOpen, setReportsOpen] = useState(0);
   const [pendingAgents, setPendingAgents] = useState(0);
@@ -63,25 +65,36 @@ export default function DashboardPage() {
   }, [loadDashboard]);
 
   const stats = useMemo(() => {
-    const now = Date.now();
+    const now = currentTime ?? 0;
+    const expiredPendingArchive = properties.filter(p => (
+      p.listing_status === 'approved' &&
+      p.expires_at !== null &&
+      p.expires_at !== undefined &&
+      new Date(p.expires_at).getTime() <= now
+    )).length;
     const expiringSoon = properties.filter(p => {
       if (p.listing_status !== 'approved' || !p.expires_at) return false;
       const ms = new Date(p.expires_at).getTime() - now;
       return ms >= 0 && ms <= THREE_DAYS;
     }).length;
     return {
-      active: properties.filter(p => p.listing_status === 'approved' && p.status === 'available').length,
+      active: properties.filter(p => (
+        p.listing_status === 'approved' &&
+        p.status === 'available' &&
+        (!p.expires_at || new Date(p.expires_at).getTime() > now)
+      )).length,
       pending: properties.filter(p => p.listing_status === 'pending').length,
       approved: properties.filter(p => p.listing_status === 'approved').length,
       rejected: properties.filter(p => p.listing_status === 'rejected').length,
       featured: properties.filter(p => p.featured).length,
       expiringSoon,
+      expiredPendingArchive,
       expired: properties.filter(p => p.listing_status === 'archived').length,
       sold: properties.filter(p => Boolean(p.sold_at)).length,
       rented: properties.filter(p => Boolean(p.rented_at) && !p.sold_at).length,
       occupied: properties.filter(p => p.status === 'occupied').length,
     };
-  }, [properties]);
+  }, [properties, currentTime]);
 
   const actions = [
     { count: stats.pending, label: 'annonces attendent votre validation', href: '/properties?tab=pending' },
@@ -138,6 +151,7 @@ export default function DashboardPage() {
           <div className="stat-lines">
             <div><span>Actives</span><strong>{stats.active}</strong></div>
             <div><span>En attente</span><strong>{stats.pending}</strong></div>
+            <div><span>Expirées, archivage en attente</span><strong>{stats.expiredPendingArchive}</strong></div>
             <div><span>Expirées</span><strong>{stats.expired}</strong></div>
             <div><span>Vendues</span><strong>{stats.sold}</strong></div>
             <div><span>Louées</span><strong>{stats.rented}</strong></div>

@@ -848,15 +848,22 @@ export default function PropertiesPage() {
         </div>
         <div className="toolbar-actions">
           {canUseBulkActions && selectedIds.size > 0 ? (
-            <details className="dropdown">
-              <summary>Actions groupees</summary>
-              <div className="dropdown-menu">
-                <button onClick={() => handleBulkAction('approve')}>Approuver</button>
-                <button onClick={() => handleBulkAction('reject')}>Refuser</button>
-                <button onClick={() => handleBulkAction('archive')}>Archiver</button>
-                <button className="danger" onClick={() => handleBulkAction('delete')}>Supprimer</button>
-              </div>
-            </details>
+            <>
+              <button
+                className="danger-button"
+                onClick={() => handleBulkAction('delete')}
+              >
+                Supprimer ({selectedIds.size})
+              </button>
+              <details className="dropdown">
+                <summary>Actions groupees</summary>
+                <div className="dropdown-menu">
+                  <button onClick={() => handleBulkAction('approve')}>Approuver</button>
+                  <button onClick={() => handleBulkAction('reject')}>Refuser</button>
+                  <button onClick={() => handleBulkAction('archive')}>Archiver</button>
+                </div>
+              </details>
+            </>
           ) : null}
           <details className="dropdown">
             <summary>Exporter</summary>

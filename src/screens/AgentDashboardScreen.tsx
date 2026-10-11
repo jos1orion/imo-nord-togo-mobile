@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { AppAlert as Alert } from '../components/ui/appAlertService';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -497,14 +497,75 @@ const AgentDashboardScreen = () => {
         </View>
       </Modal>
 
-      <Modal visible={profileEditorOpen} transparent animationType="slide" onRequestClose={() => setProfileEditorOpen(false)}>
-        <View style={styles.modalBackdrop}><View style={styles.modalCard}>
-          <View style={styles.modalHeader}><Text style={styles.modalTitle}>{t('profile_agent_step_professional')}</Text><TouchableOpacity onPress={() => setProfileEditorOpen(false)}><Ionicons name="close" size={23} color={colors.onSurfaceMuted} /></TouchableOpacity></View>
-          <Text style={styles.inputLabel}>Bio</Text><TextInput style={styles.input} value={bioDraft} onChangeText={setBioDraft} accessibilityLabel="Bio professionnelle" multiline placeholderTextColor={colors.onSurfaceMuted} placeholder="Présentez votre activité" />
-          <Text style={styles.inputLabel}>Spécialités</Text><TextInput style={styles.input} value={specialtiesDraft} onChangeText={setSpecialtiesDraft} accessibilityLabel="Spécialités immobilières" placeholderTextColor={colors.onSurfaceMuted} placeholder="house, land, apartment, shop" autoCapitalize="none" />
-          <Text style={styles.inputLabel}>Expérience (années)</Text><TextInput style={styles.input} value={experienceDraft} onChangeText={setExperienceDraft} accessibilityLabel="Expérience en années" keyboardType="numeric" placeholderTextColor={colors.onSurfaceMuted} placeholder="0" />
-          <TouchableOpacity style={[styles.publishButton, savingProfile && styles.disabled]} onPress={() => void saveProfessionalProfile()} disabled={savingProfile}><Text style={styles.publishButtonText}>{savingProfile ? '…' : t('confirm')}</Text></TouchableOpacity>
-        </View></View>
+      <Modal
+        visible={profileEditorOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setProfileEditorOpen(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScrollView
+            contentContainerStyle={styles.modalScrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          >
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{t('profile_agent_step_professional')}</Text>
+                <TouchableOpacity
+                  onPress={() => setProfileEditorOpen(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('close')}
+                >
+                  <Ionicons name="close" size={23} color={colors.onSurfaceMuted} />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.inputLabel}>Bio</Text>
+              <TextInput
+                style={styles.input}
+                value={bioDraft}
+                onChangeText={setBioDraft}
+                accessibilityLabel="Bio professionnelle"
+                multiline
+                placeholderTextColor={colors.onSurfaceMuted}
+                placeholder="Présentez votre activité"
+              />
+              <Text style={styles.inputLabel}>Spécialités</Text>
+              <TextInput
+                style={styles.input}
+                value={specialtiesDraft}
+                onChangeText={setSpecialtiesDraft}
+                accessibilityLabel="Spécialités immobilières"
+                placeholderTextColor={colors.onSurfaceMuted}
+                placeholder="house, land, apartment, shop"
+                autoCapitalize="none"
+                returnKeyType="next"
+              />
+              <Text style={styles.inputLabel}>Expérience (années)</Text>
+              <TextInput
+                style={styles.input}
+                value={experienceDraft}
+                onChangeText={setExperienceDraft}
+                accessibilityLabel="Expérience en années"
+                keyboardType="numeric"
+                placeholderTextColor={colors.onSurfaceMuted}
+                placeholder="0"
+                returnKeyType="done"
+              />
+              <TouchableOpacity
+                style={[styles.publishButton, savingProfile && styles.disabled]}
+                onPress={() => void saveProfessionalProfile()}
+                disabled={savingProfile}
+                accessibilityRole="button"
+              >
+                <Text style={styles.publishButtonText}>{savingProfile ? '…' : t('confirm')}</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </ScrollView>
   );
@@ -569,7 +630,13 @@ const baseStyles = StyleSheet.create({
   completionSecondaryText: { color: COLORS.onSurface, fontSize: 14, fontWeight: '700' },
   completionCancel: { alignItems: 'center', paddingVertical: SPACING.xs },
   completionCancelText: { color: COLORS.onSurfaceMuted, fontSize: 14, fontWeight: '700' },
-  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: COLORS.scrim50 }, modalCard: { backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, padding: 20, gap: 8 }, modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }, modalTitle: { flex: 1, color: COLORS.onSurface, fontSize: 18, fontWeight: '800' }, inputLabel: { color: COLORS.onSurfaceMuted, fontSize: 12, fontWeight: '800', marginTop: 6 }, input: { minHeight: 46, paddingHorizontal: 12, paddingVertical: 10, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderStrong, color: COLORS.onSurface, fontSize: 14, backgroundColor: COLORS.background },
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: COLORS.scrim50 },
+  modalScrollContent: { flexGrow: 1, justifyContent: 'flex-end' },
+  modalCard: { maxHeight: '90%', backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, padding: 20, gap: 8 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  modalTitle: { flex: 1, color: COLORS.onSurface, fontSize: 18, fontWeight: '800' },
+  inputLabel: { color: COLORS.onSurfaceMuted, fontSize: 12, fontWeight: '800', marginTop: 6 },
+  input: { minHeight: 46, paddingHorizontal: 12, paddingVertical: 10, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderStrong, color: COLORS.onSurface, fontSize: 14, backgroundColor: COLORS.background },
   disabled: { opacity: 0.6 },
   gate: { flex: 1, backgroundColor: COLORS.background, paddingHorizontal: 28, alignItems: 'center' }, gateIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primaryContainer, marginBottom: 18 }, gateTitle: { color: COLORS.onSurface, fontSize: 20, fontWeight: '800', textAlign: 'center' }, gateBody: { color: COLORS.onSurfaceMuted, fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 10 }, primaryButton: { marginTop: 22, minHeight: 46, paddingHorizontal: 18, justifyContent: 'center', borderRadius: RADIUS.md, backgroundColor: COLORS.primary }, primaryButtonText: { color: COLORS.white, fontWeight: '800' },
 });

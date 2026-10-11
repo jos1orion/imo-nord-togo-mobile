@@ -8,6 +8,7 @@ const PUBLIC_PATHS = [
   '/auth/reset',
   '/delete-account',
   '/privacy',
+  '/property',
   '/terms',
   '/api/health',
 ];
@@ -29,6 +30,8 @@ export async function updateSession(request: NextRequest) {
     path.startsWith('/delete-account/') ||
     path === '/privacy' ||
     path.startsWith('/privacy/') ||
+    path === '/property' ||
+    path.startsWith('/property/') ||
     path === '/terms' ||
     path.startsWith('/terms/');
 

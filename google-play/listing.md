@@ -71,7 +71,7 @@ L'application est entièrement gratuite ! Téléchargez-la maintenant et trouvez
 
 📞 CONTACT
 Email : kondgbandi@gmail.com
-Téléphone : +228 90 00 00 00
+Téléphone : +228 93 57 62 98
 Adresse : Avenue de la Libération, Kara, Togo
 
 Imo Nord Togo - Votre partenaire immobilier de confiance !
@@ -97,9 +97,8 @@ immo, immobilier, togolais, togo, kara, vente, location, terrain, villa, maison,
 1. Écran d'accueil avec les biens en vedette
 2. Carte interactive avec les marqueurs
 3. Détail d'un bien immobilier
-4. Back office / Administration
-5. Écran de recherche et filtres
-6. Profil et contact
+4. Écran de recherche et filtres
+5. Profil et contact
 
 ### Tablette (optionnel)
 - Format : 16:9 ou 9:16
@@ -145,38 +144,36 @@ immo, immobilier, togolais, togo, kara, vente, location, terrain, villa, maison,
 
 ## Coordonnées
 
-- **Site web** : https://imonordtogo.com
+- **Site web** : https://imo-nord-togo-mobile.vercel.app/privacy
 - **Email** : kondgbandi@gmail.com
-- **Téléphone** : +228 90 00 00 00
+- **Téléphone** : +228 93 57 62 98
 - **Adresse** : Avenue de la Libération, Kara, Togo
 
 ---
 
 ## Politique de confidentialité
 
-URL requise : https://imonordtogo.com/privacy-policy
-(Fichier disponible dans assets/privacy-policy.md)
+URL requise : https://imo-nord-togo-mobile.vercel.app/privacy
 
 ---
 
 ## Conditions d'utilisation
 
-URL recommandée : https://imonordtogo.com/terms
-(Fichier disponible dans assets/terms-of-service.md)
+URL recommandée : https://imo-nord-togo-mobile.vercel.app/terms
 
 ---
 
 ## Notes pour la publication
 
 1. L'application nécessite les permissions suivantes :
-   - Localisation (GPS) - Pour afficher les biens sur la carte
-   - Caméra - Pour prendre des photos de propriétés
-   - Stockage - Pour sauvegarder les images
+   - Caméra - Uniquement lorsque l'utilisateur choisit de prendre une photo
+   - Microphone - Uniquement lors de l'utilisation de la recherche vocale
+   - Photothèque - Accès demandé au moment de sélectionner des photos
 
 2. Justification des permissions :
-   - GPS : Nécessaire pour localiser les biens sur la carte
-   - Caméra : Permet aux utilisateurs de photographier leurs propriétés
-   - Stockage : Stockage des images de propriétés
+   - L'application ne demande pas la localisation GPS.
+   - L'accès aux photos est limité aux parcours de sélection/téléversement choisis par l'utilisateur.
+   - Les anciennes permissions générales de stockage et `SYSTEM_ALERT_WINDOW` sont bloquées dans la configuration Android.
 
 3. L'application respecte les politiques Google Play :
    - Pas de contenu inapproprié
