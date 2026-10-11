@@ -2,24 +2,24 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Modal,
   Share,
-  TextInput,
-  Alert,
   ActivityIndicator,
   InteractionManager,
   Linking,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
+import { AppAlert as Alert } from '../components/ui/appAlertService';
+import TextInput from '../components/ui/AccessibleTextInput';
 
 import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,11 +35,18 @@ import { isPublicProperty } from '../utils/propertyVisibility';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { logger } from '../lib/logger';
+import { formatPrice } from '../utils/format';
 
 type ProfileRouteProp = RouteProp<
   { Profile: { authMode?: 'login' | 'register' } | undefined },
   'Profile'
 >;
+
+const isExpiringSoon = (expiresAt?: string | null) => {
+  if (!expiresAt) return false;
+  const remaining = new Date(expiresAt).getTime() - Date.now();
+  return remaining > 0 && remaining <= 14 * 24 * 60 * 60 * 1000;
+};
 
 const ProfileScreen: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
@@ -50,12 +57,14 @@ const ProfileScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const {
     properties,
+    propertyStats,
     savedSearches,
     removeSavedSearch,
     searchHistory,
     clearSearchHistory,
     recentViewedIds,
     getMyProperties,
+    getAgentProfile,
     chats,
     currentUser,
     registerUser,
@@ -90,6 +99,9 @@ const ProfileScreen: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [agentListingFilter, setAgentListingFilter] = useState<
+    'pending' | 'published' | 'rejected' | 'completed'
+  >('published');
 
   useEffect(() => {
     if (route.params?.authMode) {
@@ -378,13 +390,8 @@ const ProfileScreen: React.FC = () => {
               <Ionicons name="home" size={22} color={themeColors.onSurfaceMuted} />
             </View>
             <View style={styles.authWelcomeCopy}>
-              <Text style={styles.authWelcomeTitle}>{t('profile_auth_hero_title')}</Text>
               <Text style={styles.authWelcomeSubtitle}>{t('profile_auth_hero_subtitle')}</Text>
             </View>
-          </View>
-          <View style={styles.authSecureNote}>
-            <Ionicons name="shield-checkmark" size={15} color={themeColors.onSurfaceMuted} />
-            <Text style={styles.authSecureText}>{t('profile_auth_secure')}</Text>
           </View>
           <View style={styles.guestLanguageRow}>
             <Text style={styles.guestLanguageLabel}>{t('language')}</Text>
@@ -457,6 +464,7 @@ const ProfileScreen: React.FC = () => {
                 <Ionicons name="person-outline" size={19} color={themeColors.onSurfaceMuted} />
                 <TextInput
                   style={styles.authInput}
+                  accessibilityLabel={t('profile_name')}
                   value={authName}
                   onChangeText={setAuthName}
                   placeholder={t('profile_name_placeholder')}
@@ -491,6 +499,7 @@ const ProfileScreen: React.FC = () => {
               <Ionicons name="mail-outline" size={19} color={themeColors.onSurfaceMuted} />
               <TextInput
                 style={styles.authInput}
+                accessibilityLabel={t('profile_email')}
                 value={authEmail}
                 onChangeText={setAuthEmail}
                 placeholder="email@example.com"
@@ -509,6 +518,7 @@ const ProfileScreen: React.FC = () => {
                 <Ionicons name="call-outline" size={19} color={themeColors.onSurfaceMuted} />
                 <TextInput
                   style={styles.authInput}
+                  accessibilityLabel={t('profile_phone')}
                   value={authPhone}
                   onChangeText={setAuthPhone}
                   placeholder={t('profile_phone_placeholder')}
@@ -526,6 +536,7 @@ const ProfileScreen: React.FC = () => {
               <Ionicons name="lock-closed-outline" size={19} color={themeColors.onSurfaceMuted} />
               <TextInput
                 style={[styles.authInput, styles.passwordInput]}
+                accessibilityLabel={t('profile_password')}
                 value={authPassword}
                 onChangeText={setAuthPassword}
                 placeholder="********"
@@ -613,7 +624,9 @@ const ProfileScreen: React.FC = () => {
       currentUser.agentStatus === 'none' ||
       currentUser.agentStatus === 'pending' ||
       currentUser.agentStatus === 'rejected');
-  const agentProperties = isAgent ? getMyProperties() : [];
+  const agentProperties = isAgent
+    ? properties.filter(property => property.ownerId === currentUser.id)
+    : [];
   const profileProperties = getMyProperties();
   const unreadMessageCount = currentUser
     ? chats
@@ -623,14 +636,50 @@ const ProfileScreen: React.FC = () => {
   const activeAgentListings = agentProperties.filter(
     property => property.listingStatus === 'approved' && property.status === 'available'
   ).length;
-  const pendingAgentListings = agentProperties.filter(
-    property => property.listingStatus === 'pending'
-  ).length;
   const unreadAgentMessages = isAgent
     ? chats
         .filter(chat => chat.participants.includes(currentUser.id))
         .reduce((total, chat) => total + (chat.unreadCount[currentUser.id] ?? 0), 0)
     : 0;
+  const agentViews = agentProperties.reduce(
+    (total, property) => total + (propertyStats[property.id]?.views ?? 0),
+    0
+  );
+  const agentProfile = isAgent ? getAgentProfile(currentUser.id) : null;
+  const agentProfileComplete = Boolean(
+    currentUser.name.trim() &&
+    currentUser.phone.trim() &&
+    currentUser.email.trim() &&
+    agentProfile?.bio.trim() &&
+    agentProfile.specialties.length > 0
+  );
+  const agentSetupSteps = [
+    { label: t('profile_agent_step_account'), done: true },
+    {
+      label: t('profile_agent_step_contact'),
+      done: Boolean(currentUser.name.trim() && currentUser.email.trim() && currentUser.phone.trim()),
+    },
+    {
+      label: t('profile_agent_step_professional'),
+      done: Boolean(agentProfile?.bio.trim() && agentProfile.specialties.length > 0),
+    },
+    { label: t('profile_agent_step_verification'), done: currentUser.verified },
+    { label: t('profile_agent_step_first_listing'), done: agentProperties.length > 0 },
+  ];
+  const completedAgentSetupSteps = agentSetupSteps.filter(step => step.done).length;
+  const agentListingsByStatus = {
+    pending: agentProperties.filter(property => property.listingStatus === 'pending'),
+    published: agentProperties.filter(
+      property => property.listingStatus === 'approved' && property.status === 'available'
+    ),
+    rejected: agentProperties.filter(property => property.listingStatus === 'rejected'),
+    completed: agentProperties.filter(
+      property =>
+        property.status === 'occupied' ||
+        property.listingStatus === 'archived'
+    ),
+  };
+  const selectedAgentListings = agentListingsByStatus[agentListingFilter];
 
   return (
     <>
@@ -641,55 +690,39 @@ const ProfileScreen: React.FC = () => {
         keyboardDismissMode="none"
       >
         {/* Header */}
-        <LinearGradient
-          colors={[themeColors.brand, themeColors.primaryDark]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.profileHeader}
-        >
+        <View style={[styles.profileHeader, { backgroundColor: themeColors.surface }]}>
           <TouchableOpacity style={styles.profileBrand} onPress={handleSecretTap} activeOpacity={1}>
             <View style={styles.profileLogo}>
               <Text style={styles.profileLogoText}>IMO</Text>
             </View>
-            <View style={styles.profileHeroCard}>
-              <View style={styles.profileHeroMetric}>
-                <Ionicons name="home-outline" size={17} color={themeColors.primary} />
-                <Text style={styles.profileHeroValue}>{profileProperties.length}</Text>
-                <Text style={styles.profileHeroLabel}>{t('my_listings')}</Text>
-              </View>
-              <View style={styles.profileHeroDivider} />
-              <View style={styles.profileHeroMetric}>
-                <Ionicons name="bookmark-outline" size={17} color={themeColors.info} />
-                <Text style={styles.profileHeroValue}>{savedSearches.length}</Text>
-                <Text style={styles.profileHeroLabel}>{t('saved_searches')}</Text>
-              </View>
-              <View style={styles.profileHeroDivider} />
-              <View style={styles.profileHeroMetric}>
-                <Ionicons name="chatbubble-ellipses-outline" size={17} color={themeColors.success} />
-                <Text style={styles.profileHeroValue}>{unreadMessageCount}</Text>
-                <Text style={styles.profileHeroLabel}>{t('profile_messages_shortcut')}</Text>
-              </View>
-            </View>
             <View style={styles.profileBrandCopy}>
-              <Text style={[styles.profileHeading, theme === 'dark' && styles.textLight]}>
-                {t('tab_profile')}
-              </Text>
+              <Text style={styles.profileHeading}>{t('tab_profile')}</Text>
               <Text style={styles.profileTagline}>
-                {isAgent ? t('profile_agent_dashboard') : t('profile_personal_space')}
-              </Text>
-            </View>
-            <View style={styles.profileRoleBadge}>
-              <Ionicons
-                name={isAgent ? 'briefcase' : 'person'}
-                size={13}
-                color={isAgent ? themeColors.onSurfaceMuted : themeColors.onBrandMuted}
-              />
-              <Text style={styles.profileRoleBadgeText}>
-                {isAgent ? t('profile_agent_approved') : t('profile_client_badge')}
+                {t('profile_personal_space')}
               </Text>
             </View>
           </TouchableOpacity>
-        </LinearGradient>
+        </View>
+
+        <View style={styles.profileHeroCard}>
+          <View style={styles.profileHeroMetric}>
+            <Ionicons name="home-outline" size={17} color={themeColors.primary} />
+            <Text style={styles.profileHeroValue}>{profileProperties.length}</Text>
+            <Text style={styles.profileHeroLabel}>{t('my_listings')}</Text>
+          </View>
+          <View style={styles.profileHeroDivider} />
+          <View style={styles.profileHeroMetric}>
+            <Ionicons name="bookmark-outline" size={17} color={themeColors.info} />
+            <Text style={styles.profileHeroValue}>{savedSearches.length}</Text>
+            <Text style={styles.profileHeroLabel}>{t('saved_searches')}</Text>
+          </View>
+          <View style={styles.profileHeroDivider} />
+          <View style={styles.profileHeroMetric}>
+            <Ionicons name="chatbubble-ellipses-outline" size={17} color={themeColors.success} />
+            <Text style={styles.profileHeroValue}>{unreadMessageCount}</Text>
+            <Text style={styles.profileHeroLabel}>{t('profile_messages_shortcut')}</Text>
+          </View>
+        </View>
 
         {canRequestAgentAccess && (
           <View style={[styles.agentAccessCard, theme === 'dark' && styles.agentAccessCardDark]}>
@@ -731,7 +764,7 @@ const ProfileScreen: React.FC = () => {
           </View>
         )}
 
-        {isAgent && (
+        {isAgent && currentUser && false && (
           <View style={[styles.agentDashboard, theme === 'dark' && styles.agentDashboardDark]}>
             <View style={styles.agentDashboardHeader}>
               <View style={styles.agentDashboardHeading}>
@@ -739,17 +772,33 @@ const ProfileScreen: React.FC = () => {
                   <Ionicons name="briefcase" size={17} color={themeColors.onSurfaceMuted} />
                 </View>
                 <View style={styles.agentDashboardTitleWrap}>
-                  <Text style={[styles.agentDashboardTitle, theme === 'dark' && styles.textLight]}>
-                    {t('profile_agent_dashboard')}
+                  <Text style={[styles.agentGreeting, theme === 'dark' && styles.textLight]}>
+                    {t('profile_agent_greeting')} {currentUser?.name.split(' ')[0] ?? ''}
                   </Text>
                   <Text style={[styles.agentDashboardSubtitle, theme === 'dark' && styles.textMutedDark]}>
-                    {t('profile_agent_dashboard_subtitle')}
+                    {t('profile_agent_dashboard')}
                   </Text>
                 </View>
               </View>
-              <View style={styles.agentApprovedBadge}>
-                <Ionicons name="checkmark-circle" size={14} color={themeColors.success} />
-                <Text style={styles.agentApprovedText}>{t('profile_agent_approved')}</Text>
+              <View
+                style={[
+                  styles.agentApprovedBadge,
+                  !currentUser?.verified && styles.agentUnverifiedBadge,
+                ]}
+              >
+                <Ionicons
+                  name={currentUser?.verified ? 'checkmark-circle' : 'alert-circle'}
+                  size={14}
+                  color={currentUser?.verified ? themeColors.success : themeColors.warning}
+                />
+                <Text
+                  style={[
+                    styles.agentApprovedText,
+                    !currentUser?.verified && styles.agentUnverifiedText,
+                  ]}
+                >
+                  {currentUser?.verified ? t('profile_agent_approved') : t('profile_not_verified')}
+                </Text>
               </View>
             </View>
 
@@ -763,11 +812,11 @@ const ProfileScreen: React.FC = () => {
                   color: themeColors.primary,
                 },
                 {
-                  key: 'pending',
-                  value: pendingAgentListings,
-                  label: t('profile_agent_pending_listings'),
-                  icon: 'time-outline' as const,
-                  color: themeColors.warning,
+                  key: 'views',
+                  value: agentViews,
+                  label: t('profile_agent_views'),
+                  icon: 'eye-outline' as const,
+                  color: themeColors.info,
                 },
                 {
                   key: 'messages',
@@ -789,6 +838,49 @@ const ProfileScreen: React.FC = () => {
                   </Text>
                   <Text style={[styles.agentStatLabel, theme === 'dark' && styles.textMutedDark]}>
                     {stat.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.agentProgressCard}>
+              <View style={styles.agentListingsHeader}>
+                <Text style={[styles.agentTodayTitle, theme === 'dark' && styles.textLight]}>
+                  {t('profile_agent_setup')}
+                </Text>
+                <Text style={styles.agentProgressCount}>
+                  {completedAgentSetupSteps}/{agentSetupSteps.length}
+                </Text>
+              </View>
+              <View style={styles.agentProgressTrack}>
+                <View
+                  style={[
+                    styles.agentProgressFill,
+                    { width: `${(completedAgentSetupSteps / agentSetupSteps.length) * 100}%` },
+                  ]}
+                />
+              </View>
+              {agentSetupSteps.map(step => (
+                <View key={step.label} style={styles.agentSetupStep}>
+                  <View
+                    style={[
+                      styles.agentSetupStepIcon,
+                      step.done && styles.agentSetupStepIconDone,
+                    ]}
+                  >
+                    <Ionicons
+                      name={step.done ? 'checkmark' : 'ellipse-outline'}
+                      size={13}
+                      color={step.done ? themeColors.onSuccessContainer : themeColors.onSurfaceMuted}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.agentTodoText,
+                      theme === 'dark' && styles.textMutedDark,
+                    ]}
+                  >
+                    {step.label}
                   </Text>
                 </View>
               ))}
@@ -833,7 +925,187 @@ const ProfileScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
             </View>
+
+            <View style={styles.agentTodaySection}>
+              <Text style={[styles.agentTodayTitle, theme === 'dark' && styles.textLight]}>
+                {t('profile_agent_today')}
+              </Text>
+              {!agentProfileComplete && (
+                <View style={styles.agentTodoRow}>
+                  <Ionicons name="person-circle-outline" size={19} color={themeColors.warning} />
+                  <Text style={[styles.agentTodoText, theme === 'dark' && styles.textMutedDark]}>
+                    {t('profile_agent_complete_profile')}
+                  </Text>
+                </View>
+              )}
+              {unreadAgentMessages > 0 && (
+                <TouchableOpacity
+                  style={styles.agentTodoRow}
+                  onPress={() => navigation.navigate('MainTabs', { screen: 'Messages' })}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="chatbubble-ellipses-outline" size={19} color={themeColors.primary} />
+                  <Text style={[styles.agentTodoText, theme === 'dark' && styles.textMutedDark]}>
+                    {t('profile_agent_reply_to_prospect')}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={17} color={themeColors.onSurfaceMuted} />
+                </TouchableOpacity>
+              )}
+              {agentListingsByStatus.rejected.map(property => (
+                <TouchableOpacity
+                  key={`rejected-${property.id}`}
+                  style={styles.agentTodoRow}
+                  onPress={() => navigation.navigate('Publish', { propertyId: property.id })}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="alert-circle-outline" size={19} color={themeColors.danger} />
+                  <Text style={[styles.agentTodoText, theme === 'dark' && styles.textMutedDark]} numberOfLines={1}>
+                    {t('profile_agent_fix_rejected')}: {property.title}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={17} color={themeColors.onSurfaceMuted} />
+                </TouchableOpacity>
+              ))}
+              {agentProperties
+                .filter(property => isExpiringSoon(property.expiresAt))
+                .map(property => (
+                  <TouchableOpacity
+                    key={`expiring-${property.id}`}
+                    style={styles.agentTodoRow}
+                    onPress={() => navigation.navigate('Publish', { propertyId: property.id })}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="time-outline" size={19} color={themeColors.warning} />
+                    <Text style={[styles.agentTodoText, theme === 'dark' && styles.textMutedDark]} numberOfLines={1}>
+                      {t('profile_agent_renew_listing')}: {property.title}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={17} color={themeColors.onSurfaceMuted} />
+                  </TouchableOpacity>
+                ))}
+              {agentProfileComplete && unreadAgentMessages === 0 &&
+                agentListingsByStatus.rejected.length === 0 &&
+                !agentProperties.some(property => isExpiringSoon(property.expiresAt)) && (
+                  <Text style={[styles.agentTodoText, theme === 'dark' && styles.textMutedDark]}>
+                    {t('profile_agent_all_caught_up')}
+                  </Text>
+                )}
+            </View>
+
+            <View style={styles.agentListingsSection}>
+              <View style={styles.agentListingsHeader}>
+                <Text style={[styles.agentTodayTitle, theme === 'dark' && styles.textLight]}>
+                  {t('profile_agent_manage_listings')}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Publish')}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.agentSeeAll}>{t('profile_agent_publish')}</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.agentStatusTabs}
+              >
+                {([
+                  ['pending', t('profile_agent_pending_listings')],
+                  ['published', t('profile_agent_published')],
+                  ['rejected', t('profile_agent_rejected')],
+                  ['completed', t('profile_agent_completed')],
+                ] as const).map(([key, label]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      styles.agentStatusTab,
+                      agentListingFilter === key && styles.agentStatusTabActive,
+                    ]}
+                    onPress={() => setAgentListingFilter(key)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: agentListingFilter === key }}
+                  >
+                    <Text
+                      style={[
+                        styles.agentStatusTabText,
+                        agentListingFilter === key && styles.agentStatusTabTextActive,
+                      ]}
+                    >
+                      {label} ({agentListingsByStatus[key].length})
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              {selectedAgentListings.length === 0 ? (
+                <Text style={[styles.agentEmptyText, theme === 'dark' && styles.textMutedDark]}>
+                  {t('profile_agent_no_listings')}
+                </Text>
+              ) : (
+                selectedAgentListings.map(property => (
+                  <View key={property.id} style={styles.agentListingRow}>
+                    <TouchableOpacity
+                      style={styles.agentListingMain}
+                      onPress={() => navigation.navigate('PropertyDetail', { propertyId: property.id })}
+                      accessibilityRole="button"
+                    >
+                      {property.images[0] ? (
+                        <Image source={{ uri: property.images[0] }} style={styles.agentListingImage} />
+                      ) : (
+                        <View style={styles.agentListingImageFallback}>
+                          <Ionicons name="home-outline" size={22} color={themeColors.onSurfaceMuted} />
+                        </View>
+                      )}
+                      <View style={styles.agentListingCopy}>
+                        <Text style={[styles.agentListingTitle, theme === 'dark' && styles.textLight]} numberOfLines={1}>
+                          {property.title}
+                        </Text>
+                        <Text style={[styles.agentListingPrice, theme === 'dark' && styles.textLight]}>
+                          {formatPrice(property.price)}
+                        </Text>
+                        <Text style={[styles.agentListingMeta, theme === 'dark' && styles.textMutedDark]}>
+                          {t('profile_agent_listing_views')}: {propertyStats[property.id]?.views ?? 0}
+                          {'  ·  '}
+                          {t('profile_agent_listing_contacts')}: {propertyStats[property.id]?.contacts ?? 0}
+                        </Text>
+                        {property.listingStatus === 'rejected' && property.rejectionReason ? (
+                          <Text style={styles.agentListingRejection} numberOfLines={2}>
+                            {property.rejectionReason}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.agentListingEdit}
+                      onPress={() => navigation.navigate('Publish', { propertyId: property.id })}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('profile_agent_edit_listing')}
+                    >
+                      <Ionicons name="create-outline" size={19} color={themeColors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
+            </View>
           </View>
+        )}
+
+        {isAgent && (
+          <TouchableOpacity
+            style={[styles.agentWorkspaceLink, theme === 'dark' && styles.agentWorkspaceLinkDark]}
+            onPress={() => navigation.navigate('MainTabs', { screen: 'Agent' })}
+            accessibilityRole="button"
+          >
+            <View style={styles.agentWorkspaceLinkIcon}>
+              <Ionicons name="briefcase-outline" size={20} color={themeColors.primary} />
+            </View>
+            <View style={styles.agentWorkspaceLinkCopy}>
+              <Text style={[styles.agentWorkspaceLinkTitle, theme === 'dark' && styles.textLight]}>
+                {t('profile_agent_dashboard')}
+              </Text>
+              <Text style={[styles.agentWorkspaceLinkSub, theme === 'dark' && styles.textMutedDark]}>
+                {t('profile_agent_manage_listings')}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={themeColors.onSurfaceMuted} />
+          </TouchableOpacity>
         )}
 
         {/* Account Status */}
@@ -920,12 +1192,18 @@ const ProfileScreen: React.FC = () => {
                   <TouchableOpacity
                     style={styles.savedSearchApply}
                     onPress={() => applySavedSearch(saved.id)}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('saved_search_apply')}: ${saved.label}`}
                   >
                     <Ionicons name="arrow-forward" size={16} color={themeColors.primary} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.savedSearchDelete}
                     onPress={() => removeSavedSearch(saved.id)}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('saved_search_delete')}: ${saved.label}`}
                   >
                     <Ionicons name="trash" size={16} color={themeColors.danger} />
                   </TouchableOpacity>
@@ -1176,10 +1454,10 @@ const baseStyles = StyleSheet.create({
   authHero: {
     paddingHorizontal: 22,
     paddingTop: 26,
-    paddingBottom: 34,
-    backgroundColor: COLORS.brand,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    paddingBottom: 22,
+    backgroundColor: COLORS.surface,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
   authBrand: {
     flexDirection: 'row',
@@ -1191,7 +1469,7 @@ const baseStyles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 18,
-    backgroundColor: COLORS.surfaceAlt,
+    backgroundColor: COLORS.primaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: COLORS.shadow,
@@ -1203,22 +1481,11 @@ const baseStyles = StyleSheet.create({
   authLogoText: {
     fontSize: 17,
     fontWeight: '900',
-    color: COLORS.onSurfaceMuted,
+    color: COLORS.primary,
     letterSpacing: 0.5,
   },
   authBrandCopy: {
     flex: 1,
-  },
-  authSecureNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    marginTop: 18,
-  },
-  authSecureText: {
-    color: COLORS.onBrandMuted,
-    fontSize: 12,
-    fontWeight: '600',
   },
   authWelcome: {
     flexDirection: 'row',
@@ -1232,21 +1499,15 @@ const baseStyles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.overlayGold14,
+    backgroundColor: COLORS.primaryContainer,
     borderWidth: 1,
-    borderColor: COLORS.overlayGold32,
+    borderColor: COLORS.border,
   },
   authWelcomeCopy: {
     flex: 1,
   },
-  authWelcomeTitle: {
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
   authWelcomeSubtitle: {
-    color: COLORS.onBrandMuted,
+    color: COLORS.onSurfaceMuted,
     fontSize: 12,
     lineHeight: 18,
     marginTop: 4,
@@ -1259,37 +1520,37 @@ const baseStyles = StyleSheet.create({
   },
   guestLanguageLabel: {
     flex: 1,
-    color: COLORS.onBrandMuted,
+    color: COLORS.onSurfaceMuted,
     fontSize: 12,
     fontWeight: '700',
   },
   authTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: COLORS.white,
+    color: COLORS.onSurface,
   },
   authSubtitle: {
     fontSize: 12,
-    color: COLORS.onBrandMuted,
+    color: COLORS.onSurfaceMuted,
     marginTop: 3,
   },
   profileHeader: {
     marginHorizontal: 16,
     paddingHorizontal: 16,
     paddingTop: 14,
-    paddingBottom: 36,
+    paddingBottom: 14,
     borderRadius: 22,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 1,
   },
   profileHeroCard: {
     flexDirection: 'row',
     alignItems: 'stretch',
     marginHorizontal: SPACING.lg,
-    marginTop: -22,
+    marginTop: SPACING.md,
     marginBottom: SPACING.md,
     paddingVertical: SPACING.md,
     backgroundColor: COLORS.surface,
@@ -1337,7 +1598,7 @@ const baseStyles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 15,
-    backgroundColor: COLORS.surfaceAlt,
+    backgroundColor: COLORS.primaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1345,32 +1606,16 @@ const baseStyles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
     letterSpacing: 0.3,
-    color: COLORS.onSurfaceMuted,
-  },
-  profileRoleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: COLORS.overlayWhite12,
-    borderWidth: 1,
-    borderColor: COLORS.overlayWhite16,
-  },
-  profileRoleBadgeText: {
-    color: COLORS.white,
-    fontSize: 10,
-    fontWeight: '700',
+    color: COLORS.primary,
   },
   profileHeading: {
-    color: COLORS.white,
+    color: COLORS.onSurface,
     fontSize: 19,
     fontWeight: '800',
   },
   profileTagline: {
-    fontSize: 11,
-    color: COLORS.onBrandMuted,
+    fontSize: 12,
+    color: COLORS.onSurfaceMuted,
     marginTop: 3,
   },
   textLight: {
@@ -1597,6 +1842,34 @@ const baseStyles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 2,
   },
+  agentWorkspaceLink: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    minHeight: 76,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: COLORS.primaryContainer,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  agentWorkspaceLinkDark: {
+    backgroundColor: COLORS.surfaceAlt,
+    borderColor: COLORS.border,
+  },
+  agentWorkspaceLinkIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  agentWorkspaceLinkCopy: { flex: 1 },
+  agentWorkspaceLinkTitle: { fontSize: 15, fontWeight: '800', color: COLORS.onSurface },
+  agentWorkspaceLinkSub: { marginTop: 3, fontSize: 12, color: COLORS.onSurfaceMuted },
   agentAccessCard: {
     marginHorizontal: 16,
     marginTop: 14,
@@ -1638,12 +1911,12 @@ const baseStyles = StyleSheet.create({
   },
   agentAccessSubtitle: {
     color: COLORS.onSurfaceMuted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 16,
     marginTop: 3,
   },
   agentAccessButton: {
-    minHeight: 42,
+    minHeight: 44,
     marginTop: 12,
     paddingHorizontal: 13,
     borderRadius: 13,
@@ -1690,6 +1963,11 @@ const baseStyles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
+  agentGreeting: {
+    color: COLORS.onSurface,
+    fontSize: 17,
+    fontWeight: '800',
+  },
   agentApprovedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1701,12 +1979,18 @@ const baseStyles = StyleSheet.create({
   },
   agentApprovedText: {
     color: COLORS.onSuccessContainer,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
+  },
+  agentUnverifiedBadge: {
+    backgroundColor: COLORS.warningContainer,
+  },
+  agentUnverifiedText: {
+    color: COLORS.onWarningContainer,
   },
   agentDashboardSubtitle: {
     color: COLORS.onSurfaceMuted,
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 3,
   },
   agentStatsGrid: {
@@ -1744,9 +2028,182 @@ const baseStyles = StyleSheet.create({
   },
   agentStatLabel: {
     color: COLORS.onSurfaceMuted,
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     marginTop: 3,
+  },
+  agentProgressCard: {
+    marginTop: 14,
+    padding: 12,
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  agentProgressCount: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  agentProgressTrack: {
+    height: 6,
+    overflow: 'hidden',
+    borderRadius: 3,
+    backgroundColor: COLORS.surfaceMuted,
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  agentProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: COLORS.success,
+  },
+  agentSetupStep: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  agentSetupStepIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surfaceMuted,
+  },
+  agentSetupStepIconDone: {
+    backgroundColor: COLORS.successContainer,
+  },
+  agentTodaySection: {
+    marginTop: 16,
+    gap: 8,
+  },
+  agentTodayTitle: {
+    color: COLORS.onSurface,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  agentTodoRow: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 12,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  agentTodoText: {
+    flex: 1,
+    color: COLORS.onSurfaceMuted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  agentListingsSection: {
+    marginTop: 18,
+  },
+  agentListingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  agentSeeAll: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  agentStatusTabs: {
+    gap: 7,
+    paddingVertical: 11,
+  },
+  agentStatusTab: {
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  agentStatusTabActive: {
+    backgroundColor: COLORS.primaryContainer,
+    borderColor: COLORS.primary,
+  },
+  agentStatusTabText: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  agentStatusTabTextActive: {
+    color: COLORS.primary,
+  },
+  agentEmptyText: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 12,
+    paddingVertical: 10,
+  },
+  agentListingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 8,
+    marginBottom: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+  agentListingMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  agentListingImage: {
+    width: 68,
+    height: 68,
+    borderRadius: 10,
+    backgroundColor: COLORS.surfaceMuted,
+  },
+  agentListingImageFallback: {
+    width: 68,
+    height: 68,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surfaceMuted,
+  },
+  agentListingCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  agentListingTitle: {
+    color: COLORS.onSurface,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  agentListingPrice: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  agentListingMeta: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 12,
+  },
+  agentListingRejection: {
+    color: COLORS.danger,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  agentListingEdit: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primaryContainer,
   },
   agentActions: {
     marginTop: 13,
@@ -1804,7 +2261,7 @@ const baseStyles = StyleSheet.create({
   },
   agentUnreadBadgeText: {
     color: COLORS.white,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   agentStatusAction: {
@@ -1973,7 +2430,7 @@ const baseStyles = StyleSheet.create({
     color: COLORS.onSurfaceMuted,
   },
   propertyStats: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.onSurfaceMuted,
     marginTop: 4,
   },
@@ -1987,7 +2444,7 @@ const baseStyles = StyleSheet.create({
     color: COLORS.primary,
   },
   propertyStatus: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.onSurfaceMuted,
     marginTop: 4,
   },
@@ -1999,7 +2456,7 @@ const baseStyles = StyleSheet.create({
     marginTop: 6,
   },
   listingBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: COLORS.onSurface,
   },
@@ -2040,7 +2497,7 @@ const baseStyles = StyleSheet.create({
     color: COLORS.onSurface,
   },
   savedSearchMeta: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.onSurfaceMuted,
     marginTop: 4,
   },
@@ -2168,7 +2625,7 @@ const baseStyles = StyleSheet.create({
     textAlign: 'center',
   },
   serviceDesc: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.onSurfaceMuted,
     textAlign: 'center',
     marginTop: 4,

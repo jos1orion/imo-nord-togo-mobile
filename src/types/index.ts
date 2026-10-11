@@ -4,6 +4,7 @@ export type PropertyType = 'house' | 'apartment' | 'land' | 'shop';
 
 export type PropertyStatus = 'available' | 'occupied';
 export type ListingStatus = 'pending' | 'approved' | 'rejected' | 'archived';
+export type PropertyCompletionType = 'sold' | 'rented';
 
 export interface Property {
   id: string;
@@ -33,6 +34,7 @@ export interface Property {
   expiresAt?: string | null;
   soldAt?: string | null;
   rentedAt?: string | null;
+  completionType?: PropertyCompletionType | null;
   featuredStartAt?: string | null;
   featuredEndAt?: string | null;
   republishedAt?: string | null;

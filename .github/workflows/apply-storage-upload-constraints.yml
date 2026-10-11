@@ -1,0 +1,42 @@
+name: Apply Supabase storage upload constraints
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - supabase/migrations/0017_storage_upload_constraints.sql
+      - supabase/migrations/0018_property_images_one_megabyte.sql
+      - .github/workflows/apply-storage-upload-constraints.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-storage-upload-constraints
+  cancel-in-progress: false
+
+jobs:
+  apply-migration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Apply storage upload constraints
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PGSSLMODE: require
+        run: |
+          : "${SUPABASE_DB_URL:?Configure the SUPABASE_DB_URL repository secret}"
+          psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file=supabase/migrations/0017_storage_upload_constraints.sql \
+            "$SUPABASE_DB_URL"
+          psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file=supabase/migrations/0018_property_images_one_megabyte.sql \
+            "$SUPABASE_DB_URL"

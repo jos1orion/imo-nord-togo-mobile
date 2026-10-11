@@ -69,6 +69,7 @@ const createNoopSupabase = (): SupabaseClient =>
       from: () => ({
         getPublicUrl: () => ({ data: { publicUrl: '' }, error: makeNoopError() }),
         createSignedUploadUrl: async () => ({ data: null, error: makeNoopError() }),
+        remove: async () => ({ data: null, error: makeNoopError() }),
       }),
     },
   } as unknown as SupabaseClient);

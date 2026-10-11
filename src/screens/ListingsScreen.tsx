@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   InteractionManager,
   StyleSheet,
@@ -9,8 +8,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AppAlert as Alert } from '../components/ui/appAlertService';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -26,6 +25,7 @@ import { isPublicProperty } from '../utils/propertyVisibility';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { logger } from '../lib/logger';
+import { isDirectPublishingEnabled } from '../lib/publishing';
 
 type ListingsTabParamList = {
   Home: undefined;
@@ -48,6 +48,7 @@ const ListingsScreen: React.FC = () => {
     neighborhoodAlerts,
     toggleNeighborhoodAlert,
     updatePropertyStatus,
+    completeProperty,
     currentUser,
     hydrated,
     requestAgentAccess,
@@ -81,19 +82,25 @@ const ListingsScreen: React.FC = () => {
     );
   };
 
-  const openRegistration = () => {
+  const openAuthentication = (authMode: 'login' | 'register') => {
     navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('MainTabs', {
       screen: 'Profile',
-      params: { authMode: 'register' },
+      params: { authMode },
     });
   };
 
+  const hasTemporaryPublishingAccess =
+    isDirectPublishingEnabled(currentUser) &&
+    currentUser?.role === 'USER' &&
+    (currentUser.agentStatus === 'pending' || currentUser.agentStatus === 'rejected');
   const agentAccessState = !currentUser
     ? 'guest'
     : currentUser.role === 'ADMIN' || currentUser.role === 'AGENT'
       ? 'approved'
       : currentUser.role && currentUser.role !== 'USER'
         ? 'ineligible'
+      : hasTemporaryPublishingAccess
+        ? 'temporary'
       : currentUser.agentStatus === 'pending'
         ? 'pending'
         : currentUser.agentStatus === 'rejected'
@@ -105,6 +112,7 @@ const ListingsScreen: React.FC = () => {
     pending: 'listing_agent_access_pending',
     rejected: 'listing_agent_access_rejected',
     approved: 'listing_agent_access_approved',
+    temporary: 'listing_agent_access_temporary',
     ineligible: 'listing_agent_access_ineligible',
   } as const;
 
@@ -124,10 +132,10 @@ const ListingsScreen: React.FC = () => {
 
   const openPublishOrRequestAccess = () => {
     if (agentAccessState === 'guest') {
-      openRegistration();
+      openAuthentication('register');
       return;
     }
-    if (agentAccessState === 'approved') {
+    if (agentAccessState === 'approved' || agentAccessState === 'temporary') {
       navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('Publish');
       return;
     }
@@ -168,17 +176,40 @@ const ListingsScreen: React.FC = () => {
     ]);
   };
 
+  const confirmListingCompletion = (
+    id: string,
+    completionType: 'sold' | 'rented',
+    title: string,
+    message: string
+  ) => {
+    Alert.alert(title, message, [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: t('confirm'),
+        style: 'destructive',
+        onPress: () => {
+          if (busyListings[id]) return;
+          setBusyListings(previous => ({ ...previous, [id]: true }));
+          void completeProperty(id, completionType)
+            .then(() => Alert.alert(t('success'), t('listing_update_success')))
+            .catch(() => Alert.alert(t('error'), t('listing_update_error')))
+            .finally(() => setBusyListings(previous => ({ ...previous, [id]: false })));
+        },
+      },
+    ]);
+  };
+
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[themeColors.brand, themeColors.primaryDark]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: themeColors.brand, paddingTop: Math.max(insets.top, 12) + 8 },
+        ]}
       >
         <View>
-          <Text style={styles.title}>{t('publish_tab')}</Text>
-          <Text style={styles.subtitle}>{t('home_publish_card_sub')}</Text>
+          <Text style={styles.title}>{t('tab_activity')}</Text>
+          <Text style={styles.subtitle}>{t('activity_subtitle')}</Text>
         </View>
         <TouchableOpacity
           style={styles.publishButton}
@@ -188,10 +219,10 @@ const ListingsScreen: React.FC = () => {
         >
           <Ionicons name="add" size={20} color={themeColors.white} />
           <Text style={styles.publishButtonText}>
-            {agentAccessState === 'approved'
+            {agentAccessState === 'approved' || agentAccessState === 'temporary'
               ? t('home_publish_card_title')
               : agentAccessState === 'guest'
-                ? t('listing_agent_access_sign_in_short')
+                ? t('profile_register')
                 : agentAccessState === 'pending'
                   ? t('listing_agent_access_pending_button')
                   : agentAccessState === 'rejected'
@@ -201,7 +232,7 @@ const ListingsScreen: React.FC = () => {
                       : t('listing_agent_access_request')}
           </Text>
         </TouchableOpacity>
-      </LinearGradient>
+      </View>
       <View style={styles.heroFloatingCard}>
         <View style={styles.heroFloatingMetric}>
           <Ionicons name="home-outline" size={17} color={themeColors.primary} />
@@ -275,13 +306,24 @@ const ListingsScreen: React.FC = () => {
             {t(agentAccessMessageKey[agentAccessState])}
           </Text>
           {agentAccessState === 'guest' && (
-            <TouchableOpacity
-              style={styles.accessButton}
-              accessibilityRole="button"
-              onPress={openRegistration}
-            >
-              <Text style={styles.accessButtonText}>{t('listing_agent_access_sign_in')}</Text>
-            </TouchableOpacity>
+            <View style={styles.authActions}>
+              <TouchableOpacity
+                style={[styles.accessButton, styles.authActionButton, styles.loginButton]}
+                accessibilityRole="button"
+                onPress={() => openAuthentication('login')}
+              >
+                <Text style={[styles.accessButtonText, styles.loginButtonText]}>
+                  {t('profile_login')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.accessButton, styles.authActionButton, styles.registerButton]}
+                accessibilityRole="button"
+                onPress={() => openAuthentication('register')}
+              >
+                <Text style={styles.accessButtonText}>{t('profile_register')}</Text>
+              </TouchableOpacity>
+            </View>
           )}
           {agentAccessState === 'none' && (
             <TouchableOpacity
@@ -390,12 +432,11 @@ const ListingsScreen: React.FC = () => {
                             style={[styles.actionButton, styles.actionDanger, isBusy && styles.disabled]}
                             disabled={isBusy}
                             onPress={() =>
-                              confirmListingStatus(
+                              confirmListingCompletion(
                                 property.id,
-                                'occupied',
+                                'sold',
                                 t('listing_confirm_sold_title'),
-                                t('listing_confirm_sold_message'),
-                                'destructive'
+                                t('listing_confirm_sold_message')
                               )
                             }
                           >
@@ -409,19 +450,18 @@ const ListingsScreen: React.FC = () => {
                             style={[styles.actionButton, styles.actionWarning, isBusy && styles.disabled]}
                             disabled={isBusy}
                             onPress={() =>
-                              confirmListingStatus(
+                              confirmListingCompletion(
                                 property.id,
-                                'occupied',
-                                t('listing_confirm_occupied_title'),
-                                t('listing_confirm_occupied_message'),
-                                'destructive'
+                                'rented',
+                                t('listing_confirm_rented_title'),
+                                t('listing_confirm_rented_message')
                               )
                             }
                           >
                             {isBusy ? (
                               <ActivityIndicator size="small" color={themeColors.onSurface} />
                             ) : (
-                              <Text style={styles.actionTextDark}>{t('property_mark_occupied')}</Text>
+                              <Text style={styles.actionTextDark}>{t('status_rented')}</Text>
                             )}
                           </TouchableOpacity>
                         </>
@@ -577,7 +617,7 @@ const baseStyles = StyleSheet.create({
     marginTop: 4,
   },
   summaryLabel: {
-    fontSize: 10,
+    fontSize: 12,
     color: COLORS.onSurfaceMuted,
     marginTop: 3,
     textAlign: 'center',
@@ -615,11 +655,29 @@ const baseStyles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     marginTop: 12,
   },
+  authActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  authActionButton: {
+    flex: 1,
+  },
+  loginButton: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+  },
+  registerButton: {
+    backgroundColor: COLORS.primary,
+  },
   accessButtonText: {
     color: COLORS.white,
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  loginButtonText: {
+    color: COLORS.primary,
   },
   rejectionReason: {
     fontSize: 12,
@@ -666,13 +724,13 @@ const baseStyles = StyleSheet.create({
   },
   actionTextLight: {
     color: COLORS.white,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',
   },
   actionTextDark: {
     color: COLORS.onSurface,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',
   },

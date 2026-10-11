@@ -273,18 +273,8 @@ begin
       from expired e
      where p.id = e.current_publication_id or p.property_id = e.id
     returning e.id
-  ), removed_images as (
-    delete from public.property_images images
-    using expired
-    where images.property_id = expired.id
-    returning expired.owner_id, expired.id
   )
-  delete from storage.objects object
-  using removed_images
-  where object.bucket_id = 'property-images'
-    and object.name like removed_images.owner_id::text || '/' || removed_images.id::text || '/%';
-
-  get diagnostics affected = row_count;
+  select count(*) into affected from expired;
   return affected;
 end;
 $$;

@@ -5,10 +5,10 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   Platform,
   Animated,
 } from 'react-native';
+import { AppAlert as Alert } from './ui/appAlertService';
 import { Ionicons } from '@expo/vector-icons';
 import { useEventListener } from 'expo';
 import type {

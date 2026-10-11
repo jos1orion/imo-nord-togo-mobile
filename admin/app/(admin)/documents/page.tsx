@@ -1,6 +1,7 @@
 'use client';
 
 import DataTable from '../../../components/DataTable';
+import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { formatDate } from '../../../lib/format';
 import { supabase } from '../../../lib/supabaseClient';
@@ -42,8 +43,9 @@ export default function DocumentsPage() {
   return (
     <div className="grid">
       <SectionHeader title="Documents" subtitle="Pièces liées aux dossiers locataires." />
-      {loading ? <div className="card">Chargement...</div> : (
+      {loading ? <LoadingState /> : (
         <DataTable
+          loading={loading}
           rows={data}
           emptyLabel="Aucun document."
           columns={[

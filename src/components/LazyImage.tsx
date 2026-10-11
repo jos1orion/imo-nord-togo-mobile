@@ -1,18 +1,11 @@
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  StyleProp,
-  StyleSheet,
-  View,
-  ImageResizeMode,
-  ViewStyle,
-} from 'react-native';
+import { ActivityIndicator, ImageResizeMode, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import PropertyImage from './ui/PropertyImage';
 import COLORS from '../theme/colors';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 
 type LazyImageProps = {
-  uri: string;
+  uri?: string;
   style: StyleProp<ViewStyle>;
   resizeMode?: ImageResizeMode;
 };
@@ -28,8 +21,8 @@ const LazyImage: React.FC<LazyImageProps> = ({
 
   return (
     <View style={[styles.wrapper, style]}>
-      <Image
-        source={{ uri }}
+      <PropertyImage
+        uri={uri}
         style={StyleSheet.absoluteFill}
         resizeMode={resizeMode}
         onLoadEnd={() => setLoaded(true)}

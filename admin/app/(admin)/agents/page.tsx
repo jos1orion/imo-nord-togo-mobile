@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import DataTable from '../../../components/DataTable';
+import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { supabase } from '../../../lib/supabaseClient';
@@ -53,8 +54,9 @@ export default function AgentsPage() {
   return (
     <div className="grid">
       <SectionHeader title="Agents" subtitle="Comptes AGENT, leurs publications, suspension et réactivation." />
-      {loading ? <div className="card">Chargement...</div> : (
+      {loading ? <LoadingState /> : (
         <DataTable
+          loading={loading}
           rows={agents}
           emptyLabel="Aucun agent."
           columns={[

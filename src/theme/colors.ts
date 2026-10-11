@@ -73,9 +73,6 @@ export const THEME_PALETTES = {
     pink: '#FB7185',
     purple: '#4F46E5',
     occupied: '#92400E',
-    heroScrimTop: 'rgba(16,35,63,0.72)',
-    heroScrimMid: 'rgba(154,52,18,0.42)',
-    heroScrimBottom: 'rgba(154,52,18,0.9)',
   },
   dark: {
     primary: '#FDBA74',
@@ -151,9 +148,6 @@ export const THEME_PALETTES = {
     pink: '#FB7185',
     purple: '#A5B4FC',
     occupied: '#FCD34D',
-    heroScrimTop: 'rgba(11,18,32,0.86)',
-    heroScrimMid: 'rgba(124,45,18,0.5)',
-    heroScrimBottom: 'rgba(11,18,32,0.94)',
   },
 } as const;
 

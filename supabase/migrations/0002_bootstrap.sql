@@ -1,6 +1,6 @@
 -- IMMO NORD TOGO — INSTALLATION SUPABASE COMPLETE
 -- Execute this entire file once in the Supabase SQL Editor on a NEW project.
--- Do not execute admin/supabase/schema.sql or docs/supabase-production-migration.sql afterwards.
+-- This bootstrap is the self-contained starting point for a NEW Supabase project.
 
 create extension if not exists pgcrypto;
 
@@ -183,28 +183,16 @@ begin
   return new;
 end;
 $$;
-create or replace function public.cleanup_inactive_property_images() returns trigger language plpgsql security definer set search_path = public, storage as $$
-begin
-  if old.status = 'available' and new.status = 'occupied' then
-    delete from storage.objects where bucket_id = 'property-images' and name like new.owner_id::text || '/' || new.id::text || '/%';
-    delete from public.property_images where property_id = new.id;
-  end if;
-  return new;
-end;
-$$;
 create or replace function public.expire_due_listings() returns integer language plpgsql security definer set search_path = public, storage as $$
 declare affected integer;
 begin
   with expired as (
     update public.properties set listing_status = 'archived', featured = false
     where listing_status = 'approved' and status = 'available' and expires_at <= now()
-    returning id, owner_id
-  ), deleted_images as (
-    delete from public.property_images i using expired e where i.property_id = e.id returning e.owner_id, e.id
+    returning id
   )
-  delete from storage.objects o using deleted_images d
-  where o.bucket_id = 'property-images' and o.name like d.owner_id::text || '/' || d.id::text || '/%';
-  get diagnostics affected = row_count; return affected;
+  select count(*) into affected from expired;
+  return affected;
 end;
 $$;
 
@@ -214,9 +202,6 @@ drop trigger if exists properties_updated_at on public.properties;
 create trigger properties_updated_at before update on public.properties for each row execute function public.set_updated_at();
 drop trigger if exists properties_apply_lifecycle on public.properties;
 create trigger properties_apply_lifecycle before insert or update on public.properties for each row execute function public.apply_property_lifecycle();
-drop trigger if exists properties_cleanup_inactive_images on public.properties;
-create trigger properties_cleanup_inactive_images after update on public.properties for each row execute function public.cleanup_inactive_property_images();
-
 alter table public.profiles enable row level security;
 alter table public.properties enable row level security;
 alter table public.property_images enable row level security;
@@ -356,7 +341,7 @@ create policy "admin_payments" on public.payments for all using (public.is_admin
 create policy "admin_notifications" on public.notifications for all using (public.is_admin()) with check (public.is_admin());
 create policy "admin_activity_logs" on public.activity_logs for all using (public.is_admin()) with check (public.is_admin());
 
--- Create these buckets in Supabase Storage before uploads: property-images (public) and tenant-documents (private).
+-- Bucket creation and upload limits are managed by 0017_storage_upload_constraints.sql.
 create policy "storage_property_images_public_read" on storage.objects for select using (bucket_id = 'property-images');
 create policy "storage_property_images_owner_insert" on storage.objects for insert with check (
   bucket_id = 'property-images'

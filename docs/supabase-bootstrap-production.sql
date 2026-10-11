@@ -1,6 +1,6 @@
 -- IMMO NORD TOGO — INSTALLATION SUPABASE COMPLETE
 -- Execute this entire file once in the Supabase SQL Editor on a NEW project.
--- Do not execute admin/supabase/schema.sql or docs/supabase-production-migration.sql afterwards.
+-- Historical standalone bootstrap. The maintained SQL source of truth is supabase/migrations/.
 
 create extension if not exists pgcrypto;
 

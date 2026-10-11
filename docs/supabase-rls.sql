@@ -1,6 +1,6 @@
--- LEGACY DRAFT — do not execute this file on a production database.
+-- ARCHIVED LEGACY DRAFT — do not execute this file on a production database.
 -- It uses JWT app_metadata while the application/back-office uses profiles.role.
--- Use admin/supabase/schema.sql followed by docs/supabase-production-migration.sql.
+-- Deployment SQL is maintained in supabase/migrations/; validate its prerequisites for the target database.
 
 -- Helper: admin check via JWT app_metadata.is_admin
 create or replace function public.is_admin()

@@ -4,13 +4,49 @@
 
 Recommandé : `dev` / `staging` / `prod`, avec des variables d’environnement distinctes (Supabase, URLs, etc.).
 
-## Supabase (projet existant)
+## Supabase
 
-1. Sauvegarder la base.
-2. SQL Editor : exécuter `docs/supabase-user-role.sql` seul, puis valider.
-3. Exécuter `docs/supabase-production-migration.sql`.
-4. Promouvoir un admin : `update public.profiles set role = 'ADMIN' where id = '<uuid>';`
-5. Vérifier le job `expire-imo-nord-listings` (pg_cron) ou le planifier à la main.
+La source de vérité du schéma, des politiques et des contraintes Storage est
+[`supabase/migrations/`](../supabase/migrations/). Les scripts SQL historiques
+conservés sous `docs/` ne sont plus des entrées de déploiement.
+
+### Projet existant
+
+1. Sauvegarder la base et vérifier quelles migrations sont déjà appliquées.
+2. Vérifier les prérequis de chaque migration, puis appliquer uniquement les
+   migrations manquantes selon leurs dépendances. Les numéros ne remplacent pas
+   l’ordre des dépendances : `0005_user_role.sql` précède
+   `0003_production.sql`, et `0004_auth_hardening.sql` nécessite
+   `0006_admin_platform.sql`. Ne pas rejouer une migration déjà appliquée.
+3. `0001_rls.sql` est un brouillon hérité explicitement marqué : ne pas
+   l’appliquer en production. Ne pas appliquer `0002_bootstrap.sql` à une base
+   existante.
+4. Les migrations Storage `0017` et `0018` sont appliquées automatiquement par
+   GitHub Actions lorsqu’elles sont poussées sur `main`.
+   Configurer une seule fois le secret de dépôt `SUPABASE_DB_URL` avec l’URL de
+   connexion PostgreSQL du projet. Ne pas y mettre la clé `service_role`.
+   `0019_storage_api_cleanup.sql` n’est pas exécutée par ce workflow : après
+   vérification de ses prérequis, l’appliquer séparément sur une base ayant déjà
+   `0006_admin_platform.sql` et les migrations précédentes nécessaires.
+5. Promouvoir un admin : `update public.profiles set role = 'ADMIN' where id = '<uuid>';`
+6. Vérifier le job `expire-imo-nord-listings` (pg_cron) ou le planifier à la main.
+
+### Nouveau projet vide
+
+Après avoir confirmé les prérequis, utiliser `0002_bootstrap.sql` comme base
+initiale, puis appliquer les migrations ultérieures dans l’ordre. Ne pas
+appliquer `0001_rls.sql`. Suivre les prérequis des migrations et ne pas supposer
+que leur ordre numérique suffit pour déterminer l’ordre d’application.
+`0019_storage_api_cleanup.sql` doit être appliquée après `0006_admin_platform.sql`.
+
+Les scripts SQL historiques de `docs/` ne sont pas des migrations à exécuter ;
+certains conservent des opérations de nettoyage Storage obsolètes.
+
+La migration `0013_property_reports_compatibility.sql` harmonise les anciens schémas de signalements (`reports.reporter_id`) avec le schéma utilisé par l’application (`property_reports.user_id`). Elle détecte explicitement les cas où les deux tables ou les deux colonnes existent et s’arrête plutôt que de fusionner ou supprimer des données silencieusement.
+
+### Publication temporaire des comptes agent
+
+Du 1er décembre 2026 au 31 mai 2027 inclus (UTC, même fuseau que le Togo), un compte utilisateur actif ayant une demande agent en attente ou refusée peut publier immédiatement. L’approbation agent redevient obligatoire à partir du 1er juin 2027. La migration `0012_temporary_agent_direct_publishing.sql` reste une migration de schéma à déployer après validation des prérequis de la base.
 
 ## Mobile (Expo / EAS)
 

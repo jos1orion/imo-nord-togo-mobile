@@ -1,6 +1,7 @@
 'use client';
 
 import DataTable from '../../../components/DataTable';
+import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { formatDate } from '../../../lib/format';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
@@ -12,8 +13,9 @@ export default function LogsPage() {
   return (
     <div className="grid">
       <SectionHeader title="Logs" subtitle="Historique des actions administratives." />
-      {loading ? <div className="card">Chargement...</div> : (
+      {loading ? <LoadingState /> : (
         <DataTable
+          loading={loading}
           rows={data}
           emptyLabel="Aucun log."
           columns={[

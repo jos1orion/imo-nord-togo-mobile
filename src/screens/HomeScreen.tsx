@@ -9,21 +9,18 @@ import {
   Dimensions,
   StatusBar,
   TextInput,
-  Alert,
-  Modal,
   InteractionManager,
   LayoutAnimation,
-  Platform,
-  UIManager,
-  Image,
+  ImageBackground,
 } from 'react-native';
+import { AppAlert as Alert } from '../components/ui/appAlertService';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PropertyCard from '../components/PropertyCard';
+import CategoryPickerModal from '../components/home/CategoryPickerModal';
 import SearchBar from '../components/SearchBar';
 import OfflineBanner from '../components/ui/OfflineBanner';
 import EmptyState from '../components/ui/EmptyState';
@@ -31,10 +28,11 @@ import Skeleton from '../components/ui/Skeleton';
 import { useApp } from '../context/AppContext';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { Property, PropertyType } from '../types';
-import COLORS from '../theme/colors';
+import { COLORS } from '../theme/colors';
 import { RootStackParamList } from '../../App';
 import { translate } from '../i18n';
 import { isFeaturedProperty, isPublicProperty } from '../utils/propertyVisibility';
+import { getRecentProperties } from '../utils/recentProperties';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import heroBackground from '../../assets/branding/hero-case-chaume.jpg';
@@ -62,14 +60,13 @@ const HomeScreen: React.FC = () => {
     setFilters,
     resetFilters,
     addSavedSearch,
-    propertyStats,
-    visitorCount,
     syncError,
     retrySync,
     t,
     tType,
     hydrated,
     language,
+    theme,
   } = useApp();
   const propertiesByType = useMemo(() => {
     const types: PropertyType[] = ['house', 'apartment', 'land', 'shop'];
@@ -83,14 +80,15 @@ const HomeScreen: React.FC = () => {
       .filter(property => isFeaturedProperty(property) && isPublicProperty(property))
       .slice(0, 10);
   }, [properties]);
-  const recentProperties = useMemo(() => {
-    const sorted = [...properties].sort((a, b) => {
-      const aTime = new Date(a.createdAt).getTime();
-      const bTime = new Date(b.createdAt).getTime();
-      return bTime - aTime;
-    });
-    return sorted.filter(isPublicProperty).slice(0, 8);
-  }, [properties]);
+  const [recentWindowNow, setRecentWindowNow] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setRecentWindowNow(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+  const recentProperties = useMemo(
+    () => getRecentProperties(properties, recentWindowNow),
+    [properties, recentWindowNow]
+  );
   const filteredProperties = getFilteredProperties();
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
@@ -127,9 +125,16 @@ const HomeScreen: React.FC = () => {
     () => Array.from(new Set(properties.filter(isPublicProperty).map(p => (p.city || p.location).trim()).filter(Boolean))).sort(),
     [properties]
   );
-  const filteredByNeighborhood = selectedNeighborhood
+  const availableSelectedNeighborhood = selectedNeighborhood && availableNeighborhoods.some(
+    name => name.toLowerCase() === selectedNeighborhood.toLowerCase()
+  )
+    ? selectedNeighborhood
+    : null;
+  if (selectedNeighborhood && !availableSelectedNeighborhood) setSelectedNeighborhood(null);
+
+  const filteredByNeighborhood = availableSelectedNeighborhood
     ? filteredProperties.filter(
-        p => (p.neighborhood ?? '').toLowerCase() === selectedNeighborhood.toLowerCase()
+        p => (p.neighborhood ?? '').toLowerCase() === availableSelectedNeighborhood.toLowerCase()
       )
     : filteredProperties;
   const filteredByCity = selectedCity
@@ -143,28 +148,22 @@ const HomeScreen: React.FC = () => {
     });
   }, [filteredByCity, sortMode]);
 
-  useEffect(() => {
-    if (!selectedNeighborhood) return;
-    const exists = availableNeighborhoods.some(
-      name => name.toLowerCase() === selectedNeighborhood.toLowerCase()
-    );
-    if (!exists) setSelectedNeighborhood(null);
-  }, [availableNeighborhoods, selectedNeighborhood]);
   const activeListings = properties.filter(isPublicProperty).length;
-  const totalLikes = Object.values(propertyStats).reduce(
-    (sum, stats) => sum + (stats.likes ?? 0),
-    0
-  );
   const listSectionYRef = useRef(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const scrollRef = useRef<FlatList<Property>>(null);
-  const [visibleCount, setVisibleCount] = useState(12);
-
-  // Reset the progressive list when the result set changes.
-  useEffect(() => {
-    setVisibleCount(12);
-  }, [filterType, searchQuery, filters, selectedNeighborhood]);
+  const resultSetKey = JSON.stringify([
+    filterType,
+    searchQuery,
+    filters,
+    availableSelectedNeighborhood,
+  ]);
+  const [listState, setListState] = useState({ key: '', visibleCount: 12 });
+  if (listState.key !== resultSetKey) {
+    setListState({ key: resultSetKey, visibleCount: 12 });
+  }
+  const visibleCount = listState.visibleCount;
   const suggestionBase = useMemo(() => {
     const cityCandidates = Array.from(
       new Set(
@@ -235,12 +234,6 @@ const HomeScreen: React.FC = () => {
     return chips;
   }, [filters, filterType, searchQuery, selectedCity, selectedNeighborhood, tType]);
 
-
-  useEffect(() => {
-    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-      UIManager.setLayoutAnimationEnabledExperimental(true);
-    }
-  }, []);
 
   const handlePropertyPress = (property: Property) => {
     setSelectedProperty(property);
@@ -317,14 +310,20 @@ const HomeScreen: React.FC = () => {
     Alert.alert(t('save_search_done_title'), t('save_search_done_message'));
   };
 
-  const visibleProperties = filteredByNeighborhood.slice(0, visibleCount);
-  const hasMoreProperties = visibleProperties.length < filteredByNeighborhood.length;
+  const visibleProperties = sortedProperties.slice(0, visibleCount);
+  const hasMoreProperties = visibleProperties.length < sortedProperties.length;
   const loadMoreProperties = () => {
-    if (hasMoreProperties) setVisibleCount(count => count + 12);
+    if (hasMoreProperties) {
+      setListState(previous => ({
+        key: resultSetKey,
+        visibleCount: (previous.key === resultSetKey ? previous.visibleCount : 12) + 12,
+      }));
+    }
   };
   const isLoading = !hydrated;
   const homeCategoryItems: {
     type?: PropertyType;
+    action?: 'all' | 'picker';
     label: string;
     icon: keyof typeof Ionicons.glyphMap;
     color: string;
@@ -338,7 +337,7 @@ const HomeScreen: React.FC = () => {
       color: themeColors.onSurfaceMuted,
       container: themeColors.surfaceAlt,
       count: activeListings,
-      onPress: showAllProperties,
+      action: 'all',
     },
     {
       type: 'house',
@@ -377,9 +376,18 @@ const HomeScreen: React.FC = () => {
       icon: 'grid-outline',
       color: themeColors.accent,
       container: themeColors.successContainer,
-      onPress: () => setCategoryPickerOpen(true),
+      action: 'picker',
     },
   ];
+  const handleCategoryTilePress = (item: (typeof homeCategoryItems)[number]) => {
+    if (item.type) {
+      handleCategoryPress(item.type);
+    } else if (item.action === 'all') {
+      showAllProperties();
+    } else if (item.action === 'picker') {
+      setCategoryPickerOpen(true);
+    }
+  };
 
   const renderSkeletonCard = (key: string, compact = false) => (
     <View key={key} style={[styles.skeletonCard, compact && styles.skeletonCardCompact]}>
@@ -399,7 +407,7 @@ const HomeScreen: React.FC = () => {
 
   return (
     <>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} />
       <OfflineBanner />
       {filterType !== 'ALL' && (
         <View style={[styles.categoryNavigationBar, { paddingTop: insets.top + 12 }]}>
@@ -450,58 +458,27 @@ const HomeScreen: React.FC = () => {
       <>
       <View>
         {/* Header */}
-        <View style={[styles.headerBlock, { paddingTop: insets.top + 18 }]}>
-          <Image
-            source={heroBackground}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
-          <LinearGradient
-            colors={[
-              themeColors.heroScrimTop,
-              themeColors.heroScrimMid,
-              themeColors.heroScrimBottom,
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0.55, y: 1 }}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
-          <View style={styles.heroDecorLg} pointerEvents="none" />
-          <View style={styles.heroDecorSm} pointerEvents="none" />
-          <View style={styles.locationPill}>
-            <Ionicons name="location" size={13} color={themeColors.brandAccent} />
-            <Text style={styles.locationPillText}>{t('footer_location')}</Text>
-          </View>
-          <Text style={styles.headerTitle}>{t('home_hero_line1')}</Text>
-          <Text style={styles.headerTitleEm}>{t('home_hero_line2')}</Text>
-        </View>
-
-        <View style={styles.trustStatsCard}>
-          <View style={styles.trustStat}>
-            <View style={[styles.trustStatIcon, { backgroundColor: themeColors.primaryContainer }]}>
-              <Ionicons name="home-outline" size={16} color={themeColors.primary} />
+        <ImageBackground
+          source={heroBackground}
+          resizeMode="cover"
+          style={[styles.headerBlock, { paddingTop: insets.top + 18 }]}
+          imageStyle={styles.headerImage}
+        >
+          <View style={styles.headerScrim} pointerEvents="none" />
+          <View style={styles.headerContent}>
+            <View style={styles.locationPill}>
+              <Ionicons name="location" size={13} color={themeColors.brandAccent} />
+              <Text style={styles.locationPillText}>{t('footer_location')}</Text>
             </View>
-            <Text style={styles.trustStatValue}>{activeListings}</Text>
-            <Text style={styles.trustStatLabel}>{t('home_visible_properties')}</Text>
+            <Text style={styles.headerTitle}>{t('home_hero_line1')}</Text>
+            <Text style={styles.headerTitleEm}>{t('home_hero_line2')}</Text>
+            <TouchableOpacity style={styles.heroCta} onPress={showAllProperties} accessibilityRole="button">
+              <Ionicons name="search" size={16} color={themeColors.brand} />
+              <Text style={styles.heroCtaText}>{t('home_search_card_title')}</Text>
+              <Ionicons name="arrow-forward" size={16} color={themeColors.brand} />
+            </TouchableOpacity>
           </View>
-          <View style={styles.trustStatDivider} />
-          <View style={styles.trustStat}>
-            <View style={[styles.trustStatIcon, { backgroundColor: themeColors.successContainer }]}>
-              <Ionicons name="shield-checkmark-outline" size={16} color={themeColors.success} />
-            </View>
-            <Text style={styles.trustStatValue}>—</Text>
-            <Text style={styles.trustStatLabel}>{t('home_verified_owners')}</Text>
-          </View>
-          <View style={styles.trustStatDivider} />
-          <View style={styles.trustStat}>
-            <View style={[styles.trustStatIcon, { backgroundColor: themeColors.infoContainer }]}>
-              <Ionicons name="chatbubble-ellipses-outline" size={16} color={themeColors.info} />
-            </View>
-            <Text style={styles.trustStatValue}>{t('home_direct_contact_value')}</Text>
-            <Text style={styles.trustStatLabel}>{t('home_direct_contact')}</Text>
-          </View>
-        </View>
+        </ImageBackground>
 
         <View style={styles.searchCardOverlap}>
           <View style={styles.searchCard}>
@@ -827,7 +804,7 @@ const HomeScreen: React.FC = () => {
             <TouchableOpacity
               key={item.type ?? item.label}
               style={styles.categoryTile}
-              onPress={item.onPress ?? (() => item.type && handleCategoryPress(item.type))}
+              onPress={() => handleCategoryTilePress(item)}
               accessibilityRole="button"
               accessibilityLabel={item.label}
             >
@@ -840,6 +817,32 @@ const HomeScreen: React.FC = () => {
               )}
             </TouchableOpacity>
           ))}
+        </View>
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(40)} style={styles.trustStatsCard}>
+        <View style={styles.trustStat}>
+          <View style={[styles.trustStatIcon, { backgroundColor: themeColors.primaryContainer }]}>
+            <Ionicons name="home-outline" size={16} color={themeColors.primary} />
+          </View>
+          <Text style={styles.trustStatValue}>{activeListings}</Text>
+          <Text style={styles.trustStatLabel}>{t('home_visible_properties')}</Text>
+        </View>
+        <View style={styles.trustStatDivider} />
+        <View style={styles.trustStat}>
+          <View style={[styles.trustStatIcon, { backgroundColor: themeColors.successContainer }]}>
+            <Ionicons name="shield-checkmark-outline" size={16} color={themeColors.success} />
+          </View>
+          <Text style={styles.trustStatValue}>—</Text>
+          <Text style={styles.trustStatLabel}>{t('home_verified_owners')}</Text>
+        </View>
+        <View style={styles.trustStatDivider} />
+        <View style={styles.trustStat}>
+          <View style={[styles.trustStatIcon, { backgroundColor: themeColors.infoContainer }]}>
+            <Ionicons name="chatbubble-ellipses-outline" size={16} color={themeColors.info} />
+          </View>
+          <Text style={styles.trustStatValue}>{t('home_direct_contact_value')}</Text>
+          <Text style={styles.trustStatLabel}>{t('home_direct_contact')}</Text>
         </View>
       </Animated.View>
 
@@ -943,6 +946,7 @@ const HomeScreen: React.FC = () => {
           </ScrollView>
         </Animated.View>
       )}
+
       </>
       )}
 
@@ -1028,55 +1032,12 @@ const HomeScreen: React.FC = () => {
       )}
       </> : null}
       />
-      <Modal
+      <CategoryPickerModal
         visible={categoryPickerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCategoryPickerOpen(false)}
-      >
-        <View style={styles.categoryModalBackdrop}>
-          <View style={styles.categoryModal}>
-            <View style={styles.categoryModalHeader}>
-              <View style={styles.categoryModalTitleWrap}>
-                <Text style={styles.categoryModalTitle}>{t('home_choose_category')}</Text>
-                <Text style={styles.categoryModalSubtitle}>
-                  {t('home_choose_category_subtitle')}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.categoryModalClose}
-                onPress={() => setCategoryPickerOpen(false)}
-                accessibilityRole="button"
-                accessibilityLabel={t('close')}
-              >
-                <Ionicons name="close" size={20} color={themeColors.onSurfaceMuted} />
-              </TouchableOpacity>
-            </View>
-            {[
-              { type: 'house' as PropertyType, icon: 'home' as const, color: themeColors.accent },
-              { type: 'apartment' as PropertyType, icon: 'business' as const, color: themeColors.primary },
-              { type: 'land' as PropertyType, icon: 'map' as const, color: themeColors.gold },
-              { type: 'shop' as PropertyType, icon: 'storefront' as const, color: themeColors.cyan },
-            ].map(item => (
-              <TouchableOpacity
-                key={item.type}
-                style={styles.categoryOption}
-                onPress={() => handleCategoryPress(item.type)}
-                accessibilityRole="button"
-              >
-                <View style={[styles.categoryOptionIcon, { backgroundColor: `${item.color}18` }]}>
-                  <Ionicons name={item.icon} size={21} color={item.color} />
-                </View>
-                <Text style={styles.categoryOptionText}>{tType(item.type)}</Text>
-                <Text style={styles.categoryOptionCount}>
-                  {propertiesByType.find(propertyType => propertyType.type === item.type)?.count ?? 0}
-                </Text>
-                <Ionicons name="chevron-forward" size={17} color={themeColors.onSurfaceMuted} />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </Modal>
+        categories={propertiesByType}
+        onClose={() => setCategoryPickerOpen(false)}
+        onSelect={handleCategoryPress}
+      />
     </>
   );
 };
@@ -1089,36 +1050,39 @@ const baseStyles = StyleSheet.create({
   headerBlock: {
     paddingTop: 18,
     paddingHorizontal: 20,
-    paddingBottom: 64,
-    backgroundColor: COLORS.brand,
+    paddingBottom: 34,
+    minHeight: 226,
+    justifyContent: 'flex-end',
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     overflow: 'hidden',
   },
-  heroImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  headerImage: {
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
-  heroDecorLg: {
-    position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: COLORS.overlayWhite07,
-    top: -80,
-    right: -60,
+  headerScrim: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: COLORS.overlayNavy72,
   },
-  heroDecorSm: {
-    position: 'absolute',
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: COLORS.overlayWhite05,
-    bottom: 10,
-    left: -50,
+  headerContent: {
+    position: 'relative',
+  },
+  heroCta: {
+    alignSelf: 'flex-start',
+    marginTop: 18,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.brandAccent,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  heroCtaText: {
+    color: COLORS.brand,
+    fontSize: 13,
+    fontWeight: '800',
   },
   locationPill: {
     flexDirection: 'row',
@@ -1128,8 +1092,10 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: COLORS.overlayWhite14,
-    marginBottom: 14,
+    backgroundColor: COLORS.overlayWhite20,
+    borderWidth: 1,
+    borderColor: COLORS.overlayWhite35,
+    marginBottom: SPACING.sm,
   },
   locationPillText: {
     fontSize: 12,
@@ -1141,7 +1107,7 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     marginHorizontal: SPACING.lg,
-    marginTop: -28,
+    marginTop: 18,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.sm,
     backgroundColor: COLORS.surface,
@@ -1800,76 +1766,6 @@ const baseStyles = StyleSheet.create({
     color: COLORS.onSurfaceMuted,
     fontSize: 12,
     fontWeight: '700',
-  },
-  categoryModalBackdrop: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    backgroundColor: COLORS.overlayNavy48,
-  },
-  categoryModal: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.2,
-    shadowRadius: 24,
-    elevation: 8,
-  },
-  categoryModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-  },
-  categoryModalTitleWrap: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  categoryModalTitle: {
-    color: COLORS.onSurface,
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  categoryModalSubtitle: {
-    color: COLORS.onSurfaceMuted,
-    fontSize: 13,
-    marginTop: 5,
-  },
-  categoryModalClose: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: COLORS.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoryOption: {
-    minHeight: 60,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 10,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.surfaceAlt,
-  },
-  categoryOptionIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoryOptionText: {
-    flex: 1,
-    color: COLORS.onSurface,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  categoryOptionCount: {
-    color: COLORS.onSurfaceMuted,
-    fontSize: 12,
-    fontWeight: '600',
   },
   propertiesGrid: {
     flexDirection: 'row',

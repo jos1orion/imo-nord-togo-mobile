@@ -1,6 +1,7 @@
 'use client';
 
 import DataTable from '../../../components/DataTable';
+import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { formatDate } from '../../../lib/format';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
@@ -20,8 +21,9 @@ export default function MessagesPage() {
   return (
     <div className="grid">
       <SectionHeader title="Messages" subtitle="Suivi et modération des conversations." />
-      {loading ? <div className="card">Chargement...</div> : (
+      {loading ? <LoadingState /> : (
         <DataTable
+          loading={loading}
           rows={data}
           emptyLabel="Aucun message."
           columns={[

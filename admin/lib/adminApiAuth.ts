@@ -3,33 +3,33 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseAdmin } from './supabaseAdmin';
 import { fetchStaffProfileAccess } from './profileAccess';
 
-type AdminGuardResult =
-  | { supabaseAdmin: SupabaseClient; authUserId: string }
-  | { error: NextResponse };
+type AdminApiContext = {
+  supabaseAdmin: SupabaseClient;
+  userId: string;
+};
 
-export async function requireAdmin(request: Request): Promise<AdminGuardResult> {
+type AdminApiGuardResult = AdminApiContext | { response: NextResponse };
+
+export async function requireAdminApi(request: Request): Promise<AdminApiGuardResult> {
   let supabaseAdmin: SupabaseClient;
   try {
     supabaseAdmin = getSupabaseAdmin();
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Configuration serveur incomplète : SUPABASE_SERVICE_ROLE_KEY est requise pour créer ou modifier des utilisateurs.';
+    const message = error instanceof Error ? error.message : 'Configuration serveur incomplète.';
     return {
-      error: NextResponse.json({ error: message }, { status: 503 }),
+      response: NextResponse.json({ error: message }, { status: 503 }),
     };
   }
 
-  const authorization = request.headers.get('authorization')?.trim() ?? '';
-  const tokenMatch = authorization.match(/^Bearer\s+(\S+)$/i);
-  if (!tokenMatch) {
-    return { error: NextResponse.json({ error: 'Non autorisé.' }, { status: 401 }) };
+  const authorization = request.headers.get('authorization')?.trim();
+  const token = authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
+  if (!token) {
+    return { response: NextResponse.json({ error: 'Non autorisé.' }, { status: 401 }) };
   }
 
-  const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(tokenMatch[1]);
+  const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
   if (authError || !authData.user) {
-    return { error: NextResponse.json({ error: 'Session invalide.' }, { status: 401 }) };
+    return { response: NextResponse.json({ error: 'Session invalide.' }, { status: 401 }) };
   }
 
   const { data: profile, error: profileError } = await fetchStaffProfileAccess(
@@ -40,20 +40,18 @@ export async function requireAdmin(request: Request): Promise<AdminGuardResult> 
   if (profileError) {
     console.error('Admin profile lookup failed', profileError.message);
     return {
-      error: NextResponse.json(
+      response: NextResponse.json(
         { error: 'Impossible de vérifier les droits admin.' },
         { status: 500 }
       ),
     };
   }
-  if (!profile || profile.role !== 'ADMIN') {
-    return { error: NextResponse.json({ error: 'Accès refusé.' }, { status: 403 }) };
-  }
-  if (profile.account_status === 'suspended') {
-    return { error: NextResponse.json({ error: 'Compte suspendu.' }, { status: 403 }) };
+  if (!profile || profile.role !== 'ADMIN' || profile.account_status === 'suspended') {
+    const message = profile?.account_status === 'suspended' ? 'Compte suspendu.' : 'Accès refusé.';
+    return { response: NextResponse.json({ error: message }, { status: 403 }) };
   }
 
-  return { supabaseAdmin, authUserId: authData.user.id };
+  return { supabaseAdmin, userId: authData.user.id };
 }
 
 export function isValidUuid(value: string): boolean {

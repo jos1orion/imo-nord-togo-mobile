@@ -1,11 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { THEME_PALETTES } from '../theme/colors';
+import { THEME_PALETTES, type ThemePalette } from '../theme/colors';
 import { getCurrentLanguage, translate } from '../i18n';
 import { logger } from '../lib/logger';
 
-type Props = { children: ReactNode };
+type Props = { children: ReactNode; theme?: 'light' | 'dark' };
 
 type State = {
   hasError: boolean;
@@ -62,6 +62,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const styles = createStyles(THEME_PALETTES[this.props.theme ?? 'light']);
       const t = (key: Parameters<typeof translate>[1]) => translate(getCurrentLanguage(), key);
       const details = [this.state.stack, this.state.componentStack].filter(Boolean).join('\n\n');
       return (
@@ -101,55 +102,55 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-const styles = StyleSheet.create({
+const createStyles = (palette: ThemePalette) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    backgroundColor: THEME_PALETTES.light.background,
+    backgroundColor: palette.background,
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: THEME_PALETTES.light.onSurface,
+    color: palette.onSurface,
     marginBottom: 8,
     textAlign: 'center',
   },
   body: {
     fontSize: 14,
-    color: THEME_PALETTES.light.onSurfaceMuted,
+    color: palette.onSurfaceMuted,
     textAlign: 'center',
     marginBottom: 20,
   },
   button: {
-    backgroundColor: THEME_PALETTES.light.primary,
+    backgroundColor: palette.primary,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 999,
     marginTop: 12,
   },
   buttonText: {
-    color: THEME_PALETTES.light.onBrand,
+    color: palette.onBrand,
     fontWeight: '700',
     fontSize: 15,
   },
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: THEME_PALETTES.light.border,
+    borderColor: palette.border,
   },
   secondaryButtonText: {
-    color: THEME_PALETTES.light.onSurface,
+    color: palette.onSurface,
   },
   details: {
     alignSelf: 'stretch',
     maxHeight: 240,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: THEME_PALETTES.light.border,
+    borderColor: palette.border,
     borderRadius: 12,
-    backgroundColor: THEME_PALETTES.light.overlay,
+    backgroundColor: palette.overlay,
   },
   detailsInner: {
     padding: 12,
@@ -157,6 +158,6 @@ const styles = StyleSheet.create({
   detailsText: {
     fontSize: 12,
     lineHeight: 16,
-    color: THEME_PALETTES.light.onSurface,
+    color: palette.onSurface,
   },
 });

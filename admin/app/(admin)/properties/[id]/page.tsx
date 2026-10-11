@@ -136,12 +136,25 @@ export default function PropertyDetailsPage() {
         <div className="detail-left">
           <div className="card detail-card">
             <div className="detail-cover">
-              {cover ? <img src={cover} alt={property.title} /> : <div className="detail-cover-empty">Aucune image</div>}
+              <img
+                src={cover || '/property-placeholder.svg'}
+                alt={property.title}
+                onError={event => {
+                  event.currentTarget.src = '/property-placeholder.svg';
+                }}
+              />
             </div>
             {property.property_images && property.property_images.length > 1 ? (
               <div className="detail-thumbs">
                 {property.property_images.map(image => (
-                  <img key={image.url} src={image.url} alt="" />
+                  <img
+                    key={image.url}
+                    src={image.url}
+                    alt=""
+                    onError={event => {
+                      event.currentTarget.src = '/property-placeholder.svg';
+                    }}
+                  />
                 ))}
               </div>
             ) : null}

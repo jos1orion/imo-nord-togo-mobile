@@ -378,6 +378,7 @@ export default function UsersPage() {
       </div>
 
       <DataTable
+        loading={loading}
         rows={users}
         emptyLabel={loading ? 'Chargement...' : error ? 'Liste indisponible.' : 'Aucun utilisateur'}
         columns={columns}

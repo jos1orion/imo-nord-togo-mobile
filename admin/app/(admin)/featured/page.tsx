@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import DataTable from '../../../components/DataTable';
+import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { formatCurrency, formatDate } from '../../../lib/format';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
@@ -35,8 +36,9 @@ export default function FeaturedPage() {
   return (
     <div className="grid">
       <SectionHeader title="Featured" subtitle="Annonces mises en avant (fenêtre 7 jours côté trigger)." />
-      {loading ? <div className="card">Chargement...</div> : (
+      {loading ? <LoadingState /> : (
         <DataTable
+          loading={loading}
           rows={featured}
           emptyLabel="Aucune annonce featured."
           columns={[

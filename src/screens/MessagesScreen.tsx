@@ -5,10 +5,10 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   InteractionManager,
   Linking,
 } from 'react-native';
+import { AppAlert as Alert } from '../components/ui/appAlertService';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,7 +44,11 @@ const MessagesScreen = () => {
       return;
     }
     InteractionManager.runAfterInteractions(() => {
-      navigation.navigate('Chat', { chatId: chat.id, otherUserId });
+      navigation.navigate('Chat', {
+        chatId: chat.id,
+        otherUserId,
+        propertyId: chat.propertyId,
+      });
     });
   };
 

@@ -814,6 +814,25 @@ button {
   font-weight: 600;
 }
 
+.form-field [aria-invalid="true"] {
+  border-color: var(--danger) !important;
+}
+
+.field-error,
+.form-error-summary {
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.form-error-summary {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
 .form-field input {
   border-radius: 12px;
   border: 1px solid var(--border);
@@ -1642,6 +1661,49 @@ button {
   display: grid;
   place-items: center;
   padding: 24px;
+}
+
+.loading-state {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  overflow: hidden;
+}
+
+.loading-state-heading,
+.loading-state-row span {
+  display: block;
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
+  background-size: 220% 100%;
+  animation: loading-shimmer 1.4s ease-in-out infinite;
+}
+
+.loading-state-heading {
+  width: 34%;
+  height: 18px;
+}
+
+.loading-state-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 0.6fr;
+  gap: 14px;
+}
+
+.loading-state-row span {
+  height: 38px;
+}
+
+@keyframes loading-shimmer {
+  to { background-position: -220% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-state-heading,
+  .loading-state-row span {
+    animation: none;
+  }
 }
 
 .primary-button {

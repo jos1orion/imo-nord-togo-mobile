@@ -202,6 +202,7 @@ export default function PaymentsPage() {
       </div>
 
       <DataTable
+        loading={loading}
         rows={payments}
         emptyLabel={loading ? 'Chargement...' : 'Aucun paiement'}
         columns={[

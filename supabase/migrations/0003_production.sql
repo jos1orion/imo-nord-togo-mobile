@@ -337,44 +337,11 @@ begin
        and expires_at is not null
        and expires_at <= now()
      returning id, owner_id
-  ), removed_images as (
-    delete from public.property_images images
-    using expired
-    where images.property_id = expired.id
-    returning expired.owner_id, expired.id
   )
-  delete from storage.objects object
-  using removed_images
-  where object.bucket_id = 'property-images'
-    and object.name like removed_images.owner_id::text || '/' || removed_images.id::text || '/%';
-
-  get diagnostics affected = row_count;
+  select count(*) into affected from expired;
   return affected;
 end;
 $$;
-
--- The same cleanup happens immediately when an available listing is marked occupied.
-create or replace function public.cleanup_inactive_property_images()
-returns trigger
-language plpgsql
-security definer
-set search_path = public, storage
-as $$
-begin
-  if old.status = 'available' and new.status = 'occupied' then
-    delete from storage.objects
-      where bucket_id = 'property-images'
-        and name like new.owner_id::text || '/' || new.id::text || '/%';
-    delete from public.property_images where property_id = new.id;
-  end if;
-  return new;
-end;
-$$;
-
-drop trigger if exists properties_cleanup_inactive_images on public.properties;
-create trigger properties_cleanup_inactive_images
-after update on public.properties
-for each row execute function public.cleanup_inactive_property_images();
 
 -- Tables used by the mobile application but absent from the original back-office schema.
 create table if not exists public.favorites (

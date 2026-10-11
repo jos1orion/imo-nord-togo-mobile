@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { isValidUuid, recordAdminAction, requireAdmin } from '../../../../lib/adminApiAuth';
+import { isValidUuid, recordAdminAction, requireAdminApi } from '../../../../lib/adminApiAuth';
 
 export async function GET(request: Request) {
-  const guard = await requireAdmin(request);
-  if ('error' in guard) return guard.error;
+  const guard = await requireAdminApi(request);
+  if ('response' in guard) return guard.response;
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get('pageSize')) || 25));
@@ -63,8 +63,8 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const guard = await requireAdmin(request);
-  if ('error' in guard) return guard.error;
+  const guard = await requireAdminApi(request);
+  if ('response' in guard) return guard.response;
 
   let payload: { ids?: unknown; status?: unknown };
   try {
@@ -98,7 +98,7 @@ export async function PATCH(request: Request) {
 
   await Promise.all(
     (data ?? []).map(agent =>
-      recordAdminAction(guard.supabaseAdmin, guard.authUserId, 'approve_agent', 'agent', agent.id),
+      recordAdminAction(guard.supabaseAdmin, guard.userId, 'approve_agent', 'agent', agent.id),
     ),
   );
   return NextResponse.json({ success: true, count: data?.length ?? 0 });

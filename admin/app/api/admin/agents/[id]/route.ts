@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { isValidUuid, recordAdminAction, requireAdmin } from '../../../../../lib/adminApiAuth';
+import { isValidUuid, recordAdminAction, requireAdminApi } from '../../../../../lib/adminApiAuth';
 
 const statuses = ['approved', 'rejected'] as const;
 
@@ -13,8 +13,8 @@ export async function PATCH(
     return NextResponse.json({ error: 'ID agent manquant.' }, { status: 400 });
   }
 
-  const guard = await requireAdmin(request);
-  if ('error' in guard) return guard.error;
+  const guard = await requireAdminApi(request);
+  if ('response' in guard) return guard.response;
 
   let payload: { status?: unknown; rejection_reason?: unknown };
   try {
@@ -54,7 +54,7 @@ export async function PATCH(
 
   await recordAdminAction(
     guard.supabaseAdmin,
-    guard.authUserId,
+    guard.userId,
     status === 'approved' ? 'approve_agent' : 'reject_agent',
     'agent',
     agentId,

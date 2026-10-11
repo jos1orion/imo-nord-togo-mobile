@@ -7,14 +7,13 @@ import {
   FlatList,
   Pressable,
   TouchableOpacity,
-  Image,
   Dimensions,
   Linking,
   StatusBar,
   Share,
-  Alert,
   InteractionManager,
 } from 'react-native';
+import { AppAlert as Alert } from '../components/ui/appAlertService';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +27,7 @@ import COLORS from '../theme/colors';
 import { canViewProperty, isPublicProperty } from '../utils/propertyVisibility';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import PropertyImage from '../components/ui/PropertyImage';
 
 const { width } = Dimensions.get('window');
 
@@ -55,6 +55,7 @@ const PropertyDetailScreen: React.FC = () => {
     tStatus,
     currentUser,
     updatePropertyStatus,
+    completeProperty,
   } = useApp();
 
   const property = properties.find(p => p.id === route.params.propertyId);
@@ -213,14 +214,14 @@ const PropertyDetailScreen: React.FC = () => {
     typeof value === 'string' && value.trim().length > 0 && value !== 'null';
 
   const images = (property.images || []).filter(isValidImage);
-  const displayImages = images.length > 0 ? images : ['https://via.placeholder.com/400x300'];
+  const displayImages = images.length > 0 ? images : [''];
   const createdTime = new Date(property.createdAt).getTime();
   const isNew = Number.isFinite(createdTime) && Date.now() - createdTime < 7 * 24 * 60 * 60 * 1000;
   const isVerified = (property.listingStatus ?? 'approved') === 'approved';
   const isOwner = Boolean(currentUser?.id && property.ownerId === currentUser.id);
 
-  const handleMarkOccupied = (status: 'sold' | 'occupied') => {
-    const statusLabel = status === 'sold' ? t('status_sold') : t('status_occupied');
+  const handleCompleteTransaction = (completionType: 'sold' | 'rented') => {
+    const statusLabel = completionType === 'sold' ? t('status_sold') : t('status_rented');
     Alert.alert(
       t('property_confirmation'),
       t('property_mark_status_confirm').replace('{{status}}', statusLabel),
@@ -231,7 +232,7 @@ const PropertyDetailScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await updatePropertyStatus(property.id, 'occupied');
+              await completeProperty(property.id, completionType);
               Alert.alert(
                 t('property_status_updated'),
                 t('property_marked_status').replace('{{status}}', statusLabel)
@@ -298,7 +299,10 @@ const PropertyDetailScreen: React.FC = () => {
                 key={`${uri}-${index}`}
                 onPress={() => openViewerAt(index)}
               >
-                <Image source={{ uri }} style={styles.image} />
+                <PropertyImage
+                  uri={uri}
+                  style={styles.image}
+                />
               </Pressable>
             ))}
           </ScrollView>
@@ -353,7 +357,10 @@ const PropertyDetailScreen: React.FC = () => {
                     imageScrollRef.current?.scrollTo({ x: index * width, y: 0, animated: true });
                   }}
                 >
-                  <Image source={{ uri }} style={styles.thumbImage} />
+                  <PropertyImage
+                    uri={uri}
+                    style={styles.thumbImage}
+                  />
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -439,14 +446,18 @@ const PropertyDetailScreen: React.FC = () => {
               {t('property_owner_hint')}
             </Text>
             <View style={styles.ownerActions}>
-              <TouchableOpacity style={styles.ownerActionPrimary} onPress={() => handleMarkOccupied('sold')}>
-                <Ionicons name="cash" size={16} color={themeColors.white} />
-                <Text style={styles.ownerActionTextPrimary}>{t('property_mark_sold')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.ownerActionPrimary} onPress={() => handleMarkOccupied('occupied')}>
-                <Ionicons name="home" size={16} color={themeColors.white} />
-                <Text style={styles.ownerActionTextPrimary}>{t('property_mark_occupied')}</Text>
-              </TouchableOpacity>
+              {property.status === 'available' && (
+                <>
+                  <TouchableOpacity style={styles.ownerActionPrimary} onPress={() => handleCompleteTransaction('sold')}>
+                    <Ionicons name="cash" size={16} color={themeColors.white} />
+                    <Text style={styles.ownerActionTextPrimary}>{t('property_mark_sold')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.ownerActionPrimary} onPress={() => handleCompleteTransaction('rented')}>
+                    <Ionicons name="home" size={16} color={themeColors.white} />
+                    <Text style={styles.ownerActionTextPrimary}>{t('property_mark_rented')}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
               {property.status === 'occupied' && (
                 <TouchableOpacity style={styles.ownerActionGhost} onPress={handleMarkAvailable}>
                   <Ionicons name="refresh" size={16} color={themeColors.primary} />
@@ -537,12 +548,14 @@ const PropertyDetailScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>{t('similar')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {similarProperties.map(item => {
-                  const cover =
-                    (item.images || []).find(isValidImage) || 'https://via.placeholder.com/400x300';
+                  const cover = (item.images || []).find(isValidImage);
                   return (
                   <View key={item.id} style={styles.similarCard}>
                     <TouchableOpacity onPress={() => InteractionManager.runAfterInteractions(() => navigation.push('PropertyDetail', { propertyId: item.id }))}>
-                      <Image source={{ uri: cover }} style={styles.similarImage} />
+                      <PropertyImage
+                        uri={cover}
+                        style={styles.similarImage}
+                      />
                       <Text style={styles.similarTitle} numberOfLines={1}>{item.title}</Text>
                       <Text style={styles.similarPrice}>{formatPrice(item.price)}</Text>
                     </TouchableOpacity>
@@ -595,7 +608,10 @@ const PropertyDetailScreen: React.FC = () => {
             }}
             renderItem={({ item: uri }) => (
               <View style={styles.viewerImageWrap}>
-                <Image source={{ uri }} style={styles.viewerImage} />
+                <PropertyImage
+                  uri={uri}
+                  style={styles.viewerImage}
+                />
               </View>
             )}
           />

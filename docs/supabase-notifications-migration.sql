@@ -1,5 +1,4 @@
--- Adds user-scoped notifications for the mobile application.
--- Safe to run after admin/supabase/schema.sql or the production bootstrap.
+-- ARCHIVED REFERENCE ONLY. The maintained migration is supabase/migrations/0008_notifications.sql.
 
 alter table public.notifications
   add column if not exists user_id uuid references auth.users(id) on delete cascade;

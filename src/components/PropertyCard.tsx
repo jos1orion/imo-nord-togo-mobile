@@ -2,16 +2,15 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
-  Alert,
   StyleSheet,
   TouchableOpacity,
   Dimensions,
   ScrollView,
   Modal,
   FlatList,
-  Image,
   StatusBar,
 } from 'react-native';
+import { AppAlert as Alert } from './ui/appAlertService';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useAnimatedStyle,
@@ -25,10 +24,11 @@ import { Property, PROPERTY_TYPE_COLORS } from '../types';
 import { formatPrice } from '../utils/format';
 import { useApp } from '../context/AppContext';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
-import COLORS from '../theme/colors';
+import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import LazyImage from './LazyImage';
+import PropertyImage from './ui/PropertyImage';
 import { isFeaturedProperty } from '../utils/propertyVisibility';
 
 const { width } = Dimensions.get('window');
@@ -68,6 +68,15 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
   const createdTime = new Date(property.publishedAt ?? property.createdAt).getTime();
   const isNew = Number.isFinite(createdTime) && Date.now() - createdTime < 7 * 24 * 60 * 60 * 1000;
   const isVerified = (property.listingStatus ?? 'approved') === 'approved';
+  const imageStatusLabel = property.status === 'occupied'
+    ? t('status_occupied')
+    : isFeaturedProperty(property)
+      ? t('card_badge_top')
+      : isVerified
+        ? t('card_badge_verified')
+        : isNew
+          ? t('card_badge_new')
+          : null;
   const cardAnimatedStyle = useAnimatedStyle(() => ({ opacity: cardOpacity.value }));
   const favoriteAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: favoriteScale.value }],
@@ -78,7 +87,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
   const images = (property.images || []).filter(
     value => typeof value === 'string' && value.trim().length > 0 && value !== 'null'
   );
-  const displayImages = images.length ? images : ['https://via.placeholder.com/400x300'];
+  const displayImages = images.length ? images : [''];
   const openViewerAt = (index: number) => {
     setViewerIndex(index);
     setViewerOpen(true);
@@ -123,23 +132,12 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
           <Text style={styles.typeText}>{tType(property.type)}</Text>
         </View>
         <View style={styles.statusBadgeRow}>
-          {isNew && (
+          {imageStatusLabel && (
             <View style={[styles.statusBadge, styles.statusBadgeNew]}>
-              <Text style={styles.statusBadgeText}>{t('card_badge_new')}</Text>
-            </View>
-          )}
-          {isVerified && (
-            <View style={[styles.statusBadge, styles.statusBadgeVerified]}>
-              <Ionicons name="checkmark-circle" size={12} color={themeColors.primary} />
-              <Text style={styles.statusBadgeText}>{t('card_badge_verified')}</Text>
+              <Text style={styles.statusBadgeText} numberOfLines={1}>{imageStatusLabel}</Text>
             </View>
           )}
         </View>
-        {property.status === 'occupied' && (
-          <View style={styles.occupiedBadge}>
-            <Text style={styles.occupiedText}>{t('status_occupied')}</Text>
-          </View>
-        )}
         <TouchableOpacity
           style={[styles.favoriteButton, favorite && styles.favoriteButtonActive]}
           onPress={(event) => {
@@ -163,12 +161,6 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
         <View style={[styles.likesBadge, likes === 0 && styles.likesBadgeEmpty]}>
           <Text style={[styles.likesText, likes === 0 && styles.likesTextEmpty]}>{likes}</Text>
         </View>
-        {isFeaturedProperty(property) && (
-          <View style={styles.featuredBadge}>
-            <Ionicons name="star" size={12} color={themeColors.gold} />
-            <Text style={styles.featuredText}>{t('card_badge_top')}</Text>
-          </View>
-        )}
         {displayImages.length > 1 && (
           <>
             <View style={styles.imageDots} pointerEvents="none">
@@ -289,7 +281,11 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
             }}
             renderItem={({ item }) => (
               <View style={styles.viewerImageWrap}>
-                <Image source={{ uri: item }} style={styles.viewerImage} resizeMode="contain" />
+                <PropertyImage
+                  uri={item}
+                  style={styles.viewerImage}
+                  resizeMode="contain"
+                />
               </View>
             )}
           />
@@ -359,7 +355,7 @@ const baseStyles = StyleSheet.create({
   },
   imageCounterText: {
     color: COLORS.white,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
   },
   viewerBackdrop: {
@@ -411,7 +407,7 @@ const baseStyles = StyleSheet.create({
   },
   typeText: {
     color: COLORS.white,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
   },
   statusBadgeRow: {
@@ -441,7 +437,7 @@ const baseStyles = StyleSheet.create({
     borderColor: COLORS.info,
   },
   statusBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: COLORS.onSurface,
   },
@@ -455,7 +451,7 @@ const baseStyles = StyleSheet.create({
     borderRadius: 10,
   },
   occupiedText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: COLORS.white,
   },
@@ -473,16 +469,16 @@ const baseStyles = StyleSheet.create({
   },
   featuredText: {
     color: COLORS.gold,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   favoriteButton: {
     position: 'absolute',
     top: 12,
     right: 12,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: COLORS.overlayWhite95,
     alignItems: 'center',
     justifyContent: 'center',
@@ -494,7 +490,7 @@ const baseStyles = StyleSheet.create({
   },
   likesBadge: {
     position: 'absolute',
-    top: 44,
+    top: 76,
     right: 12,
     backgroundColor: COLORS.overlaySlate75,
     paddingHorizontal: 6,
@@ -505,7 +501,7 @@ const baseStyles = StyleSheet.create({
     backgroundColor: COLORS.scrimSoft,
   },
   likesText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: COLORS.white,
   },
@@ -550,7 +546,7 @@ const baseStyles = StyleSheet.create({
     marginBottom: 8,
   },
   neighborhoodBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.primary,
     maxWidth: 160,
@@ -572,12 +568,12 @@ const baseStyles = StyleSheet.create({
     borderRadius: 999,
   },
   metaTagText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.primary,
   },
   metaDate: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.onSurfaceSoft,
     maxWidth: 110,
     textAlign: 'right',

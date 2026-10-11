@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import DataTable from '../../../components/DataTable';
+import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { formatDate } from '../../../lib/format';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
@@ -42,8 +43,9 @@ export default function ReportsPage() {
   return (
     <div className="grid">
       <SectionHeader title="Signalements" subtitle="Fraude, doublons et contenus inappropriés." />
-      {loading ? <div className="card">Chargement...</div> : (
+      {loading ? <LoadingState /> : (
         <DataTable
+          loading={loading}
           rows={data}
           emptyLabel="Aucun signalement (table reports requise)."
           columns={[

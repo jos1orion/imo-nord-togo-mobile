@@ -212,6 +212,7 @@ export default function ContractsPage() {
       </div>
 
       <DataTable
+        loading={loading}
         rows={contracts}
         emptyLabel={loading ? 'Chargement...' : 'Aucun contrat'}
         columns={[

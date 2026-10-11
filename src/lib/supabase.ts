@@ -13,8 +13,8 @@ export const supabaseAnonKey =
   process.env.SUPABASE_ANON_KEY ??
   '';
 
-export const authCallbackUrl = 'https://imo-nord-togo-mobile.vercel.app/auth/callback';
-export const resetPasswordCallbackUrl = 'https://imo-nord-togo-mobile.vercel.app/reset-password';
+export const authCallbackUrl = 'imonordtogo://auth/callback';
+export const resetPasswordCallbackUrl = 'imonordtogo://reset-password';
 
 const isValidHttpUrl = (value: string) => {
   if (!value) return false;
@@ -172,6 +172,7 @@ export const supabase: SupabaseClient = isSupabaseConfigured
       auth: {
         persistSession: true,
         autoRefreshToken: true,
+        flowType: 'pkce',
         detectSessionInUrl: false,
         storage: supabaseStorage,
       },

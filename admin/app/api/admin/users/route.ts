@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { requireAdmin } from '../../../../lib/adminApiAuth';
+import { requireAdminApi } from '../../../../lib/adminApiAuth';
 
 export async function GET(request: Request) {
-  const guard = await requireAdmin(request);
-  if ('error' in guard) return guard.error;
+  const guard = await requireAdminApi(request);
+  if ('response' in guard) return guard.response;
   const { supabaseAdmin } = guard;
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get('page')) || 1);

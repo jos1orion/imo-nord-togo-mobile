@@ -1,5 +1,7 @@
 -- Imo Nord Togo - migration de securite et cycle de vie des annonces.
--- A executer dans le SQL Editor Supabase APRES docs/supabase-user-role.sql
+-- ARCHIVED REFERENCE ONLY. The maintained SQL source of truth is supabase/migrations/.
+-- Do not deploy this historical script; it is retained for comparison.
+-- Formerly executed in the SQL Editor Supabase APRES docs/supabase-user-role.sql
 -- (le type user_role doit deja contenir USER).
 -- Cette migration conserve les annonces et leur historique ; elle ne supprime pas de biens.
 --

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import DataTable from '../../../components/DataTable';
 import SectionHeader from '../../../components/SectionHeader';
 import { supabase } from '../../../lib/supabaseClient';
@@ -8,6 +8,11 @@ import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { formatDate } from '../../../lib/format';
 import type { Tenant, TenantDocumentType } from '../../../lib/types';
 import { logAdminAction } from '../../../lib/adminAudit';
+import {
+  TENANT_DOCUMENT_MAX_BYTES,
+  TENANT_DOCUMENT_MIME_TYPES,
+  validateTenantDocuments,
+} from '../../../../src/utils/imageUploadValidation';
 
 const emptyForm = {
   full_name: '',
@@ -23,9 +28,35 @@ export default function TenantsPage() {
   const [docFiles, setDocFiles] = useState<FileList | null>(null);
   const [docType, setDocType] = useState<TenantDocumentType>('cni');
   const [saving, setSaving] = useState(false);
+  const [formErrors, setFormErrors] = useState<
+    Partial<Record<'full_name' | 'phone' | 'documents', string>>
+  >({});
+  const [formMessage, setFormMessage] = useState('');
+  const nameRef = useRef<HTMLInputElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const documentRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async () => {
-    if (!form.full_name || !form.phone) return;
+    const nextErrors: typeof formErrors = {};
+    if (!form.full_name.trim()) nextErrors.full_name = 'Le nom complet est obligatoire.';
+    if (!form.phone.trim()) nextErrors.phone = 'Le téléphone est obligatoire.';
+    const selectedFiles = Array.from(docFiles ?? []);
+    const documentError = validateTenantDocuments(selectedFiles);
+    if (documentError) nextErrors.documents = documentError;
+    setFormErrors(nextErrors);
+    setFormMessage('');
+    const firstError = (['full_name', 'phone', 'documents'] as const).find(
+      field => nextErrors[field]
+    );
+    if (firstError) {
+      const refs = { full_name: nameRef, phone: phoneRef, documents: documentRef };
+      requestAnimationFrame(() => {
+        const input = refs[firstError].current;
+        input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        input?.focus();
+      });
+      return;
+    }
     setSaving(true);
     if (editingId) {
       const { error } = await supabase
@@ -55,23 +86,50 @@ export default function TenantsPage() {
         .select()
         .maybeSingle();
 
-      if (!error && data && docFiles?.length) {
-        const uploads = Array.from(docFiles).map(async file => {
-          const path = `${data.id}/${Date.now()}-${file.name}`;
-          const { error: uploadError } = await supabase.storage.from('tenant-documents').upload(path, file);
-          if (uploadError) return;
-          await supabase.from('tenant_documents').insert({
-            tenant_id: data.id,
-            type: docType,
-            url: path,
-          });
-        });
-        await Promise.all(uploads);
-      }
       if (error) {
         alert(`Erreur locataire: ${error.message}`);
         setSaving(false);
         return;
+      }
+      if (data && selectedFiles.length) {
+        const uploadedPaths: string[] = [];
+        try {
+          for (const file of selectedFiles) {
+            const extension = file.name.split('.').pop()?.replace(/[^a-z0-9]/gi, '') || 'file';
+            const path = `${data.id}/${crypto.randomUUID()}.${extension}`;
+            const { error: uploadError } = await supabase.storage
+              .from('tenant-documents')
+              .upload(path, file, { contentType: file.type, upsert: false });
+            if (uploadError) throw new Error(uploadError.message);
+            uploadedPaths.push(path);
+          }
+          const { error: documentError } = await supabase.from('tenant_documents').insert(
+            uploadedPaths.map(url => ({ tenant_id: data.id, type: docType, url }))
+          );
+          if (documentError) throw new Error(documentError.message);
+        } catch (uploadFailure) {
+          const { error: tenantDeleteError } = await supabase
+            .from('tenants')
+            .delete()
+            .eq('id', data.id);
+          const { error: storageCleanupError } = uploadedPaths.length
+            ? await supabase.storage.from('tenant-documents').remove(uploadedPaths)
+            : { error: null };
+          const cleanupErrors = [tenantDeleteError?.message, storageCleanupError?.message]
+            .filter(Boolean)
+            .join(' ; ');
+          setFormErrors(previous => ({
+            ...previous,
+            documents: uploadFailure instanceof Error ? uploadFailure.message : 'Échec du téléversement.',
+          }));
+          setFormMessage(
+            tenantDeleteError
+              ? `Le téléversement a échoué et le locataire n’a pas pu être supprimé. Vérifiez le nettoyage${cleanupErrors ? ` : ${cleanupErrors}` : ''}.`
+              : `Le téléversement a échoué ; le locataire créé a été supprimé.${cleanupErrors ? ` Nettoyage incomplet : ${cleanupErrors}` : ''}`
+          );
+          setSaving(false);
+          return;
+        }
       }
       if (data) await logAdminAction('create_tenant', 'tenant', data.id);
     }
@@ -79,6 +137,8 @@ export default function TenantsPage() {
     setForm(emptyForm);
     setDocFiles(null);
     setEditingId(null);
+    setFormErrors({});
+    setFormMessage('');
     setSaving(false);
     reload();
   };
@@ -113,23 +173,40 @@ export default function TenantsPage() {
       />
 
       <div className="card form-card">
+        {formMessage ? <p className="form-error-summary" role="alert">{formMessage}</p> : null}
         <div className="form-grid">
           <div className="form-field">
-            <label>Nom complet</label>
+            <label htmlFor="tenant-full-name">Nom complet</label>
             <input
+              id="tenant-full-name"
+              ref={nameRef}
+              aria-invalid={Boolean(formErrors.full_name)}
+              aria-describedby={formErrors.full_name ? 'tenant-name-error' : undefined}
               value={form.full_name}
-              onChange={event => setForm({ ...form, full_name: event.target.value })}
+              onChange={event => {
+                setForm({ ...form, full_name: event.target.value });
+                setFormErrors(previous => ({ ...previous, full_name: undefined }));
+              }}
               placeholder="Koffi Mensah"
             />
+            {formErrors.full_name ? <small id="tenant-name-error" className="field-error">{formErrors.full_name}</small> : null}
           </div>
           <div className="form-field">
-            <label>Telephone</label>
+            <label htmlFor="tenant-phone">Telephone</label>
             <input
+              id="tenant-phone"
+              ref={phoneRef}
+              aria-invalid={Boolean(formErrors.phone)}
+              aria-describedby={formErrors.phone ? 'tenant-phone-error' : undefined}
               type="tel"
               value={form.phone}
-              onChange={event => setForm({ ...form, phone: event.target.value })}
+              onChange={event => {
+                setForm({ ...form, phone: event.target.value });
+                setFormErrors(previous => ({ ...previous, phone: undefined }));
+              }}
               placeholder="+228 90 00 00 00"
             />
+            {formErrors.phone ? <small id="tenant-phone-error" className="field-error">{formErrors.phone}</small> : null}
           </div>
           <div className="form-field">
             <label>Email (optionnel)</label>
@@ -156,8 +233,29 @@ export default function TenantsPage() {
             </select>
           </div>
           <div className="form-field">
-            <label>Documents (upload)</label>
-            <input type="file" multiple onChange={event => setDocFiles(event.target.files)} />
+            <label htmlFor="tenant-documents">Documents (PDF, JPEG, PNG, WebP)</label>
+            <input
+              id="tenant-documents"
+              ref={documentRef}
+              type="file"
+              accept={TENANT_DOCUMENT_MIME_TYPES.join(',')}
+              multiple
+              disabled={Boolean(editingId)}
+              aria-invalid={Boolean(formErrors.documents)}
+              aria-describedby={formErrors.documents ? 'tenant-documents-error' : 'tenant-documents-help'}
+              onChange={event => {
+                const nextFiles = event.target.files;
+                setDocFiles(nextFiles);
+                setFormErrors(previous => ({
+                  ...previous,
+                  documents: validateTenantDocuments(Array.from(nextFiles ?? [])) ?? undefined,
+                }));
+              }}
+            />
+            <small id="tenant-documents-help" style={{ color: 'var(--muted)' }}>
+              Maximum {Math.round(TENANT_DOCUMENT_MAX_BYTES / 1024 / 1024)} Mo par document.
+            </small>
+            {formErrors.documents ? <small id="tenant-documents-error" className="field-error">{formErrors.documents}</small> : null}
           </div>
         </div>
         <div className="form-actions">
@@ -171,6 +269,7 @@ export default function TenantsPage() {
       </div>
 
       <DataTable
+        loading={loading}
         rows={tenants}
         emptyLabel={loading ? 'Chargement...' : 'Aucun locataire'}
         columns={[

@@ -1,14 +1,22 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import SectionHeader from '../../../components/SectionHeader';
+import LoadingState from '../../../components/LoadingState';
 import { formatCurrency, formatDate } from '../../../lib/format';
 import { supabase } from '../../../lib/supabaseClient';
+import { deletePropertyImageFiles } from '../../../lib/propertyStorage';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { useSession } from '../../../lib/useSession';
 import type { ListingStatus, Neighborhood, Property, PropertyStatus } from '../../../lib/types';
 import { logAdminAction } from '../../../lib/adminAudit';
 import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  PROPERTY_IMAGE_MAX_BYTES,
+  PROPERTY_IMAGE_MAX_COUNT,
+  PROPERTY_IMAGE_MIME_TYPES,
+  validatePropertyImages,
+} from '../../../../src/utils/imageUploadValidation';
 
 type PropertyRow = Property & {
   property_images?: { url: string }[];
@@ -40,7 +48,7 @@ const emptyForm = {
   featured: false,
 };
 
-const listingTabs: Array<{ key: 'ALL' | ListingStatus; label: string }> = [
+const listingTabs: { key: 'ALL' | ListingStatus; label: string }[] = [
   { key: 'ALL', label: 'Tous' },
   { key: 'pending', label: 'En attente' },
   { key: 'approved', label: 'Approuvé' },
@@ -83,6 +91,14 @@ export default function PropertiesPage() {
   const [form, setForm] = useState(emptyForm);
   const [files, setFiles] = useState<FileList | null>(null);
   const [saving, setSaving] = useState(false);
+  const [formErrors, setFormErrors] = useState<
+    Partial<Record<'title' | 'price' | 'location' | 'images', string>>
+  >({});
+  const [formMessage, setFormMessage] = useState('');
+  const titleRef = useRef<HTMLInputElement>(null);
+  const priceRef = useRef<HTMLInputElement>(null);
+  const locationRef = useRef<HTMLInputElement>(null);
+  const imagesRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'ALL' | ListingStatus>('ALL');
   const [statusFilter, setStatusFilter] = useState<PropertyStatus | 'ALL'>('ALL');
@@ -230,7 +246,7 @@ export default function PropertiesPage() {
   };
 
   const activeFilters = useMemo(() => {
-    const filters: Array<{ label: string; onClear: () => void }> = [];
+    const filters: { label: string; onClear: () => void }[] = [];
     if (search.trim()) {
       filters.push({ label: `Recherche: ${search.trim()}`, onClear: () => setSearch('') });
     }
@@ -315,13 +331,28 @@ export default function PropertiesPage() {
     if (!window.confirm(`Supprimer le bien « ${propertyTitle ?? 'sélectionné'} » ? Cette action est irréversible.`)) {
       return;
     }
+    const { data: imageRows, error: imageQueryError } = await supabase
+      .from('property_images')
+      .select('url')
+      .eq('property_id', propertyId);
+    if (imageQueryError) {
+      alert(`Impossible de récupérer les images du bien : ${imageQueryError.message}`);
+      return;
+    }
     const { error } = await supabase.from('properties').delete().eq('id', propertyId);
     if (error) {
       alert(`Erreur suppression: ${error.message}`);
       return;
     }
+    let imageCleanupError: string | null = null;
+    try {
+      await deletePropertyImageFiles((imageRows ?? []).map(image => image.url));
+    } catch (cleanupError) {
+      imageCleanupError = cleanupError instanceof Error ? cleanupError.message : 'Erreur inconnue';
+    }
     await logAdminAction('delete_property', 'property', propertyId);
     reload();
+    if (imageCleanupError) alert(imageCleanupError);
   };
 
   const handleBulkAction = async (action: 'approve' | 'reject' | 'archive' | 'delete') => {
@@ -331,10 +362,23 @@ export default function PropertiesPage() {
       if (!window.confirm(`Supprimer définitivement les ${ids.length} biens sélectionnés ? Cette action est irréversible.`)) {
         return;
       }
+      const { data: imageRows, error: imageQueryError } = await supabase
+        .from('property_images')
+        .select('url')
+        .in('property_id', ids);
+      if (imageQueryError) {
+        alert(`Impossible de récupérer les images des biens : ${imageQueryError.message}`);
+        return;
+      }
       const { error } = await supabase.from('properties').delete().in('id', ids);
       if (error) {
         alert(`Erreur suppression: ${error.message}`);
         return;
+      }
+      try {
+        await deletePropertyImageFiles((imageRows ?? []).map(image => image.url));
+      } catch (cleanupError) {
+        alert(cleanupError instanceof Error ? cleanupError.message : 'Le nettoyage des images a échoué.');
       }
     } else {
       const nextStatus: ListingStatus =
@@ -351,15 +395,38 @@ export default function PropertiesPage() {
   };
 
   const handleSubmit = async () => {
-    if (!form.title || !form.price || !form.location) {
-      alert('Renseignez au minimum le titre, le prix et la ville.');
-      return;
+    const selectedFiles = Array.from(files ?? []);
+    const nextErrors: typeof formErrors = {};
+    if (!form.title.trim()) nextErrors.title = 'Le titre est obligatoire.';
+    if (!form.price.trim() || !Number.isFinite(Number(form.price)) || Number(form.price) <= 0) {
+      nextErrors.price = 'Saisissez un prix supérieur à zéro.';
     }
-    if (files && files.length > 8) {
-      alert('Maximum 8 images par bien.');
+    if (!form.location.trim()) nextErrors.location = 'La ville est obligatoire.';
+    const imageError = validatePropertyImages(selectedFiles);
+    if (imageError) nextErrors.images = imageError;
+    setFormErrors(nextErrors);
+    setFormMessage('');
+    const firstInvalidField = (['title', 'price', 'location', 'images'] as const).find(
+      field => nextErrors[field]
+    );
+    if (firstInvalidField) {
+      const refs = {
+        title: titleRef,
+        price: priceRef,
+        location: locationRef,
+        images: imagesRef,
+      };
+      requestAnimationFrame(() => {
+        const input = refs[firstInvalidField].current;
+        input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        input?.focus();
+      });
       return;
     }
     setSaving(true);
+    let createdPropertyId: string | null = null;
+    const uploadedPaths: string[] = [];
+    const uploadedUrls: string[] = [];
     try {
       // Agents submit and correct their own private drafts only. Approval and
       // featured status are reserved for administrators and enforced again by RLS.
@@ -393,17 +460,12 @@ export default function PropertiesPage() {
           error = retry.error;
         }
         if (error) {
-          alert(`Erreur mise a jour: ${error.message}`);
-          setSaving(false);
-          return;
+          throw new Error(`Erreur mise à jour : ${error.message}`);
         }
-        await logAdminAction('update_property', 'property', editingId);
       } else {
         const ownerId = user?.id;
         if (!ownerId) {
-          alert("Session invalide. Reconnecte-toi puis reessaie.");
-          setSaving(false);
-          return;
+          throw new Error('Session invalide. Reconnectez-vous puis réessayez.');
         }
         let { data, error } = await supabase
           .from('properties')
@@ -428,44 +490,122 @@ export default function PropertiesPage() {
           error = retry.error;
         }
         if (error) {
-          alert(`Erreur insertion: ${error.message}`);
-          setSaving(false);
-          return;
+          throw new Error(`Erreur insertion : ${error.message}`);
         }
-        if (data) {
-          await logAdminAction('create_property', 'property', data.id);
+        if (!data) throw new Error('La création du bien n’a retourné aucun identifiant.');
+        createdPropertyId = data.id;
+      }
+
+      if (selectedFiles.length > 0) {
+        const savedProperty = editingId
+          ? properties.find(property => property.id === editingId)
+          : null;
+        const ownerId = savedProperty?.owner_id ?? user?.id;
+        const propertyId = editingId ?? createdPropertyId;
+        if (!ownerId || !propertyId) throw new Error('Impossible de déterminer le propriétaire du bien.');
+
+        for (const file of selectedFiles) {
+          const extension = file.type === 'image/jpeg' ? 'jpg' : file.type.split('/')[1];
+          const path = `${ownerId}/${propertyId}/${crypto.randomUUID()}.${extension}`;
+          const { error: uploadError } = await supabase.storage
+            .from('property-images')
+            .upload(path, file, { contentType: file.type, upsert: false });
+          if (uploadError) throw new Error(uploadError.message);
+          uploadedPaths.push(path);
+
+          const { data: publicUrl } = supabase.storage.from('property-images').getPublicUrl(path);
+          uploadedUrls.push(publicUrl.publicUrl);
         }
 
-        if (!error && data && files?.length) {
-          const uploads = Array.from(files).map(async file => {
-            const path = `${ownerId}/${data.id}/${Date.now()}-${file.name}`;
-            const { error: uploadError } = await supabase.storage.from('property-images').upload(path, file);
-            if (uploadError) {
-              alert(`Erreur upload: ${uploadError.message}`);
-              return;
-            }
-            const { data: publicUrl } = supabase.storage.from('property-images').getPublicUrl(path);
-            const { error: imageError } = await supabase.from('property_images').insert({
-              property_id: data.id,
-              url: publicUrl.publicUrl,
-            });
-            if (imageError) {
-              alert(`Erreur image: ${imageError.message}`);
-            }
-          });
-          await Promise.all(uploads);
-        }
+        const { error: imageError } = await supabase.from('property_images').insert(
+          uploadedUrls.map(url => ({ property_id: propertyId, url }))
+        );
+        if (imageError) throw new Error(imageError.message);
       }
+
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Erreur inconnue';
-      alert(`Erreur: ${message}`);
+      const cleanupMessages: string[] = [];
+      let listingDeleted = false;
+      let listingKeptAsDraft = false;
+      let draftUpdateFailed = false;
+      if (createdPropertyId) {
+        const { error: deleteError } = await supabase
+          .from('properties')
+          .delete()
+          .eq('id', createdPropertyId);
+        listingDeleted = !deleteError;
+        if (deleteError) {
+          cleanupMessages.push(deleteError.message);
+          const { error: draftError } = await supabase
+            .from('properties')
+            .update({ listing_status: 'pending', featured: false })
+            .eq('id', createdPropertyId);
+          listingKeptAsDraft = !draftError;
+          if (draftError) {
+            draftUpdateFailed = true;
+            cleanupMessages.push(draftError.message);
+          }
+          if (uploadedUrls.length) {
+            const { error: imageRowsError } = await supabase
+              .from('property_images')
+              .delete()
+              .eq('property_id', createdPropertyId)
+              .in('url', uploadedUrls);
+            if (imageRowsError) cleanupMessages.push(imageRowsError.message);
+          }
+        }
+      } else if (editingId && uploadedUrls.length) {
+        const { error: imageRowsError } = await supabase
+          .from('property_images')
+          .delete()
+          .eq('property_id', editingId)
+          .in('url', uploadedUrls);
+        if (imageRowsError) cleanupMessages.push(imageRowsError.message);
+      }
+      if (uploadedPaths.length) {
+        const { error: storageError } = await supabase.storage
+          .from('property-images')
+          .remove(uploadedPaths);
+        if (storageError) cleanupMessages.push(storageError.message);
+      }
+      setFormErrors(previous => ({
+        ...previous,
+        ...(selectedFiles.length ? { images: message } : {}),
+      }));
+      setFormMessage(
+        listingKeptAsDraft
+          ? `L’image a échoué et le bien n’a pas pu être supprimé. Il a été remis en brouillon. Vérifiez le nettoyage : ${cleanupMessages.join(' ; ')}`
+          : draftUpdateFailed
+          ? `L’image a échoué. Impossible de supprimer le bien ou de le remettre en brouillon. Intervention requise : ${cleanupMessages.join(' ; ')}`
+          : listingDeleted
+          ? `Échec de l’enregistrement des images (${message}). Le bien créé a été supprimé.${cleanupMessages.length ? ` Nettoyage des fichiers incomplet : ${cleanupMessages.join(' ; ')}` : ''}`
+          : createdPropertyId
+            ? `Échec de l’enregistrement (${message}). Le bien n’a pas pu être supprimé : ${cleanupMessages.join(' ; ')}`
+          : `Échec de l’enregistrement : ${message}${cleanupMessages.length ? ` Nettoyage incomplet : ${cleanupMessages.join(' ; ')}` : ''}`
+      );
       setSaving(false);
       return;
     }
 
+    try {
+      await logAdminAction(
+        editingId ? 'update_property' : 'create_property',
+        'property',
+        editingId ?? createdPropertyId ?? undefined
+      );
+    } catch (error) {
+      setFormMessage(
+        `Le bien a été enregistré, mais le journal d’activité n’a pas pu être mis à jour : ${
+          error instanceof Error ? error.message : 'Erreur inconnue'
+        }`
+      );
+    }
     setForm(emptyForm);
     setFiles(null);
     setEditingId(null);
+    setFormErrors({});
+    setFormMessage('');
     setShowForm(false);
     setSaving(false);
     reload();
@@ -738,14 +878,23 @@ export default function PropertiesPage() {
 
       {showForm ? (
         <div className="card form-card">
+          {formMessage ? <p className="form-error-summary" role="alert">{formMessage}</p> : null}
           <div className="form-grid">
             <div className="form-field">
-              <label>Titre</label>
+              <label htmlFor="property-title">Titre</label>
               <input
+                id="property-title"
+                ref={titleRef}
+                aria-invalid={Boolean(formErrors.title)}
+                aria-describedby={formErrors.title ? 'property-title-error' : undefined}
                 value={form.title}
-                onChange={event => setForm({ ...form, title: event.target.value })}
+                onChange={event => {
+                  setForm({ ...form, title: event.target.value });
+                  setFormErrors(previous => ({ ...previous, title: undefined }));
+                }}
                 placeholder="Villa moderne"
               />
+              {formErrors.title ? <small id="property-title-error" className="field-error">{formErrors.title}</small> : null}
             </div>
             <div className="form-field">
               <label>Type</label>
@@ -760,21 +909,37 @@ export default function PropertiesPage() {
               </select>
             </div>
             <div className="form-field">
-              <label>Prix (FCFA)</label>
+              <label htmlFor="property-price">Prix (FCFA)</label>
               <input
+                id="property-price"
+                ref={priceRef}
+                aria-invalid={Boolean(formErrors.price)}
+                aria-describedby={formErrors.price ? 'property-price-error' : undefined}
                 type="number"
                 value={form.price}
-                onChange={event => setForm({ ...form, price: event.target.value })}
+                onChange={event => {
+                  setForm({ ...form, price: event.target.value });
+                  setFormErrors(previous => ({ ...previous, price: undefined }));
+                }}
                 placeholder="350000"
               />
+              {formErrors.price ? <small id="property-price-error" className="field-error">{formErrors.price}</small> : null}
             </div>
             <div className="form-field">
-              <label>Ville</label>
+              <label htmlFor="property-location">Ville</label>
               <input
+                id="property-location"
+                ref={locationRef}
+                aria-invalid={Boolean(formErrors.location)}
+                aria-describedby={formErrors.location ? 'property-location-error' : undefined}
                 value={form.location}
-                onChange={event => setForm({ ...form, location: event.target.value })}
+                onChange={event => {
+                  setForm({ ...form, location: event.target.value });
+                  setFormErrors(previous => ({ ...previous, location: undefined }));
+                }}
                 placeholder="Kara"
               />
+              {formErrors.location ? <small id="property-location-error" className="field-error">{formErrors.location}</small> : null}
             </div>
             <div className="form-field">
               <label>Quartier</label>
@@ -833,9 +998,31 @@ export default function PropertiesPage() {
               </select>
             </div>
             <div className="form-field form-span">
-              <label>Images (multiple)</label>
-              <input type="file" multiple onChange={event => setFiles(event.target.files)} />
-              <small style={{ color: 'var(--muted)' }}>Maximum 8 images.</small>
+              <label htmlFor="property-images">Images (JPEG, PNG, WebP)</label>
+              <input
+                id="property-images"
+                ref={imagesRef}
+                type="file"
+                accept={PROPERTY_IMAGE_MIME_TYPES.join(',')}
+                multiple
+                aria-invalid={Boolean(formErrors.images)}
+                aria-describedby={formErrors.images ? 'property-images-error' : 'property-images-help'}
+                onChange={event => {
+                  const nextFiles = event.target.files;
+                  setFiles(nextFiles);
+                  setFormErrors(previous => ({
+                    ...previous,
+                    images: validatePropertyImages(Array.from(nextFiles ?? [])) ?? undefined,
+                  }));
+                }}
+              />
+              <small id="property-images-help" style={{ color: 'var(--muted)' }}>
+                Maximum {PROPERTY_IMAGE_MAX_COUNT} images,{' '}
+                {Math.round(PROPERTY_IMAGE_MAX_BYTES / 1024 / 1024)} Mo par image.
+              </small>
+              {formErrors.images ? (
+                <small id="property-images-error" className="field-error">{formErrors.images}</small>
+              ) : null}
               {previewImages.length > 0 ? (
                 <div className="upload-preview-grid">
                   {previewImages.map(image => (
@@ -861,7 +1048,7 @@ export default function PropertiesPage() {
 
       {viewMode === 'grid' ? (
         <div className="property-grid">
-          {loading && <div className="card">Chargement...</div>}
+          {loading && <LoadingState />}
           {!loading && sortedProperties.length === 0 ? (
             <div className="card table-empty">
               <div className="table-empty-title">Aucun bien trouvé</div>
@@ -878,7 +1065,13 @@ export default function PropertiesPage() {
                   onClick={() => router.push(`/properties/${property.id}`)}
                 >
                   <div className="property-thumb">
-                    {cover ? <img src={cover} alt={property.title} /> : <div className="property-thumb-fallback">IMG</div>}
+                    <img
+                      src={cover || '/property-placeholder.svg'}
+                      alt={property.title}
+                      onError={event => {
+                        event.currentTarget.src = '/property-placeholder.svg';
+                      }}
+                    />
                     <span className={`status-badge ${property.listing_status}`}>
                       {getListingLabel(property.listing_status)}
                     </span>

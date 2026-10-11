@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAdminApi } from '../../../../../lib/requireAdminApi';
+import { requireAdminApi } from '../../../../../lib/adminApiAuth';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string | string[] | undefined }> }) {
   const { id } = await params;

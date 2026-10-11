@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DataTable from '../../../components/DataTable';
+import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { formatDate } from '../../../lib/format';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
@@ -50,7 +51,7 @@ export default function PublicationsPage() {
           </button>
         ))}
       </div>
-      {loading ? <div className="card">Chargement...</div> : error ? (
+      {loading ? <LoadingState /> : error ? (
         <div className="card">
           <div className="alert">
             Impossible de charger les publications : {error}
@@ -66,6 +67,7 @@ export default function PublicationsPage() {
         </div>
       ) : (
         <DataTable
+          loading={loading}
           rows={rows}
           emptyLabel={
             data.length === 0

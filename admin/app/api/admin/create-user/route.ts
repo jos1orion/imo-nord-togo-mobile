@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAdminApi } from '../../../../lib/requireAdminApi';
+import { requireAdminApi } from '../../../../lib/adminApiAuth';
 
 export async function POST(request: Request) {
   const guard = await requireAdminApi(request);

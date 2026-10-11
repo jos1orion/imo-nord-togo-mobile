@@ -34,17 +34,24 @@
       "intentFilters": [
         {
           "action": "VIEW",
-          "autoVerify": true,
           "data": [
             {
-              "scheme": "https",
-              "host": "imo-nord-togo-mobile.vercel.app",
-              "pathPrefix": "/auth/callback"
-            },
+              "scheme": "imonordtogo",
+              "host": "auth",
+              "pathPrefix": "/callback"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
             {
-              "scheme": "https",
-              "host": "imo-nord-togo-mobile.vercel.app",
-              "pathPrefix": "/reset-password"
+              "scheme": "imonordtogo",
+              "host": "reset-password"
             }
           ],
           "category": [

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import SectionHeader from '../../../components/SectionHeader';
+import LoadingState from '../../../components/LoadingState';
 import StatusPill from '../../../components/StatusPill';
 import { supabase } from '../../../lib/supabaseClient';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
@@ -121,7 +122,7 @@ export default function NotificationsPage() {
             </div>
           </div>
         ))}
-        {loading ? <div className="card">Chargement...</div> : null}
+        {loading ? <LoadingState /> : null}
       </div>
     </div>
   );

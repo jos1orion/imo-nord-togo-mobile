@@ -1,5 +1,5 @@
 -- Adds user-scoped notifications for the mobile application.
--- Safe to run after admin/supabase/schema.sql or the production bootstrap.
+-- Requires the public.notifications table from the selected base schema.
 
 alter table public.notifications
   add column if not exists user_id uuid references auth.users(id) on delete cascade;

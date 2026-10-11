@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   LogBox,
   Modal,
@@ -37,15 +36,23 @@ import PublishScreen from './src/screens/PublishScreen';
 import MessagesScreen from './src/screens/MessagesScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import AgentProfileScreen from './src/screens/AgentProfileScreen';
+import AgentDashboardScreen from './src/screens/AgentDashboardScreen';
 import ReviewsScreen from './src/screens/ReviewsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { AppDialogProvider } from './src/components/ui/AppDialogProvider';
+import { AppAlert as Alert } from './src/components/ui/appAlertService';
 import { lightPaperTheme, darkPaperTheme } from './src/theme/paperTheme';
 import { THEME_PALETTES } from './src/theme/colors';
 import { typography } from './src/theme/typography';
-import { supabase } from './src/lib/supabase';
+import {
+  exchangeAuthCallback,
+  resetPasswordCallbackUrl,
+  supabase,
+} from './src/lib/supabase';
+import { logger } from './src/lib/logger';
 
 const ONBOARDING_KEY = 'imo:onboardingComplete';
 const FIRST_VISIT_GUIDE_PREFIX = 'imo:firstVisitGuide:';
@@ -64,6 +71,7 @@ type TabParamList = {
   Home: undefined;
   Publish: undefined;
   Messages: undefined;
+  Agent: undefined;
   Profile: { authMode?: 'login' | 'register' } | undefined;
 };
 
@@ -74,7 +82,7 @@ export type RootStackParamList = {
   Admin: undefined;
   Publish: { propertyId?: string } | undefined;
   Messages: undefined;
-  Chat: { chatId: string; otherUserId: string };
+  Chat: { chatId: string; otherUserId: string; propertyId?: string };
   AgentProfile: { userId: string };
   Reviews: { propertyId: string };
   Notifications: undefined;
@@ -91,12 +99,13 @@ LogBox.ignoreLogs([
 ]);
 
 const TabNavigator = () => {
-  const { t, language } = useApp();
+  const { t, language, currentUser } = useApp();
   const paper = useTheme();
   const insets = useSafeAreaInsets();
+  const hasAgentWorkspace = currentUser?.role === 'AGENT' || currentUser?.role === 'ADMIN';
   return (
     <Tab.Navigator
-      key={language}
+      key={`${language}-${hasAgentWorkspace ? 'agent' : 'standard'}`}
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home';
@@ -107,6 +116,8 @@ const TabNavigator = () => {
             iconName = focused ? 'headset' : 'headset-outline';
           } else if (route.name === 'Publish') {
             iconName = focused ? 'add-circle' : 'add-circle-outline';
+          } else if (route.name === 'Agent') {
+            iconName = focused ? 'briefcase' : 'briefcase-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
@@ -168,12 +179,17 @@ const TabNavigator = () => {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: t('tab_home') }} />
-      <Tab.Screen
-        name="Publish"
-        component={ListingsScreen}
-        options={{ tabBarLabel: t('publish_tab') }}
-      />
+      {!hasAgentWorkspace && (
+        <Tab.Screen
+          name="Publish"
+          component={ListingsScreen}
+          options={{ tabBarLabel: t('tab_activity') }}
+        />
+      )}
       <Tab.Screen name="Messages" component={MessagesScreen} options={{ tabBarLabel: t('support_title') }} />
+      {hasAgentWorkspace ? (
+        <Tab.Screen name="Agent" component={AgentDashboardScreen} options={{ tabBarLabel: t('profile_agent_dashboard') }} />
+      ) : null}
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('tab_profile') }} />
     </Tab.Navigator>
   );
@@ -189,6 +205,13 @@ const AppContent = () => {
   const activeRouteRef = React.useRef<string | undefined>(undefined);
   const checkedGuideSectionsRef = React.useRef(new Set<GuideSection>());
   const guideDisabledRef = React.useRef(false);
+  const pendingResetNavigationRef = React.useRef(false);
+
+  const navigateToPendingResetPassword = React.useCallback(() => {
+    if (!pendingResetNavigationRef.current || !navigationRef.isReady()) return;
+    pendingResetNavigationRef.current = false;
+    navigationRef.navigate('ResetPassword');
+  }, []);
 
   const checkFirstVisitGuide = React.useCallback((routeName?: string) => {
     activeRouteRef.current = routeName;
@@ -243,33 +266,45 @@ const AppContent = () => {
 
   useEffect(() => {
     const handleAuthUrl = async (url: string | null) => {
-      if (!url || !url.includes('reset-password')) return;
-      const fragment = url.split('#')[1] ?? '';
-      const query = url.split('?')[1]?.split('#')[0] ?? '';
-      const params = new URLSearchParams(`${fragment}&${query}`);
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-      if (!accessToken || !refreshToken) {
-        Alert.alert(t('reset_link_invalid_title'), t('reset_link_invalid_message'));
+      if (
+        !url ||
+        !(
+          url === resetPasswordCallbackUrl ||
+          url.startsWith(`${resetPasswordCallbackUrl}?`) ||
+          url.startsWith(`${resetPasswordCallbackUrl}#`)
+        )
+      ) {
         return;
       }
-      const { error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-      if (error) {
+      try {
+        const result = await exchangeAuthCallback(url);
+        if (!result) {
+          Alert.alert(t('reset_link_invalid_title'), t('reset_link_invalid_message'));
+          return;
+        }
+        if (result.error) {
+          Alert.alert(t('reset_link_invalid_title'), t('reset_link_expired_message'));
+          return;
+        }
+        pendingResetNavigationRef.current = true;
+        navigateToPendingResetPassword();
+      } catch (error) {
+        logger.error('Unable to complete the password reset callback.', error);
         Alert.alert(t('reset_link_invalid_title'), t('reset_link_expired_message'));
-        return;
       }
-      navigationRef.current?.navigate('ResetPassword');
     };
 
-    void Linking.getInitialURL().then(handleAuthUrl);
+    void Linking.getInitialURL()
+      .then(handleAuthUrl)
+      .catch(error => {
+        logger.error('Unable to read the password reset callback URL.', error);
+        Alert.alert(t('reset_link_invalid_title'), t('reset_link_invalid_message'));
+      });
     const subscription = Linking.addEventListener('url', event => {
       void handleAuthUrl(event.url);
     });
     return () => subscription.remove();
-  }, [t]);
+  }, [navigateToPendingResetPassword, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -305,7 +340,10 @@ const AppContent = () => {
       <NavigationContainer
         ref={navigationRef}
         theme={theme === 'dark' ? NavigationDarkTheme : NavigationLightTheme}
-        onReady={() => checkFirstVisitGuide(navigationRef.getCurrentRoute()?.name)}
+        onReady={() => {
+          navigateToPendingResetPassword();
+          checkFirstVisitGuide(navigationRef.getCurrentRoute()?.name);
+        }}
         onStateChange={() => checkFirstVisitGuide(navigationRef.getCurrentRoute()?.name)}
       >
         <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
@@ -446,10 +484,19 @@ export default function App() {
       <SafeAreaProvider>
         <ErrorBoundary>
           <AppProvider>
-            <AppContent />
+            <AppDialogProvider>
+              <ThemeAwareErrorBoundary>
+                <AppContent />
+              </ThemeAwareErrorBoundary>
+            </AppDialogProvider>
           </AppProvider>
         </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
+
+const ThemeAwareErrorBoundary = ({ children }: { children: React.ReactNode }) => {
+  const { theme } = useApp();
+  return <ErrorBoundary theme={theme}>{children}</ErrorBoundary>;
+};

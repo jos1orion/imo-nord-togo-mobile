@@ -40,15 +40,18 @@ Le back-office est réservé aux rôles staff `ADMIN`, `AGENT` et `ACCOUNTANT`. 
 
 ## Base Supabase et production
 
-Avant toute mise en production, exécuter dans l’éditeur SQL de Supabase dans l’ordre suivant :
-
-1. `docs/supabase-user-role.sql`
-2. `docs/supabase-production-migration.sql`
-3. `docs/supabase-backoffice-schema-repair.sql` uniquement si l’étape précédente a été interrompue ou si la base est partiellement migrée. Ce correctif de colonnes ne remplace pas la migration de sécurité complète.
+Les migrations de déploiement sont maintenues uniquement dans
+[`supabase/migrations/`](../supabase/migrations/). Sur une base existante,
+vérifier les prérequis de chaque migration et n’appliquer que celles qui ne sont
+pas déjà installées. `0001_rls.sql` est un brouillon historique : ne pas
+l’appliquer en production. Les scripts SQL conservés dans `docs/` sont des
+archives de référence, pas des entrées de déploiement.
 
 La route `/api/health` vérifie Supabase Auth et les colonnes requises par le back-office. Une réponse HTTP 503 avec `auth: invalid_api_key` indique que `NEXT_PUBLIC_SUPABASE_ANON_KEY` configurée sur Vercel est refusée par Auth ; `auth: unreachable` indique que le service Auth n’est pas joignable ; `schema: incomplete` indique qu’une migration est nécessaire.
 
-Ne pas exécuter `docs/supabase-bootstrap-production.sql` sur un projet existant. La migration produit le rôle `USER` par défaut, le trigger de création de profil, les politiques RLS restrictives et la planification d’expiration des annonces.
+Pour un nouveau projet vide, suivre les prérequis et l’ordre documentés dans
+[`docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md) ; ne pas rejouer le bootstrap sur
+un projet existant.
 
 ## Rôles
 
@@ -58,9 +61,8 @@ Ne pas exécuter `docs/supabase-bootstrap-production.sql` sur un projet existant
   approuver, les mettre en vedette, ni consulter les données locataires ou financières.
 - **ACCOUNTANT** : consultation des locataires et contrats, gestion des paiements.
 
-Ces limites d’interface sont doublées par les politiques RLS de
-`docs/supabase-production-migration.sql` : ne pas remplacer cette migration par
-le schéma de démonstration seul en production.
+Ces limites d’interface sont doublées par les politiques RLS définies dans les
+migrations de [`supabase/migrations/`](../supabase/migrations/).
 
 ## Build production
 

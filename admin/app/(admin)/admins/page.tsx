@@ -118,6 +118,7 @@ export default function AdminsPage() {
       </div>
 
       <DataTable
+        loading={loading}
         rows={admins}
         emptyLabel={loading ? 'Chargement...' : 'Aucun admin'}
         columns={[

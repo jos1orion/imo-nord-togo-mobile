@@ -8,8 +8,8 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
+import { AppAlert as Alert } from '../components/ui/appAlertService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -29,25 +29,31 @@ type ChatScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Chat'>;
 const ChatScreen = () => {
   const styles = useThemedStyles(baseStyles);
   const themeColors = useThemeColors();
-  const { getChatMessages, sendMessage, markMessagesAsRead, users, currentUser, t } = useApp();
+  const { chats, getChatMessages, sendMessage, markMessagesAsRead, users, currentUser, t } = useApp();
   const route = useRoute<ChatScreenRouteProp>();
   const navigation = useNavigation<ChatScreenNavigationProp>();
-  const { chatId, otherUserId } = route.params;
+  const { chatId, otherUserId, propertyId: routePropertyId } = route.params;
 
   const [messageText, setMessageText] = useState('');
+  const [activeChatId, setActiveChatId] = useState(chatId);
   const flatListRef = useRef<FlatList>(null);
 
-  const messages = getChatMessages(chatId);
+  const messages = getChatMessages(activeChatId);
+  const propertyId = chats.find(chat => chat.id === activeChatId)?.propertyId ?? routePropertyId;
   const otherUser = users.find(u => u.id === otherUserId);
   const otherUserName = otherUser?.name || (otherUserId === 'support' ? 'Support' : 'Utilisateur');
 
   useEffect(() => {
+    setActiveChatId(chatId);
+  }, [chatId]);
+
+  useEffect(() => {
     if (currentUser) {
-      void markMessagesAsRead(chatId, currentUser.id).catch(error => {
+      void markMessagesAsRead(activeChatId, currentUser.id).catch(error => {
         Alert.alert(t('error'), error instanceof Error ? error.message : t('error'));
       });
     }
-  }, [chatId, currentUser, markMessagesAsRead, t]);
+  }, [activeChatId, currentUser, markMessagesAsRead, t]);
 
   useEffect(() => {
     // Scroll to bottom when new messages arrive
@@ -64,7 +70,8 @@ const ChatScreen = () => {
     }
     if (messageText.trim()) {
       try {
-        await sendMessage(otherUserId, messageText.trim());
+        const result = await sendMessage(otherUserId, messageText.trim(), propertyId);
+        setActiveChatId(result.chatId);
         setMessageText('');
         void safeImpactLight();
       } catch (error) {

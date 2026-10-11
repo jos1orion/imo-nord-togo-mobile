@@ -1,6 +1,7 @@
 'use client';
 
 import DataTable from '../../../components/DataTable';
+import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { formatDate } from '../../../lib/format';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
@@ -30,8 +31,9 @@ export default function ReviewsPage() {
   return (
     <div className="grid">
       <SectionHeader title="Avis" subtitle="Modération des notes et commentaires." />
-      {loading ? <div className="card">Chargement...</div> : (
+      {loading ? <LoadingState /> : (
         <DataTable
+          loading={loading}
           rows={data}
           emptyLabel="Aucun avis. La table reviews est créée par supabase-admin-platform.sql."
           columns={[

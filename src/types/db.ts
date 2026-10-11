@@ -4,6 +4,8 @@ import type {
   PropertyType,
   ReportReason,
   Message,
+  Transaction,
+  Document,
 } from './index';
 
 export interface PropertyRow {
@@ -33,6 +35,7 @@ export interface PropertyRow {
   expires_at: string | null;
   sold_at: string | null;
   rented_at: string | null;
+  completion_type?: string | null;
   featured_start_at: string | null;
   featured_end_at: string | null;
   republished_at: string | null;
@@ -71,4 +74,72 @@ export interface ReportRow {
   message: string | null;
   status: 'OPEN' | 'RESOLVED' | string | null;
   created_at: string | null;
+}
+
+export interface AgentProfileRow {
+  user_id: string;
+  bio: string;
+  specialties: PropertyType[];
+  experience: number;
+  license_number: string | null;
+  company: string | null;
+  portfolio: string[];
+  verified: boolean;
+  rating: number | string;
+  review_count: number;
+  total_sales: number;
+  total_commission: number | string;
+}
+
+export interface SearchAlertRow {
+  id: string;
+  user_id: string;
+  label: string;
+  filters: Record<string, unknown>;
+  property_type: PropertyType | 'ALL';
+  active: boolean;
+  last_triggered: string | null;
+  created_at: string;
+}
+
+export interface PremiumListingRow {
+  property_id: string;
+  plan: 'BASIC' | 'FEATURED' | 'PREMIUM';
+  start_date: string;
+  end_date: string;
+  price: number | string;
+  features: string[];
+}
+
+export interface CommissionRuleRow {
+  id: string;
+  agent_id: string;
+  property_type: PropertyType | 'ALL';
+  percentage: number | string;
+  min_amount: number | string;
+  max_amount: number | string;
+  active: boolean;
+}
+
+export interface TransactionRow {
+  id: string;
+  property_id: string;
+  buyer_id: string;
+  seller_id: string;
+  agent_id: string | null;
+  amount: number | string;
+  commission: number | string | null;
+  status: Transaction['status'];
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface PropertyDocumentRow {
+  id: string;
+  property_id: string;
+  name: string;
+  type: Document['type'];
+  url: string;
+  uploaded_by: string;
+  uploaded_at: string;
 }

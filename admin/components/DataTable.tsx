@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import LoadingState from './LoadingState';
 
 export type Column<T> = {
   key: keyof T | string;
@@ -11,9 +12,17 @@ type DataTableProps<T> = {
   columns: Column<T>[];
   rows: T[];
   emptyLabel?: string;
+  loading?: boolean;
 };
 
-export default function DataTable<T>({ columns, rows, emptyLabel = 'Aucune donnee' }: DataTableProps<T>) {
+export default function DataTable<T>({
+  columns,
+  rows,
+  emptyLabel = 'Aucune donnee',
+  loading = false,
+}: DataTableProps<T>) {
+  if (loading) return <LoadingState />;
+
   if (!rows.length) {
     return (
       <div className="card table-empty">

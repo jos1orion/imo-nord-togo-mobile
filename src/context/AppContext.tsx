@@ -1,6 +1,7 @@
 ﻿import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
-import { Alert, Image, Linking } from 'react-native';
+import { Image, Linking } from 'react-native';
+import { AppAlert as Alert } from '../components/ui/appAlertService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -12,8 +13,10 @@ import {
   supabaseUrl,
 } from '../lib/supabase';
 import { safeRegisterExpoPushToken, safeScheduleLocalNotification } from '../lib/expoNotificationsSafe';
+import { chunkStoragePaths, getPropertyImageStoragePaths } from '../utils/propertyStorage';
 import {
   Property,
+  PropertyCompletionType,
   Client,
   PropertyType,
   PropertyStatus,
@@ -39,9 +42,35 @@ import {
   AppNotification,
 } from '../types';
 import { Language, TranslationKey, setCurrentLanguage, translate, translateStatus, translateType } from '../i18n';
-import { isExpiredProperty, isPublicProperty } from '../utils/propertyVisibility';
+import { isPublicProperty } from '../utils/propertyVisibility';
 import { isDirectPublishingEnabled } from '../lib/publishing';
-import { MessageRow, PropertyRow, ReportRow, ReviewRow } from '../types/db';
+import {
+  dedupeProperties,
+  extractMissingPropertiesColumn,
+  mapAgentProfileRow,
+  mapCommissionRuleRow,
+  mapMessageRow,
+  mapPremiumListingRow,
+  mapPropertyDocumentRow,
+  mapPropertyRow,
+  mapReportRow,
+  mapReviewRow,
+  mapSearchAlertRow,
+  mapTransactionRow,
+  normalizeNeighborhoods,
+} from './appDataMappers';
+import {
+  AgentProfileRow,
+  CommissionRuleRow,
+  MessageRow,
+  PremiumListingRow,
+  PropertyDocumentRow,
+  PropertyRow,
+  ReportRow,
+  ReviewRow,
+  SearchAlertRow,
+  TransactionRow,
+} from '../types/db';
 import { logger } from '../lib/logger';
 
 interface AppContextType {
@@ -82,6 +111,7 @@ interface AppContextType {
   addProperty: (property: Omit<Property, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Property>;
   updateProperty: (id: string, updates: Partial<Omit<Property, 'id' | 'createdAt'>>) => Promise<void>;
   updatePropertyStatus: (id: string, status: PropertyStatus) => Promise<void>;
+  completeProperty: (id: string, completionType: PropertyCompletionType) => Promise<void>;
   markPropertySold: (id: string) => Promise<void>;
   clearSoldStatus: (id: string) => Promise<void>;
   deleteProperty: (id: string) => Promise<void>;
@@ -147,27 +177,27 @@ interface AppContextType {
   getPropertyReviews: (propertyId: string) => Review[];
   getAverageRating: (propertyId: string) => number;
   // Agent profile functions
-  createAgentProfile: (data: Omit<AgentProfile, 'rating' | 'reviewCount' | 'totalSales' | 'totalCommission'>) => void;
-  updateAgentProfile: (userId: string, updates: Partial<AgentProfile>) => void;
+  createAgentProfile: (data: Omit<AgentProfile, 'rating' | 'reviewCount' | 'totalSales' | 'totalCommission'>) => Promise<void>;
+  updateAgentProfile: (userId: string, updates: Partial<AgentProfile>) => Promise<void>;
   getAgentProfile: (userId: string) => AgentProfile | null;
   // Search alerts
-  createSearchAlert: (data: Omit<SearchAlert, 'id' | 'createdAt'>) => SearchAlert;
-  updateSearchAlert: (id: string, updates: Partial<SearchAlert>) => void;
-  deleteSearchAlert: (id: string) => void;
-  checkSearchAlerts: (newProperty: Property) => void;
+  createSearchAlert: (data: Omit<SearchAlert, 'id' | 'createdAt'>) => Promise<SearchAlert>;
+  updateSearchAlert: (id: string, updates: Partial<SearchAlert>) => Promise<void>;
+  deleteSearchAlert: (id: string) => Promise<void>;
+  checkSearchAlerts: (newProperty: Property) => Promise<void>;
   // Premium listings
-  createPremiumListing: (propertyId: string, plan: 'BASIC' | 'FEATURED' | 'PREMIUM') => PremiumListing;
+  createPremiumListing: (propertyId: string, plan: 'BASIC' | 'FEATURED' | 'PREMIUM') => Promise<PremiumListing>;
   getPremiumFeatures: (propertyId: string) => string[];
   isPremium: (propertyId: string) => boolean;
   // Commission system
-  createCommissionRule: (data: Omit<CommissionRule, 'id'>) => CommissionRule;
-  toggleCommissionRule: (id: string) => void;
+  createCommissionRule: (data: Omit<CommissionRule, 'id'>) => Promise<CommissionRule>;
+  toggleCommissionRule: (id: string) => Promise<void>;
   calculateCommission: (propertyId: string, salePrice: number) => number;
   // Transactions
-  createTransaction: (data: Omit<Transaction, 'id' | 'createdAt'>) => Transaction;
-  updateTransactionStatus: (id: string, status: Transaction['status']) => void;
+  createTransaction: (data: Omit<Transaction, 'id' | 'createdAt'>) => Promise<Transaction>;
+  updateTransactionStatus: (id: string, status: Transaction['status']) => Promise<void>;
   // Documents
-  addDocument: (data: Omit<Document, 'id' | 'uploadedAt'>) => Document;
+  addDocument: (data: Omit<Document, 'id' | 'uploadedAt'>) => Promise<Document>;
   getPropertyDocuments: (propertyId: string) => Document[];
 }
 
@@ -193,12 +223,6 @@ const STORAGE_KEYS = {
   messages: 'imo:messages',
   chats: 'imo:chats',
   reviews: 'imo:reviews',
-  agentProfiles: 'imo:agentProfiles',
-  searchAlerts: 'imo:searchAlerts',
-  premiumListings: 'imo:premiumListings',
-  commissionRules: 'imo:commissionRules',
-  transactions: 'imo:transactions',
-  documents: 'imo:documents',
   contracts: 'imo:contracts',
   payments: 'imo:payments',
   tenantDocuments: 'imo:tenantDocuments',
@@ -213,128 +237,14 @@ const DEFAULT_FILTERS: SearchFilters = {
   minArea: null,
 };
 
-const normalizeNeighborhoods = (values: Array<string | null | undefined>): string[] => {
-  const map = new Map<string, string>();
-  values.forEach(value => {
-    const cleaned = value?.trim();
-    if (!cleaned) return;
-    const key = cleaned.toLowerCase();
-    if (!map.has(key)) {
-      map.set(key, cleaned);
-    }
-  });
-  return Array.from(map.values());
-};
-
-const extractMissingPropertiesColumn = (message?: string): string | null => {
-  if (!message) return null;
-  const match = message.match(/Could not find the '([^']+)' column of 'properties'/i);
-  return match?.[1] ?? null;
-};
-
-const listingStatuses: ListingStatus[] = ['pending', 'approved', 'rejected', 'archived'];
-
-  const mapPropertyRow = (row: PropertyRow): Property => {
-    const isValidImage = (value: string | null | undefined): value is string =>
-      typeof value === 'string' && value.trim().length > 0 && value !== 'null';
-    const images = Array.isArray(row?.property_images)
-      ? row.property_images.map(image => image.url).filter(isValidImage)
-      : [];
-    const listingStatus = listingStatuses.find(status => status === row.listing_status) ?? 'pending';
-
-  return {
-    id: row.id,
-    ownerId: row.owner_id ?? null,
-    title: row.title ?? '',
-    description: row.description ?? '',
-    type: row.type,
-    price: Number(row.price ?? 0),
-    location: row.location ?? '',
-    neighborhood: row.neighborhood ?? null,
-    city: row.location ?? '',
-    area: row.area ?? undefined,
-    latitude: row.latitude ?? undefined,
-    longitude: row.longitude ?? undefined,
-    images,
-    status: row.status === 'occupied' ? 'occupied' : 'available',
-    listingStatus,
-    amenities: Array.isArray(row.amenities) ? row.amenities.filter((item): item is string => typeof item === 'string') : [],
-    bedrooms: row.bedrooms ?? undefined,
-    bathrooms: row.bathrooms ?? undefined,
-    featured: row.featured ?? false,
-    createdAt: row.created_at ?? new Date().toISOString(),
-    updatedAt: row.updated_at ?? row.created_at ?? new Date().toISOString(),
-    submittedAt: row.submitted_at ?? null,
-    approvedAt: row.approved_at ?? null,
-    publishedAt: row.published_at ?? null,
-    expiresAt: row.expires_at ?? null,
-    soldAt: row.sold_at ?? null,
-    rentedAt: row.rented_at ?? null,
-    featuredStartAt: row.featured_start_at ?? null,
-    featuredEndAt: row.featured_end_at ?? null,
-    republishedAt: row.republished_at ?? null,
-    clientId: row.client_id ?? '',
-    client:
-      row.contact_name || row.contact_phone || row.contact_email
-        ? {
-            id: row.client_id ?? row.owner_id ?? row.id,
-            name: row.contact_name ?? '',
-            phone: row.contact_phone ?? '',
-            email: row.contact_email ?? '',
-            createdAt: row.created_at ?? new Date().toISOString(),
-          }
-        : undefined,
-    contactName: row.contact_name ?? null,
-    contactPhone: row.contact_phone ?? null,
-    contactEmail: row.contact_email ?? null,
-  };
-};
-
-const dedupeProperties = (items: Property[]): Property[] => {
-  const map = new Map<string, Property>();
-  items.forEach(item => {
-    if (!item?.id) return;
-    map.set(item.id, item);
-  });
-  return Array.from(map.values());
-};
-const mapMessageRow = (row: MessageRow): Message => ({
-  id: row.id,
-  senderId: row.sender_id,
-  receiverId: row.receiver_id,
-  propertyId: row.property_id ?? undefined,
-  content: row.content ?? '',
-  timestamp: row.created_at ?? new Date().toISOString(),
-  read: row.read ?? false,
-  type: (row.type as Message['type']) ?? 'text',
-});
-
-const mapReviewRow = (row: ReviewRow): Review => ({
-  id: row.id,
-  propertyId: row.property_id,
-  reviewerId: row.user_id ?? '',
-  // The public review policy deliberately does not expose profile contact data.
-  reviewerName: row.reviewer_name ?? 'Utilisateur',
-  rating: Number(row.rating ?? 0),
-  comment: row.comment ?? '',
-  createdAt: row.created_at ?? new Date().toISOString(),
-  verified: row.verified ?? false,
-});
-
-const mapReportRow = (row: ReportRow): Report => ({
-  id: row.id,
-  propertyId: row.property_id,
-  reason: row.reason as ReportReason,
-  message: row.message ?? '',
-  status: row.status === 'RESOLVED' ? 'RESOLVED' : 'OPEN',
-  createdAt: row.created_at ?? new Date().toISOString(),
-});
+const getChatKey = (participants: string[], propertyId?: string) =>
+  JSON.stringify([[...participants].sort(), propertyId ?? null]);
 
 const buildChatsFromMessages = (items: Message[]): Chat[] => {
   const map = new Map<string, Chat>();
   items.forEach(message => {
     const participants = [message.senderId, message.receiverId].sort();
-    const key = `${participants.join('|')}|${message.propertyId ?? ''}`;
+    const key = getChatKey(participants, message.propertyId);
     const existing = map.get(key);
     const unreadCount = existing?.unreadCount ? { ...existing.unreadCount } : {};
     if (!message.read) {
@@ -413,6 +323,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [messages, setMessages] = useState<Message[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const businessDataRequestRef = useRef(0);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [searchAlerts, setSearchAlerts] = useState<SearchAlert[]>([]);
   const [premiumListings, setPremiumListings] = useState<PremiumListing[]>([]);
@@ -493,15 +404,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setMessages(parse<Message[]>(STORAGE_KEYS.messages, []));
         setChats(parse<Chat[]>(STORAGE_KEYS.chats, []));
         setReviews(parse<Review[]>(STORAGE_KEYS.reviews, []));
-        setAgentProfiles(parse<AgentProfile[]>(STORAGE_KEYS.agentProfiles, []));
-        setSearchAlerts(parse<SearchAlert[]>(STORAGE_KEYS.searchAlerts, []));
-        setPremiumListings(parse<PremiumListing[]>(STORAGE_KEYS.premiumListings, []));
-        setCommissionRules(parse<CommissionRule[]>(STORAGE_KEYS.commissionRules, []));
-        setTransactions(parse<Transaction[]>(STORAGE_KEYS.transactions, []));
-        setDocuments(parse<Document[]>(STORAGE_KEYS.documents, []));
         setContracts(parse<Contract[]>(STORAGE_KEYS.contracts, []));
         setPayments(parse<Payment[]>(STORAGE_KEYS.payments, []));
         setTenantDocuments(parse<TenantDocument[]>(STORAGE_KEYS.tenantDocuments, []));
+        void AsyncStorage.multiRemove([
+          'imo:agentProfiles',
+          'imo:searchAlerts',
+          'imo:premiumListings',
+          'imo:commissionRules',
+          'imo:transactions',
+          'imo:documents',
+        ]).catch(error => logger.warn('Unable to remove obsolete local business data.', error));
       } catch (error) {
         logger.error('Unable to load persisted app data.', error);
       } finally {
@@ -602,36 +515,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!hydrated) return;
     storage.setItem(STORAGE_KEYS.reviews, JSON.stringify(reviews));
   }, [reviews, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    storage.setItem(STORAGE_KEYS.agentProfiles, JSON.stringify(agentProfiles));
-  }, [agentProfiles, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    storage.setItem(STORAGE_KEYS.searchAlerts, JSON.stringify(searchAlerts));
-  }, [searchAlerts, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    storage.setItem(STORAGE_KEYS.premiumListings, JSON.stringify(premiumListings));
-  }, [premiumListings, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    storage.setItem(STORAGE_KEYS.commissionRules, JSON.stringify(commissionRules));
-  }, [commissionRules, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    storage.setItem(STORAGE_KEYS.transactions, JSON.stringify(transactions));
-  }, [transactions, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    storage.setItem(STORAGE_KEYS.documents, JSON.stringify(documents));
-  }, [documents, hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -822,7 +705,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   useEffect(() => {
     const completeAuthCallback = async (url: string | null) => {
-      if (!url?.startsWith(authCallbackUrl)) return;
+      if (
+        !url ||
+        !(
+          url === authCallbackUrl ||
+          url.startsWith(`${authCallbackUrl}?`) ||
+          url.startsWith(`${authCallbackUrl}#`)
+        )
+      ) {
+        return;
+      }
       try {
         const result = await exchangeAuthCallback(url);
         if (result?.error) {
@@ -973,11 +865,64 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
     const { data, error } = await supabase
-      .from('reports')
+      .from('property_reports')
       .select('*')
       .order('created_at', { ascending: false });
     if (error) throw error;
     setReports((data ?? []).map(mapReportRow));
+  }, [currentUser]);
+
+  const loadBusinessFeaturesFromSupabase = useCallback(async () => {
+    const requestId = ++businessDataRequestRef.current;
+    if (!currentUser) {
+      setAgentProfiles([]);
+      setSearchAlerts([]);
+      setPremiumListings([]);
+      setCommissionRules([]);
+      setTransactions([]);
+      setDocuments([]);
+      return;
+    }
+    setAgentProfiles([]);
+    setSearchAlerts([]);
+    setPremiumListings([]);
+    setCommissionRules([]);
+    setTransactions([]);
+    setDocuments([]);
+
+    const [
+      agentProfilesResult,
+      searchAlertsResult,
+      premiumListingsResult,
+      commissionRulesResult,
+      transactionsResult,
+      documentsResult,
+    ] = await Promise.all([
+      supabase.from('agent_profiles').select('*'),
+      supabase.from('search_alerts').select('*').order('created_at', { ascending: false }),
+      supabase.from('premium_listings').select('*'),
+      supabase.from('commission_rules').select('*').order('created_at', { ascending: false }),
+      supabase.from('property_transactions').select('*').order('created_at', { ascending: false }),
+      supabase.from('property_documents').select('*').order('uploaded_at', { ascending: false }),
+    ]);
+    if (requestId !== businessDataRequestRef.current) return;
+
+    const queryError = [
+      agentProfilesResult.error,
+      searchAlertsResult.error,
+      premiumListingsResult.error,
+      commissionRulesResult.error,
+      transactionsResult.error,
+      documentsResult.error,
+    ].find(Boolean);
+    if (queryError) throw queryError;
+
+    setAgentProfiles((agentProfilesResult.data ?? []).map((row: AgentProfileRow) => mapAgentProfileRow(row)));
+    setSearchAlerts((searchAlertsResult.data ?? []).map((row: SearchAlertRow) => mapSearchAlertRow(row)));
+    setPremiumListings((premiumListingsResult.data ?? []).map((row: PremiumListingRow) => mapPremiumListingRow(row)));
+    setCommissionRules((commissionRulesResult.data ?? []).map((row: CommissionRuleRow) => mapCommissionRuleRow(row)));
+    setTransactions((transactionsResult.data ?? []).map((row: TransactionRow) => mapTransactionRow(row)));
+    setDocuments((documentsResult.data ?? []).map((row: PropertyDocumentRow) => mapPropertyDocumentRow(row)));
   }, [currentUser]);
 
     const fetchData = useCallback(async () => {
@@ -1003,6 +948,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           reloadProperties(),
           loadReviewsFromSupabase(),
           loadReportsFromSupabase(),
+          loadBusinessFeaturesFromSupabase(),
         ];
 
         if (currentUser) {
@@ -1091,6 +1037,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       reloadProperties,
       loadReviewsFromSupabase,
       loadReportsFromSupabase,
+      loadBusinessFeaturesFromSupabase,
       currentUser,
       loadFavoritesFromSupabase,
       loadMessagesFromSupabase,
@@ -1278,7 +1225,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const submittedAt = new Date().toISOString();
     const listingStatus =
       propertyData.listingStatus ??
-      (isDirectPublishingEnabled() && currentUser?.accountStatus === 'active' ? 'approved' : 'pending');
+      (isDirectPublishingEnabled(currentUser) ? 'approved' : 'pending');
     const contactName = propertyData.client?.name?.trim() || currentUser?.name?.trim() || null;
     const contactPhone = propertyData.client?.phone?.trim() || currentUser?.phone?.trim() || null;
     const contactEmail = propertyData.client?.email?.trim() || currentUser?.email?.trim() || null;
@@ -1340,7 +1287,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const uploadPropertyImages = useCallback(
     async (propertyId: string, uris: string[], ownerId?: string): Promise<string[]> => {
-      const maxImageBytes = 10 * 1024 * 1024;
+      const maxImageBytes = 1 * 1024 * 1024;
       const resolvedOwnerId = ownerId ?? (await resolveAuthUserId());
       if (!resolvedOwnerId) {
         throw new Error('User not logged in');
@@ -1395,23 +1342,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const dimensions = await new Promise<{ width: number; height: number } | null>(resolve => {
             Image.getSize(uri, (width, height) => resolve({ width, height }), () => resolve(null));
           });
-          const resizeAction =
-            dimensions && Math.max(dimensions.width, dimensions.height) > 2048
+          const compressionAttempts = [
+            { maxDimension: 1600, compress: 0.72 },
+            { maxDimension: 1400, compress: 0.6 },
+            { maxDimension: 1200, compress: 0.5 },
+            { maxDimension: 1024, compress: 0.42 },
+          ];
+          let uploadUri: string | null = null;
+          for (const attempt of compressionAttempts) {
+            const resizeAction = dimensions && Math.max(dimensions.width, dimensions.height) > attempt.maxDimension
               ? [{
                   resize: dimensions.width >= dimensions.height
-                    ? { width: 2048 }
-                    : { height: 2048 },
+                    ? { width: attempt.maxDimension }
+                    : { height: attempt.maxDimension },
                 }]
               : [];
-          const optimized = await ImageManipulator.manipulateAsync(uri, resizeAction, {
-            compress: 0.75,
-            format: ImageManipulator.SaveFormat.JPEG,
-          });
-          const uploadUri = optimized.uri;
-          const optimizedInfo = await FileSystem.getInfoAsync(uploadUri);
-          if ('size' in optimizedInfo && typeof optimizedInfo.size === 'number' && optimizedInfo.size > maxImageBytes) {
-            await FileSystem.deleteAsync(uploadUri, { idempotent: true });
-            throw new Error('Chaque image doit faire 10 Mo maximum après compression.');
+            const optimized = await ImageManipulator.manipulateAsync(uri, resizeAction, {
+              compress: attempt.compress,
+              format: ImageManipulator.SaveFormat.JPEG,
+            });
+            const optimizedInfo = await FileSystem.getInfoAsync(optimized.uri);
+            if ('size' in optimizedInfo && typeof optimizedInfo.size === 'number' && optimizedInfo.size <= maxImageBytes) {
+              uploadUri = optimized.uri;
+              break;
+            }
+            await FileSystem.deleteAsync(optimized.uri, { idempotent: true });
+          }
+          if (!uploadUri) {
+            throw new Error("Impossible de réduire cette image sous 1 Mo. Choisissez une photo plus légère.");
           }
 
           const contentType = 'image/jpeg';
@@ -1681,6 +1639,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [omitUnsupportedPropertyColumns]);
 
+  const completeProperty = useCallback(async (id: string, completionType: PropertyCompletionType) => {
+    const { data, error } = await supabase.rpc('complete_property_transaction', {
+      p_property_id: id,
+      p_outcome: completionType,
+    });
+    if (error) throw error;
+    const lifecycle = Array.isArray(data) ? data[0] : data;
+    const completedAt = lifecycle?.updated_at ?? new Date().toISOString();
+    setProperties(prev =>
+      prev.map(property =>
+        property.id === id
+          ? {
+              ...property,
+              status: 'occupied',
+              soldAt: lifecycle?.sold_at ?? (completionType === 'sold' ? completedAt : null),
+              rentedAt: lifecycle?.rented_at ?? (completionType === 'rented' ? completedAt : null),
+              completionType,
+              updatedAt: completedAt,
+            }
+          : property
+      )
+    );
+  }, []);
+
   const updatePropertyStatus = useCallback(async (id: string, status: PropertyStatus) => {
     const { data, error } = await supabase.rpc('set_property_occupancy', {
       p_property_id: id,
@@ -1694,8 +1676,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           ? {
               ...p,
               status,
-              soldAt: lifecycle?.sold_at ?? (status === 'occupied' ? new Date().toISOString() : null),
-              rentedAt: lifecycle?.rented_at ?? null,
+              soldAt: lifecycle?.sold_at ?? (status === 'occupied' ? p.soldAt : null),
+              rentedAt: lifecycle?.rented_at ?? (status === 'occupied' ? p.rentedAt : null),
+              completionType: status === 'available' ? null : p.completionType,
               updatedAt: new Date().toISOString(),
             }
           : p
@@ -1704,16 +1687,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const markPropertySold = useCallback(async (id: string) => {
-    await updatePropertyStatus(id, 'occupied');
-  }, [updatePropertyStatus]);
+    await completeProperty(id, 'sold');
+  }, [completeProperty]);
 
   const clearSoldStatus = useCallback(async (id: string) => {
     await updatePropertyStatus(id, 'available');
   }, [updatePropertyStatus]);
 
   const deleteProperty = useCallback(async (id: string) => {
+    const { data: imageRows, error: imageQueryError } = await supabase
+      .from('property_images')
+      .select('url')
+      .eq('property_id', id);
+    if (imageQueryError) throw imageQueryError;
+
     const { error } = await supabase.from('properties').delete().eq('id', id);
     if (error) throw error;
+
+    const imagePaths = getPropertyImageStoragePaths(
+      (imageRows ?? []).map(image => image.url),
+      supabaseUrl
+    );
+    for (const batch of chunkStoragePaths(imagePaths)) {
+      const { error: storageError } = await supabase.storage.from('property-images').remove(batch);
+      if (storageError) {
+        throw new Error(`Bien supprimé, mais le nettoyage de ses images a échoué : ${storageError.message}`);
+      }
+    }
+
     setProperties(prev => {
       const next = prev.filter(p => p.id !== id);
       setNeighborhoods(current => {
@@ -2158,8 +2159,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addReport = useCallback(async (data: { propertyId: string; reason: ReportReason; message: string }): Promise<Report> => {
     const reporterId = await resolveAuthUserId();
     const { data: row, error } = await supabase
-      .from('reports')
-      .insert({ property_id: data.propertyId, reporter_id: reporterId, reason: data.reason, message: data.message })
+      .from('property_reports')
+      .insert({ property_id: data.propertyId, user_id: reporterId, reason: data.reason, message: data.message })
       .select()
       .single();
     if (error) throw error;
@@ -2169,7 +2170,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [resolveAuthUserId]);
 
   const resolveReport = useCallback(async (id: string): Promise<void> => {
-    const { error } = await supabase.from('reports').update({ status: 'RESOLVED' }).eq('id', id);
+    const { error } = await supabase.from('property_reports').update({ status: 'RESOLVED' }).eq('id', id);
     if (error) throw error;
     setReports(prev => prev.map(report => (report.id === id ? { ...report, status: 'RESOLVED' } : report)));
   }, []);
@@ -2245,10 +2246,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
     const getMyProperties = (): Property[] => {
-      const base = currentUser?.id
+      return currentUser?.id
         ? properties.filter(p => p.ownerId === currentUser.id)
         : properties.filter(p => myPropertyIds.includes(p.id));
-      return base.filter(p => !isExpiredProperty(p));
     };
 
   // Enhanced features implementations
@@ -2257,12 +2257,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const sendMessage = useCallback(async (receiverId: string, content: string, propertyId?: string): Promise<{ message: Message; chatId: string }> => {
     if (!currentUser) throw new Error('User not logged in');
 
+    const participants = [currentUser.id, receiverId].sort();
+    const chatId = getChatKey(participants, propertyId);
     const existingChat = chats.find(chat =>
-      chat.participants.includes(currentUser.id) && chat.participants.includes(receiverId)
+      getChatKey(chat.participants, chat.propertyId) === chatId
     );
-    const chatId = existingChat?.id ?? Date.now().toString();
     const optimisticMessage: Message = {
-      id: `pending-${Date.now()}`,
+      id: `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       senderId: currentUser.id,
       receiverId,
       propertyId,
@@ -2274,12 +2275,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setMessages(prev => [...prev, optimisticMessage]);
     setChats(prev => {
       const currentChat = prev.find(chat =>
-        chat.participants.includes(currentUser.id) && chat.participants.includes(receiverId)
+        getChatKey(chat.participants, chat.propertyId) === chatId
       );
       if (currentChat) {
-        return prev.map(chat => chat.id === currentChat.id
+        return prev.map(chat => getChatKey(chat.participants, chat.propertyId) === chatId
           ? {
               ...chat,
+              id: chatId,
               lastMessage: optimisticMessage,
               updatedAt: optimisticMessage.timestamp,
               unreadCount: {
@@ -2292,7 +2294,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       const newChat: Chat = {
         id: chatId,
-        participants: [currentUser.id, receiverId],
+        participants,
         propertyId,
         lastMessage: optimisticMessage,
         updatedAt: optimisticMessage.timestamp,
@@ -2317,25 +2319,55 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const message = mapMessageRow(data);
       setMessages(prev => prev.map(item => item.id === optimisticMessage.id ? message : item));
-      setChats(prev => prev.map(chat => chat.id === chatId
-        ? { ...chat, lastMessage: message, updatedAt: message.timestamp }
-        : chat
-      ));
+      setChats(prev => prev.map(chat => {
+        if (getChatKey(chat.participants, chat.propertyId) !== chatId) return chat;
+        const isLatest = !chat.lastMessage ||
+          new Date(message.timestamp).getTime() >= new Date(chat.lastMessage.timestamp).getTime();
+        return {
+          ...chat,
+          id: chatId,
+          ...(isLatest ? { lastMessage: message, updatedAt: message.timestamp } : {}),
+        };
+      }));
       return { message, chatId };
     } catch (error) {
       setMessages(prev => prev.filter(item => item.id !== optimisticMessage.id));
-      setChats(prev => existingChat
-        ? prev.map(chat => chat.id === existingChat.id
+      setChats(prev => {
+        const currentChat = prev.find(chat =>
+          getChatKey(chat.participants, chat.propertyId) === chatId
+        );
+        if (!currentChat) return prev;
+
+        const unreadCount = {
+          ...currentChat.unreadCount,
+          [receiverId]: Math.max(0, (currentChat.unreadCount[receiverId] ?? 0) - 1),
+        };
+        if (currentChat.lastMessage?.id !== optimisticMessage.id) {
+          return prev.map(chat =>
+            getChatKey(chat.participants, chat.propertyId) === chatId
+              ? { ...chat, unreadCount }
+              : chat
+          );
+        }
+
+        if (!existingChat) {
+          return prev.filter(chat =>
+            getChatKey(chat.participants, chat.propertyId) !== chatId
+          );
+        }
+
+        return prev.map(chat =>
+          getChatKey(chat.participants, chat.propertyId) === chatId
             ? {
                 ...chat,
+                id: chatId,
                 lastMessage: existingChat.lastMessage,
                 updatedAt: existingChat.updatedAt,
-                unreadCount: existingChat.unreadCount,
+                unreadCount,
               }
             : chat
-          )
-        : prev.filter(chat => chat.id !== chatId)
-      );
+        );
+      });
       throw error;
     }
   }, [chats, currentUser]);
@@ -2345,8 +2377,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!chat) return [];
 
     return messages.filter(m =>
-      (m.senderId === chat.participants[0] && m.receiverId === chat.participants[1]) ||
-      (m.senderId === chat.participants[1] && m.receiverId === chat.participants[0])
+      (
+        (m.senderId === chat.participants[0] && m.receiverId === chat.participants[1]) ||
+        (m.senderId === chat.participants[1] && m.receiverId === chat.participants[0])
+      ) &&
+      (m.propertyId ?? null) === (chat.propertyId ?? null)
     ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [chats, messages]);
 
@@ -2362,16 +2397,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       )
     );
     try {
-      const { error } = await supabase
+      let query = supabase
           .from('messages')
           .update({ read: true })
           .match({ receiver_id: userId, sender_id: otherUserId });
+      query = chat.propertyId === undefined
+          ? query.is('property_id', null)
+          : query.eq('property_id', chat.propertyId);
+      const { error } = await query;
       if (error) throw error;
+      setMessages(prev => prev.map(message =>
+        message.receiverId === userId &&
+        message.senderId === otherUserId &&
+        (message.propertyId ?? null) === (chat.propertyId ?? null)
+          ? { ...message, read: true }
+          : message
+      ));
     } catch (error) {
       setChats(prev =>
           prev.map(item =>
             item.id === chatId
-              ? { ...item, unreadCount: { ...item.unreadCount, [userId]: chat.unreadCount[userId] } }
+              ? {
+                  ...item,
+                  unreadCount: {
+                    ...item.unreadCount,
+                    [userId]: (item.unreadCount[userId] ?? 0) + (chat.unreadCount[userId] ?? 0),
+                  },
+                }
               : item
           )
       );
@@ -2414,117 +2466,200 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [getPropertyReviews]);
 
   // Agent profile functions
-  const createAgentProfile = useCallback((data: Omit<AgentProfile, 'rating' | 'reviewCount' | 'totalSales' | 'totalCommission'>) => {
-    const profile: AgentProfile = {
-      ...data,
-      rating: 0,
-      reviewCount: 0,
-      totalSales: 0,
-      totalCommission: 0,
-    };
-    setAgentProfiles(prev => [...prev, profile]);
-  }, []);
+  const createAgentProfile = useCallback(async (
+    data: Omit<AgentProfile, 'rating' | 'reviewCount' | 'totalSales' | 'totalCommission'>
+  ) => {
+    if (!currentUser) throw new Error('User not logged in');
+    if (data.userId !== currentUser.id) throw new Error('Cannot create another user’s agent profile');
+    const { data: row, error } = await supabase
+      .from('agent_profiles')
+      .insert({
+        user_id: currentUser.id,
+        bio: data.bio,
+        specialties: data.specialties,
+        experience: data.experience,
+        license_number: data.licenseNumber ?? null,
+        company: data.company ?? null,
+        portfolio: data.portfolio,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    const profile = mapAgentProfileRow(row as AgentProfileRow);
+    setAgentProfiles(prev => [...prev.filter(item => item.userId !== profile.userId), profile]);
+  }, [currentUser]);
 
-  const updateAgentProfile = useCallback((userId: string, updates: Partial<AgentProfile>) => {
-    setAgentProfiles(prev =>
-      prev.map(profile =>
-        profile.userId === userId ? { ...profile, ...updates } : profile
-      )
-    );
-  }, []);
+  const updateAgentProfile = useCallback(async (userId: string, updates: Partial<AgentProfile>) => {
+    if (!currentUser) throw new Error('User not logged in');
+    if (userId !== currentUser.id) throw new Error('Cannot update another user’s agent profile');
+    const payload = {
+      ...(updates.bio !== undefined ? { bio: updates.bio } : {}),
+      ...(updates.specialties !== undefined ? { specialties: updates.specialties } : {}),
+      ...(updates.experience !== undefined ? { experience: updates.experience } : {}),
+      ...(updates.licenseNumber !== undefined ? { license_number: updates.licenseNumber } : {}),
+      ...(updates.company !== undefined ? { company: updates.company } : {}),
+      ...(updates.portfolio !== undefined ? { portfolio: updates.portfolio } : {}),
+    };
+    if (Object.keys(payload).length === 0) return;
+    const { data: row, error } = await supabase
+      .from('agent_profiles')
+      .update(payload)
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+    if (error) throw error;
+    const profile = mapAgentProfileRow(row as AgentProfileRow);
+    setAgentProfiles(prev => prev.map(item => item.userId === userId ? profile : item));
+  }, [currentUser]);
 
   const getAgentProfile = useCallback((userId: string): AgentProfile | null => {
     return agentProfiles.find(profile => profile.userId === userId) || null;
   }, [agentProfiles]);
 
   // Search alerts
-  const createSearchAlert = useCallback((data: Omit<SearchAlert, 'id' | 'createdAt'>): SearchAlert => {
-    const alert: SearchAlert = {
-      ...data,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-    };
-    setSearchAlerts(prev => [...prev, alert]);
-    return alert;
-  }, []);
-
-  const updateSearchAlert = useCallback((id: string, updates: Partial<SearchAlert>) => {
-    setSearchAlerts(prev =>
-      prev.map(alert =>
-        alert.id === id ? { ...alert, ...updates } : alert
-      )
-    );
-  }, []);
-
-  const deleteSearchAlert = useCallback((id: string) => {
-    setSearchAlerts(prev => prev.filter(alert => alert.id !== id));
-  }, []);
-
-  const checkSearchAlerts = useCallback((newProperty: Property) => {
-    // This would trigger notifications for matching alerts
-    // For now, just update lastTriggered
-    setSearchAlerts(prev =>
-      prev.map(alert => {
-        const matches =
-          (alert.type === 'ALL' || alert.type === newProperty.type) &&
-          (!alert.filters.minPrice || newProperty.price >= alert.filters.minPrice) &&
-          (!alert.filters.maxPrice || newProperty.price <= alert.filters.maxPrice) &&
-          (!alert.filters.minArea || (newProperty.area ?? 0) >= alert.filters.minArea);
-
-        if (matches && alert.active) {
-          return { ...alert, lastTriggered: new Date().toISOString() };
-        }
-        return alert;
+  const createSearchAlert = useCallback(async (
+    data: Omit<SearchAlert, 'id' | 'createdAt'>
+  ): Promise<SearchAlert> => {
+    if (!currentUser) throw new Error('User not logged in');
+    const { data: row, error } = await supabase
+      .from('search_alerts')
+      .insert({
+        user_id: currentUser.id,
+        label: data.label,
+        filters: data.filters,
+        property_type: data.type,
+        active: data.active,
+        last_triggered: data.lastTriggered ?? null,
       })
+      .select('*')
+      .single();
+    if (error) throw error;
+    const alert = mapSearchAlertRow(row as SearchAlertRow);
+    setSearchAlerts(prev => [alert, ...prev]);
+    return alert;
+  }, [currentUser]);
+
+  const updateSearchAlert = useCallback(async (id: string, updates: Partial<SearchAlert>) => {
+    if (!currentUser) throw new Error('User not logged in');
+    const payload = {
+      ...(updates.label !== undefined ? { label: updates.label } : {}),
+      ...(updates.filters !== undefined ? { filters: updates.filters } : {}),
+      ...(updates.type !== undefined ? { property_type: updates.type } : {}),
+      ...(updates.active !== undefined ? { active: updates.active } : {}),
+      ...(updates.lastTriggered !== undefined ? { last_triggered: updates.lastTriggered } : {}),
+    };
+    if (Object.keys(payload).length === 0) return;
+    const { data: row, error } = await supabase
+      .from('search_alerts')
+      .update(payload)
+      .eq('id', id)
+      .eq('user_id', currentUser.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    const alert = mapSearchAlertRow(row as SearchAlertRow);
+    setSearchAlerts(prev => prev.map(item => item.id === id ? alert : item));
+  }, [currentUser]);
+
+  const deleteSearchAlert = useCallback(async (id: string) => {
+    if (!currentUser) throw new Error('User not logged in');
+    const { error } = await supabase
+      .from('search_alerts')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', currentUser.id);
+    if (error) throw error;
+    setSearchAlerts(prev => prev.filter(alert => alert.id !== id));
+  }, [currentUser]);
+
+  const checkSearchAlerts = useCallback(async (newProperty: Property) => {
+    const matchingAlerts = searchAlerts.filter(alert =>
+      alert.active &&
+      (alert.type === 'ALL' || alert.type === newProperty.type) &&
+      (alert.filters.minPrice === null || newProperty.price >= alert.filters.minPrice) &&
+      (alert.filters.maxPrice === null || newProperty.price <= alert.filters.maxPrice) &&
+      (alert.filters.minArea === null || (newProperty.area ?? 0) >= alert.filters.minArea)
     );
-  }, []);
+    if (matchingAlerts.length === 0) return;
+    const lastTriggered = new Date().toISOString();
+    const results = await Promise.all(matchingAlerts.map(async alert => {
+      const { error } = await supabase
+        .from('search_alerts')
+        .update({ last_triggered: lastTriggered })
+        .eq('id', alert.id)
+        .select('id')
+        .single();
+      return { id: alert.id, error };
+    }));
+    const successfulIds = new Set(results.filter(result => !result.error).map(result => result.id));
+    setSearchAlerts(prev => prev.map(alert =>
+      successfulIds.has(alert.id) ? { ...alert, lastTriggered } : alert
+    ));
+    const failed = results.find(result => result.error);
+    if (failed?.error) throw failed.error;
+  }, [searchAlerts]);
 
   // Premium listings
-  const createPremiumListing = useCallback((propertyId: string, plan: 'BASIC' | 'FEATURED' | 'PREMIUM'): PremiumListing => {
-    const plans = {
-      BASIC: { price: 5000, features: ['highlighted'] },
-      FEATURED: { price: 15000, features: ['highlighted', 'top_search'] },
-      PREMIUM: { price: 25000, features: ['highlighted', 'top_search', 'analytics'] },
-    };
-
-    const planData = plans[plan];
-    const listing: PremiumListing = {
-      propertyId,
-      plan,
-      startDate: new Date().toISOString(),
-      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
-      price: planData.price,
-      features: planData.features,
-    };
-
-    setPremiumListings(prev => [...prev, listing]);
-    return listing;
+  const createPremiumListing = useCallback(async (
+    _propertyId: string,
+    _plan: 'BASIC' | 'FEATURED' | 'PREMIUM'
+  ): Promise<PremiumListing> => {
+    throw new Error('Premium listings require a verified server-side payment');
   }, []);
 
   const getPremiumFeatures = useCallback((propertyId: string): string[] => {
     const listing = premiumListings.find(p => p.propertyId === propertyId);
-    return listing?.features || [];
+    return listing && new Date(listing.endDate).getTime() > Date.now()
+      ? listing.features
+      : [];
   }, [premiumListings]);
 
   const isPremium = useCallback((propertyId: string): boolean => {
-    return premiumListings.some(p => p.propertyId === propertyId);
+    return premiumListings.some(p =>
+      p.propertyId === propertyId && new Date(p.endDate).getTime() > Date.now()
+    );
   }, [premiumListings]);
 
   // Commission system
-  const createCommissionRule = useCallback((data: Omit<CommissionRule, 'id'>): CommissionRule => {
-    const rule: CommissionRule = {
-      ...data,
-      id: Date.now().toString(),
-    };
-    setCommissionRules(prev => [...prev, rule]);
+  const createCommissionRule = useCallback(async (
+    data: Omit<CommissionRule, 'id'>
+  ): Promise<CommissionRule> => {
+    if (!currentUser) throw new Error('User not logged in');
+    if (data.agentId !== currentUser.id && currentUser.role !== 'ADMIN') {
+      throw new Error('Cannot create a commission rule for another agent');
+    }
+    const { data: row, error } = await supabase
+      .from('commission_rules')
+      .insert({
+        agent_id: data.agentId,
+        property_type: data.propertyType,
+        percentage: data.percentage,
+        min_amount: data.minAmount,
+        max_amount: data.maxAmount,
+        active: data.active,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    const rule = mapCommissionRuleRow(row as CommissionRuleRow);
+    setCommissionRules(prev => [rule, ...prev]);
     return rule;
-  }, []);
+  }, [currentUser]);
 
-  const toggleCommissionRule = useCallback((id: string) => {
-    setCommissionRules(previous => previous.map(rule =>
-      rule.id === id ? { ...rule, active: !rule.active } : rule
-    ));
-  }, []);
+  const toggleCommissionRule = useCallback(async (id: string) => {
+    if (!currentUser) throw new Error('User not logged in');
+    const rule = commissionRules.find(item => item.id === id);
+    if (!rule) throw new Error('Commission rule not found');
+    const { data: row, error } = await supabase
+      .from('commission_rules')
+      .update({ active: !rule.active })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    const updatedRule = mapCommissionRuleRow(row as CommissionRuleRow);
+    setCommissionRules(prev => prev.map(item => item.id === id ? updatedRule : item));
+  }, [commissionRules, currentUser]);
 
   const calculateCommission = useCallback((propertyId: string, salePrice: number): number => {
     const property = properties.find(p => p.id === propertyId);
@@ -2542,41 +2677,68 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [properties, commissionRules]);
 
   // Transactions
-  const createTransaction = useCallback((data: Omit<Transaction, 'id' | 'createdAt'>): Transaction => {
-    const transaction: Transaction = {
-      ...data,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-    };
-    setTransactions(prev => [...prev, transaction]);
+  const createTransaction = useCallback(async (
+    data: Omit<Transaction, 'id' | 'createdAt'>
+  ): Promise<Transaction> => {
+    if (!currentUser) throw new Error('User not logged in');
+    const { data: row, error } = await supabase
+      .from('property_transactions')
+      .insert({
+        property_id: data.propertyId,
+        buyer_id: currentUser.id,
+        seller_id: data.sellerId,
+        agent_id: data.agentId ?? null,
+        amount: data.amount,
+        commission: data.commission ?? null,
+        status: 'PENDING',
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    const transaction = mapTransactionRow(row as TransactionRow);
+    setTransactions(prev => [transaction, ...prev]);
     return transaction;
-  }, []);
+  }, [currentUser]);
 
-  const updateTransactionStatus = useCallback((id: string, status: Transaction['status']) => {
-    setTransactions(prev =>
-      prev.map(t =>
-        t.id === id
-          ? {
-              ...t,
-              status,
-              completedAt: status === 'COMPLETED' ? new Date().toISOString() : t.completedAt
-            }
-          : t
-      )
-    );
-  }, []);
+  const updateTransactionStatus = useCallback(async (
+    id: string,
+    status: Transaction['status']
+  ) => {
+    if (!currentUser) throw new Error('User not logged in');
+    if (currentUser.role !== 'ADMIN') throw new Error('Only administrators can update transaction status');
+    const { data: row, error } = await supabase
+      .from('property_transactions')
+      .update({
+        status,
+        completed_at: status === 'COMPLETED' ? new Date().toISOString() : null,
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    const transaction = mapTransactionRow(row as TransactionRow);
+    setTransactions(prev => prev.map(item => item.id === id ? transaction : item));
+  }, [currentUser]);
 
   // Documents
-  const addDocument = useCallback((data: Omit<Document, 'id' | 'uploadedAt'>): Document => {
+  const addDocument = useCallback(async (
+    data: Omit<Document, 'id' | 'uploadedAt'>
+  ): Promise<Document> => {
     if (!currentUser) throw new Error('User not logged in');
-
-    const document: Document = {
-      ...data,
-      id: Date.now().toString(),
-      uploadedAt: new Date().toISOString(),
-      uploadedBy: currentUser.id,
-    };
-    setDocuments(prev => [...prev, document]);
+    const { data: row, error } = await supabase
+      .from('property_documents')
+      .insert({
+        property_id: data.propertyId,
+        name: data.name,
+        type: data.type,
+        url: data.url,
+        uploaded_by: currentUser.id,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    const document = mapPropertyDocumentRow(row as PropertyDocumentRow);
+    setDocuments(prev => [document, ...prev]);
     return document;
   }, [currentUser]);
 
@@ -2625,6 +2787,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addProperty,
         updateProperty,
         updatePropertyStatus,
+        completeProperty,
         markPropertySold,
         clearSoldStatus,
         deleteProperty,

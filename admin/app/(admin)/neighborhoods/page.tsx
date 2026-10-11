@@ -123,6 +123,7 @@ export default function NeighborhoodsPage() {
       </div>
 
       <DataTable
+        loading={loading}
         rows={neighborhoods}
         emptyLabel={loading ? 'Chargement...' : 'Aucun quartier enregistre'}
         columns={[

@@ -1,6 +1,7 @@
 'use client';
 
 import DataTable from '../../../components/DataTable';
+import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { formatCurrency, formatDate } from '../../../lib/format';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
@@ -25,8 +26,9 @@ export default function TransactionsPage() {
         title="Transactions"
         subtitle="Historique financier des publications. Prêt pour un paiement externe (Mobile Money) sans portefeuille interne."
       />
-      {loading ? <div className="card">Chargement...</div> : (
+      {loading ? <LoadingState /> : (
         <DataTable
+          loading={loading}
           rows={data}
           emptyLabel="Aucune transaction publication. Les loyers restent dans Paiements."
           columns={[
