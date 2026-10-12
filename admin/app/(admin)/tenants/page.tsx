@@ -8,6 +8,7 @@ import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { formatDate } from '../../../lib/format';
 import type { Tenant, TenantDocumentType } from '../../../lib/types';
 import { logAdminAction } from '../../../lib/adminAudit';
+import { deleteAdminRecord, updateAdminRecord } from '../../../lib/adminMutations';
 import {
   TENANT_DOCUMENT_MAX_BYTES,
   TENANT_DOCUMENT_MIME_TYPES,
@@ -59,17 +60,15 @@ export default function TenantsPage() {
     }
     setSaving(true);
     if (editingId) {
-      const { error } = await supabase
-        .from('tenants')
-        .update({
+      try {
+        await updateAdminRecord('tenants', editingId, {
           full_name: form.full_name,
           phone: form.phone,
           email: form.email || null,
           notes: form.notes || null,
-        })
-        .eq('id', editingId);
-      if (error) {
-        alert(`Erreur locataire: ${error.message}`);
+        });
+      } catch (error) {
+        alert(`Erreur locataire: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
         setSaving(false);
         return;
       }
@@ -108,14 +107,16 @@ export default function TenantsPage() {
           );
           if (documentError) throw new Error(documentError.message);
         } catch (uploadFailure) {
-          const { error: tenantDeleteError } = await supabase
-            .from('tenants')
-            .delete()
-            .eq('id', data.id);
+          let tenantDeleteError: string | null = null;
+          try {
+            await deleteAdminRecord('tenants', data.id);
+          } catch (error) {
+            tenantDeleteError = error instanceof Error ? error.message : 'Erreur inconnue';
+          }
           const { error: storageCleanupError } = uploadedPaths.length
             ? await supabase.storage.from('tenant-documents').remove(uploadedPaths)
             : { error: null };
-          const cleanupErrors = [tenantDeleteError?.message, storageCleanupError?.message]
+          const cleanupErrors = [tenantDeleteError, storageCleanupError?.message]
             .filter(Boolean)
             .join(' ; ');
           setFormErrors(previous => ({
@@ -155,13 +156,13 @@ export default function TenantsPage() {
 
   const handleDelete = async (tenantId: string) => {
     if (!window.confirm('Supprimer ce locataire ? Cette action est irréversible.')) return;
-    const { error } = await supabase.from('tenants').delete().eq('id', tenantId);
-    if (error) {
-      alert(`Erreur suppression: ${error.message}`);
-      return;
+    try {
+      await deleteAdminRecord('tenants', tenantId);
+      await logAdminAction('delete_tenant', 'tenant', tenantId);
+      reload();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur suppression: erreur inconnue');
     }
-    await logAdminAction('delete_tenant', 'tenant', tenantId);
-    reload();
   };
 
   return (

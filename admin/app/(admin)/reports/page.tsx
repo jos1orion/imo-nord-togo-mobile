@@ -6,7 +6,7 @@ import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { formatDate } from '../../../lib/format';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
-import { supabase } from '../../../lib/supabaseClient';
+import { updateAdminRecord } from '../../../lib/adminMutations';
 import { logActivity } from '../../../lib/logActivity';
 
 type ReportRow = {
@@ -23,9 +23,10 @@ export default function ReportsPage() {
   const { data, loading, reload } = useSupabaseTable<ReportRow>('property_reports', { orderBy: 'created_at' });
 
   const resolve = async (id: string) => {
-    const { error } = await supabase.from('property_reports').update({ status: 'RESOLVED' }).eq('id', id);
-    if (error) {
-      alert(error.message);
+    try {
+      await updateAdminRecord('property_reports', id, { status: 'RESOLVED' });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur inconnue');
       return;
     }
     try {

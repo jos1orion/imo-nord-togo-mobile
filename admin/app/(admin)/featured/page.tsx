@@ -6,7 +6,7 @@ import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { formatCurrency, formatDate } from '../../../lib/format';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
-import { supabase } from '../../../lib/supabaseClient';
+import { updateAdminRecord } from '../../../lib/adminMutations';
 import { logActivity } from '../../../lib/logActivity';
 import type { Property } from '../../../lib/types';
 
@@ -16,9 +16,10 @@ export default function FeaturedPage() {
   const featured = data.filter(row => row.featured);
 
   const unfeature = async (id: string) => {
-    const { error } = await supabase.from('properties').update({ featured: false }).eq('id', id);
-    if (error) {
-      alert(error.message);
+    try {
+      await updateAdminRecord('properties', id, { featured: false });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur inconnue');
       return;
     }
     try {

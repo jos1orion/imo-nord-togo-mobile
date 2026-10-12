@@ -9,6 +9,7 @@ import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { formatDate } from '../../../lib/format';
 import type { Notification } from '../../../lib/types';
 import { logAdminAction } from '../../../lib/adminAudit';
+import { updateAdminRecord } from '../../../lib/adminMutations';
 
 const emptyForm = {
   title: '',
@@ -44,9 +45,10 @@ export default function NotificationsPage() {
   };
 
   const handleToggle = async (notification: Notification) => {
-    const { error } = await supabase.from('notifications').update({ read: !notification.read }).eq('id', notification.id);
-    if (error) {
-      alert(`Erreur notification: ${error.message}`);
+    try {
+      await updateAdminRecord('notifications', notification.id, { read: !notification.read });
+    } catch (error) {
+      alert(`Erreur notification: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
       return;
     }
     await logAdminAction('toggle_notification', 'notification', notification.id);

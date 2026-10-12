@@ -9,6 +9,7 @@ import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { formatCurrency, formatDate } from '../../../lib/format';
 import type { Contract, Payment, PaymentMethod, PaymentStatus, Tenant } from '../../../lib/types';
 import { logAdminAction } from '../../../lib/adminAudit';
+import { deleteAdminRecord, updateAdminRecord } from '../../../lib/adminMutations';
 
 const emptyForm = {
   contract_id: '',
@@ -63,18 +64,16 @@ export default function PaymentsPage() {
     if (!form.contract_id || !form.amount || !form.paid_at) return;
     setSaving(true);
     if (editingId) {
-      const { error } = await supabase
-        .from('payments')
-        .update({
+      try {
+        await updateAdminRecord('payments', editingId, {
           contract_id: form.contract_id,
           amount: Number(form.amount),
           paid_at: form.paid_at,
           method: form.method,
           status: form.status,
-        })
-        .eq('id', editingId);
-      if (error) {
-        alert(`Erreur paiement: ${error.message}`);
+        });
+      } catch (error) {
+        alert(`Erreur paiement: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
         setSaving(false);
         return;
       }
@@ -113,13 +112,13 @@ export default function PaymentsPage() {
 
   const handleDelete = async (paymentId: string) => {
     if (!window.confirm('Supprimer ce paiement ? Cette action est irréversible.')) return;
-    const { error } = await supabase.from('payments').delete().eq('id', paymentId);
-    if (error) {
-      alert(`Erreur suppression: ${error.message}`);
-      return;
+    try {
+      await deleteAdminRecord('payments', paymentId);
+      await logAdminAction('delete_payment', 'payment', paymentId);
+      reload();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur suppression: erreur inconnue');
     }
-    await logAdminAction('delete_payment', 'payment', paymentId);
-    reload();
   };
 
   const getTenantName = (contractId: string) => {

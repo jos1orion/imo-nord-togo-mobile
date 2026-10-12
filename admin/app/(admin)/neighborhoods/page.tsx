@@ -7,6 +7,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import type { Neighborhood } from '../../../lib/types';
 import { logAdminAction } from '../../../lib/adminAudit';
+import { deleteAdminRecord, updateAdminRecord } from '../../../lib/adminMutations';
 
 const emptyForm = { name: '' };
 type PropertyNeighborhoodRow = { id: string; neighborhood: string | null };
@@ -45,9 +46,10 @@ export default function NeighborhoodsPage() {
     }
     setSaving(true);
     if (editingId) {
-      const { error } = await supabase.from('neighborhoods').update({ name: cleaned }).eq('id', editingId);
-      if (error) {
-        alert(`Erreur quartier: ${error.message}`);
+      try {
+        await updateAdminRecord('neighborhoods', editingId, { name: cleaned });
+      } catch (error) {
+        alert(`Erreur quartier: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
         setSaving(false);
         return;
       }
@@ -79,14 +81,13 @@ export default function NeighborhoodsPage() {
       return;
     }
     if (!window.confirm(`Supprimer le quartier « ${row.name} » ? Cette action est irréversible.`)) return;
-    const { error } = await supabase.from('neighborhoods').delete().eq('id', row.id);
-    if (error) {
-      alert(`Erreur suppression: ${error.message}`);
-      return;
+    try {
+      await deleteAdminRecord('neighborhoods', row.id);
+      await logAdminAction('delete_neighborhood', 'neighborhood', row.id);
+      reload();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur suppression: erreur inconnue');
     }
-    await supabase.from('properties').update({ neighborhood: null }).eq('neighborhood', row.name);
-    await logAdminAction('delete_neighborhood', 'neighborhood', row.id);
-    reload();
   };
 
   return (

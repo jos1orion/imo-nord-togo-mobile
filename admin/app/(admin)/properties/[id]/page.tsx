@@ -6,6 +6,7 @@ import SectionHeader from '../../../../components/SectionHeader';
 import { supabase } from '../../../../lib/supabaseClient';
 import { formatCurrency, formatDate } from '../../../../lib/format';
 import { logActivity } from '../../../../lib/logActivity';
+import { updateAdminRecord } from '../../../../lib/adminMutations';
 import type { ListingEvent, ListingStatus, Property, PropertyStatus, Publication } from '../../../../lib/types';
 
 type PropertyRow = Property & { property_images?: { url: string }[] };
@@ -59,9 +60,10 @@ export default function PropertyDetailsPage() {
 
   const updateListingStatus = async (nextStatus: ListingStatus) => {
     if (!property) return;
-    const { error } = await supabase.from('properties').update({ listing_status: nextStatus }).eq('id', property.id);
-    if (error) {
-      alert(error.message);
+    try {
+      await updateAdminRecord('properties', property.id, { listing_status: nextStatus });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur inconnue');
       return;
     }
     try {
@@ -78,9 +80,10 @@ export default function PropertyDetailsPage() {
 
   const updateAvailability = async (status: PropertyStatus) => {
     if (!property) return;
-    const { error } = await supabase.from('properties').update({ status }).eq('id', property.id);
-    if (error) {
-      alert(error.message);
+    try {
+      await updateAdminRecord('properties', property.id, { status });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur inconnue');
       return;
     }
     await load();
@@ -88,9 +91,10 @@ export default function PropertyDetailsPage() {
 
   const toggleFeatured = async () => {
     if (!property) return;
-    const { error } = await supabase.from('properties').update({ featured: !property.featured }).eq('id', property.id);
-    if (error) {
-      alert(error.message);
+    try {
+      await updateAdminRecord('properties', property.id, { featured: !property.featured });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur inconnue');
       return;
     }
     try {

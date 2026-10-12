@@ -10,6 +10,12 @@ import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { useSession } from '../../../lib/useSession';
 import type { ListingStatus, Neighborhood, Property, PropertyStatus } from '../../../lib/types';
 import { logAdminAction } from '../../../lib/adminAudit';
+import {
+  bulkDeleteAdminRecords,
+  bulkUpdateAdminRecords,
+  deleteAdminRecord,
+  updateAdminRecord,
+} from '../../../lib/adminMutations';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   PROPERTY_IMAGE_MAX_BYTES,
@@ -298,9 +304,10 @@ export default function PropertiesPage() {
   const clearSelection = () => setSelectedIds(new Set());
 
   const handleListingStatus = async (propertyId: string, nextStatus: ListingStatus) => {
-    const { error } = await supabase.from('properties').update({ listing_status: nextStatus }).eq('id', propertyId);
-    if (error) {
-      alert(`Erreur mise a jour: ${error.message}`);
+    try {
+      await updateAdminRecord('properties', propertyId, { listing_status: nextStatus });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur mise à jour inconnue.');
       return;
     }
     await logAdminAction('listing_status', 'property', propertyId);
@@ -312,14 +319,16 @@ export default function PropertiesPage() {
       alert("La colonne 'featured' n'existe pas encore dans votre base Supabase.");
       return;
     }
-    const { error } = await supabase.from('properties').update({ featured }).eq('id', propertyId);
-    if (error) {
-      if (isMissingFeaturedColumnError(error.message)) {
+    try {
+      await updateAdminRecord('properties', propertyId, { featured });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erreur inconnue';
+      if (isMissingFeaturedColumnError(message)) {
         setSupportsFeaturedColumn(false);
         alert("La colonne 'featured' manque dans la base. Le bien reste utilisable, mais l'option Vedette est désactivée.");
         return;
       }
-      alert(`Erreur mise a jour: ${error.message}`);
+      alert(`Erreur mise à jour: ${message}`);
       return;
     }
     await logAdminAction('featured_toggle', 'property', propertyId);
@@ -339,20 +348,20 @@ export default function PropertiesPage() {
       alert(`Impossible de récupérer les images du bien : ${imageQueryError.message}`);
       return;
     }
-    const { error } = await supabase.from('properties').delete().eq('id', propertyId);
-    if (error) {
-      alert(`Erreur suppression: ${error.message}`);
-      return;
-    }
-    let imageCleanupError: string | null = null;
     try {
-      await deletePropertyImageFiles((imageRows ?? []).map(image => image.url));
-    } catch (cleanupError) {
-      imageCleanupError = cleanupError instanceof Error ? cleanupError.message : 'Erreur inconnue';
+      await deleteAdminRecord('properties', propertyId);
+      let imageCleanupError: string | null = null;
+      try {
+        await deletePropertyImageFiles((imageRows ?? []).map(image => image.url));
+      } catch (cleanupError) {
+        imageCleanupError = cleanupError instanceof Error ? cleanupError.message : 'Erreur inconnue';
+      }
+      await logAdminAction('delete_property', 'property', propertyId);
+      reload();
+      if (imageCleanupError) alert(imageCleanupError);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur suppression: erreur inconnue');
     }
-    await logAdminAction('delete_property', 'property', propertyId);
-    reload();
-    if (imageCleanupError) alert(imageCleanupError);
   };
 
   const handleBulkAction = async (action: 'approve' | 'reject' | 'archive' | 'delete') => {
@@ -370,22 +379,24 @@ export default function PropertiesPage() {
         alert(`Impossible de récupérer les images des biens : ${imageQueryError.message}`);
         return;
       }
-      const { error } = await supabase.from('properties').delete().in('id', ids);
-      if (error) {
-        alert(`Erreur suppression: ${error.message}`);
-        return;
-      }
       try {
-        await deletePropertyImageFiles((imageRows ?? []).map(image => image.url));
-      } catch (cleanupError) {
-        alert(cleanupError instanceof Error ? cleanupError.message : 'Le nettoyage des images a échoué.');
+        await bulkDeleteAdminRecords('properties', ids);
+        try {
+          await deletePropertyImageFiles((imageRows ?? []).map(image => image.url));
+        } catch (cleanupError) {
+          alert(cleanupError instanceof Error ? cleanupError.message : 'Le nettoyage des images a échoué.');
+        }
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'Erreur suppression: erreur inconnue');
+        return;
       }
     } else {
       const nextStatus: ListingStatus =
         action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'archived';
-      const { error } = await supabase.from('properties').update({ listing_status: nextStatus }).in('id', ids);
-      if (error) {
-        alert(`Erreur mise a jour: ${error.message}`);
+      try {
+        await bulkUpdateAdminRecords('properties', ids, { listing_status: nextStatus });
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'Erreur mise à jour inconnue.');
         return;
       }
     }
@@ -447,20 +458,17 @@ export default function PropertiesPage() {
         listing_status: listingStatusForSave,
       };
       if (editingId) {
-        let { error } = await supabase
-          .from('properties')
-          .update({
-            ...basePayload,
-            ...(supportsFeaturedColumn ? { featured: featuredForSave } : {}),
-          })
-          .eq('id', editingId);
-        if (error && supportsFeaturedColumn && isMissingFeaturedColumnError(error.message)) {
+        const updates = {
+          ...basePayload,
+          ...(supportsFeaturedColumn ? { featured: featuredForSave } : {}),
+        };
+        try {
+          await updateAdminRecord('properties', editingId, updates);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Erreur inconnue';
+          if (!supportsFeaturedColumn || !isMissingFeaturedColumnError(message)) throw error;
           setSupportsFeaturedColumn(false);
-          const retry = await supabase.from('properties').update(basePayload).eq('id', editingId);
-          error = retry.error;
-        }
-        if (error) {
-          throw new Error(`Erreur mise à jour : ${error.message}`);
+          await updateAdminRecord('properties', editingId, basePayload);
         }
       } else {
         const ownerId = user?.id;
@@ -530,21 +538,21 @@ export default function PropertiesPage() {
       let listingKeptAsDraft = false;
       let draftUpdateFailed = false;
       if (createdPropertyId) {
-        const { error: deleteError } = await supabase
-          .from('properties')
-          .delete()
-          .eq('id', createdPropertyId);
-        listingDeleted = !deleteError;
-        if (deleteError) {
-          cleanupMessages.push(deleteError.message);
-          const { error: draftError } = await supabase
-            .from('properties')
-            .update({ listing_status: 'pending', featured: false })
-            .eq('id', createdPropertyId);
-          listingKeptAsDraft = !draftError;
-          if (draftError) {
+        try {
+          await deleteAdminRecord('properties', createdPropertyId);
+          listingDeleted = true;
+        } catch (deleteError) {
+          const deleteMessage = deleteError instanceof Error ? deleteError.message : 'Erreur inconnue';
+          cleanupMessages.push(deleteMessage);
+          try {
+            await updateAdminRecord('properties', createdPropertyId, {
+              listing_status: 'pending',
+              featured: false,
+            });
+            listingKeptAsDraft = true;
+          } catch (draftError) {
             draftUpdateFailed = true;
-            cleanupMessages.push(draftError.message);
+            cleanupMessages.push(draftError instanceof Error ? draftError.message : 'Erreur inconnue');
           }
           if (uploadedUrls.length) {
             const { error: imageRowsError } = await supabase

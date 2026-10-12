@@ -5,7 +5,7 @@ import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { formatDate } from '../../../lib/format';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
-import { supabase } from '../../../lib/supabaseClient';
+import { updateAdminRecord } from '../../../lib/adminMutations';
 
 type ReviewRow = {
   id: string;
@@ -20,9 +20,10 @@ export default function ReviewsPage() {
   const { data, loading, reload } = useSupabaseTable<ReviewRow>('reviews', { orderBy: 'created_at' });
 
   const toggle = async (row: ReviewRow) => {
-    const { error } = await supabase.from('reviews').update({ verified: !row.verified }).eq('id', row.id);
-    if (error) {
-      alert(error.message);
+    try {
+      await updateAdminRecord('reviews', row.id, { verified: !row.verified });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur inconnue');
       return;
     }
     reload();

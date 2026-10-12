@@ -6,7 +6,7 @@ import DataTable from '../../../components/DataTable';
 import LoadingState from '../../../components/LoadingState';
 import SectionHeader from '../../../components/SectionHeader';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
-import { supabase } from '../../../lib/supabaseClient';
+import { updateAdminRecord } from '../../../lib/adminMutations';
 import { logActivity } from '../../../lib/logActivity';
 import type { Profile } from '../../../lib/useSession';
 import type { Property } from '../../../lib/types';
@@ -34,9 +34,10 @@ export default function AgentsPage() {
   }, [properties]);
 
   const setStatus = async (id: string, account_status: 'active' | 'suspended' | 'pending') => {
-    const { error } = await supabase.from('profiles').update({ account_status }).eq('id', id);
-    if (error) {
-      alert(error.message);
+    try {
+      await updateAdminRecord('profiles', id, { account_status });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur inconnue');
       return;
     }
     try {

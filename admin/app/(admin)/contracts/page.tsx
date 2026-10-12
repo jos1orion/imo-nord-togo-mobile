@@ -9,6 +9,7 @@ import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { formatCurrency, formatDate } from '../../../lib/format';
 import type { Contract, ContractStatus, Property, Tenant } from '../../../lib/types';
 import { logAdminAction } from '../../../lib/adminAudit';
+import { deleteAdminRecord, updateAdminRecord } from '../../../lib/adminMutations';
 
 const emptyForm = {
   property_id: '',
@@ -65,19 +66,17 @@ export default function ContractsPage() {
     if (!form.property_id || !form.tenant_id || !form.start_date || !form.end_date || !form.rent_amount) return;
     setSaving(true);
     if (editingId) {
-      const { error } = await supabase
-        .from('contracts')
-        .update({
+      try {
+        await updateAdminRecord('contracts', editingId, {
           property_id: form.property_id,
           tenant_id: form.tenant_id,
           start_date: form.start_date,
           end_date: form.end_date,
           rent_amount: Number(form.rent_amount),
           status: form.status,
-        })
-        .eq('id', editingId);
-      if (error) {
-        alert(`Erreur contrat: ${error.message}`);
+        });
+      } catch (error) {
+        alert(`Erreur contrat: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
         setSaving(false);
         return;
       }
@@ -118,13 +117,13 @@ export default function ContractsPage() {
 
   const handleDelete = async (contractId: string) => {
     if (!window.confirm('Supprimer ce contrat ? Cette action est irréversible.')) return;
-    const { error } = await supabase.from('contracts').delete().eq('id', contractId);
-    if (error) {
-      alert(`Erreur suppression: ${error.message}`);
-      return;
+    try {
+      await deleteAdminRecord('contracts', contractId);
+      await logAdminAction('delete_contract', 'contract', contractId);
+      reload();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur suppression: erreur inconnue');
     }
-    await logAdminAction('delete_contract', 'contract', contractId);
-    reload();
   };
 
   return (
