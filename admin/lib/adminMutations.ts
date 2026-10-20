@@ -33,7 +33,7 @@ async function adminApiRequest(path: string, init: RequestInit): Promise<Respons
   return response;
 }
 
-export async function deleteAdminRecord(entity: string, id: string): Promise<void> {
+export async function deleteAdminRecord(entity: string, id: string): Promise<string | null> {
   const response = await adminApiRequest(`/api/admin/${entity}/${id}`, {
     method: 'DELETE',
   });
@@ -42,6 +42,7 @@ export async function deleteAdminRecord(entity: string, id: string): Promise<voi
   if (!response.ok) {
     throw new Error(result?.error ?? 'Erreur lors de la suppression.');
   }
+  return typeof result?.warning === 'string' ? result.warning : null;
 }
 
 export async function deleteAdminPropertyImage(propertyId: string, url: string): Promise<void> {
@@ -78,8 +79,8 @@ export async function updateAdminRecord(
   }
 }
 
-export async function bulkDeleteAdminRecords(entity: string, ids: string[]): Promise<void> {
-  if (!ids.length) return;
+export async function bulkDeleteAdminRecords(entity: string, ids: string[]): Promise<string | null> {
+  if (!ids.length) return null;
   if (ids.length > MAX_BULK_MUTATION_SIZE) {
     throw new Error(`La suppression groupée est limitée à ${MAX_BULK_MUTATION_SIZE} éléments.`);
   }
@@ -96,6 +97,7 @@ export async function bulkDeleteAdminRecords(entity: string, ids: string[]): Pro
   if (!response.ok) {
     throw new Error(result?.error ?? 'Erreur lors de la suppression groupée.');
   }
+  return typeof result?.warning === 'string' ? result.warning : null;
 }
 
 export async function bulkUpdateAdminRecords(

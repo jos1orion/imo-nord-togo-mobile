@@ -5,7 +5,7 @@ import SectionHeader from '../../../components/SectionHeader';
 import LoadingState from '../../../components/LoadingState';
 import { formatCurrency, formatDate } from '../../../lib/format';
 import { supabase } from '../../../lib/supabaseClient';
-import { deleteAdminProperty, deletePropertyImageFiles } from '../../../lib/propertyStorage';
+import { deleteAdminProperty } from '../../../lib/propertyStorage';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { useSession } from '../../../lib/useSession';
 import type { ListingStatus, Neighborhood, Property, PropertyStatus } from '../../../lib/types';
@@ -418,21 +418,9 @@ export default function PropertiesPage() {
       if (!window.confirm(`Supprimer définitivement les ${ids.length} biens sélectionnés ? Cette action est irréversible.`)) {
         return;
       }
-      const { data: imageRows, error: imageQueryError } = await supabase
-        .from('property_images')
-        .select('url')
-        .in('property_id', ids);
-      if (imageQueryError) {
-        alert(`Impossible de récupérer les images des biens : ${imageQueryError.message}`);
-        return;
-      }
       try {
-        await bulkDeleteAdminRecords('properties', ids);
-        try {
-          await deletePropertyImageFiles((imageRows ?? []).map(image => image.url));
-        } catch (cleanupError) {
-          alert(cleanupError instanceof Error ? cleanupError.message : 'Le nettoyage des images a échoué.');
-        }
+        const cleanupWarning = await bulkDeleteAdminRecords('properties', ids);
+        if (cleanupWarning) alert(cleanupWarning);
       } catch (error) {
         alert(error instanceof Error ? error.message : 'Erreur suppression: erreur inconnue');
         return;

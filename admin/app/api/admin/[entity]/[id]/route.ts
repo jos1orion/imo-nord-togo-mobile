@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { isValidUuid, requireAdminApi } from '../../../../../lib/adminApiAuth';
+import { isValidUuid, recordAdminAction, requireAdminApi } from '../../../../../lib/adminApiAuth';
+import {
+  AdminPropertyDeletionError,
+  deleteAdminProperties,
+} from '../../../../../lib/adminPropertyDeletion';
 import { deletableEntities, validateAdminUpdates } from '../../../../../lib/adminMutationValidation';
 
 type RouteContext = {
@@ -61,6 +65,19 @@ export async function DELETE(request: Request, { params }: RouteContext) {
 
   const guard = await requireAdminApi(request);
   if ('response' in guard) return guard.response;
+
+  if (entity === 'properties') {
+    try {
+      const result = await deleteAdminProperties(guard.supabaseAdmin, [id]);
+      await recordAdminAction(guard.supabaseAdmin, guard.userId, 'delete_property', 'property', id);
+      return NextResponse.json({ success: true, ...result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erreur inconnue lors de la suppression.';
+      const status = error instanceof AdminPropertyDeletionError ? error.status : 500;
+      console.error('Admin property deletion failed.', message);
+      return NextResponse.json({ error: message }, { status });
+    }
+  }
 
   const { data, error } = await guard.supabaseAdmin
     .from(entity)
