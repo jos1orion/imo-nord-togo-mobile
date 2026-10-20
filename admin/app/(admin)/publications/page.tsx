@@ -11,7 +11,7 @@ import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import type { Publication } from '../../../lib/types';
 
 type PublicationRow = Publication & {
-  properties?: { title: string; location: string } | null;
+  property?: { title: string; location: string } | null;
 };
 
 const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
@@ -22,7 +22,7 @@ export default function PublicationsPage() {
   const currentTime = useCurrentTime();
   const filter = searchParams.get('filter');
   const { data, loading, error, reload } = useSupabaseTable<PublicationRow>('publications', {
-    select: '*, properties(title, location)',
+    select: '*, property:properties!publications_property_id_fkey(title, location)',
     orderBy: 'created_at',
   });
   const [status, setStatus] = useState('ALL');
@@ -58,9 +58,8 @@ export default function PublicationsPage() {
             Impossible de charger les publications : {error}
           </div>
           <p>
-            Vérifiez que la table « publications » existe et que les droits d’accès sont configurés.
-            La migration <code>supabase/migrations/0006_admin_platform.sql</code> la crée et reprend
-            les biens déjà enregistrés. Ne la relancez pas si elle a déjà été appliquée.
+            La requête utilise le lien de l’annonce vers le bien. Si l’erreur persiste après
+            actualisation, vérifiez les relations de la table <code>publications</code> dans Supabase.
           </p>
           <button className="ghost-button" onClick={() => void reload()}>
             Réessayer
@@ -81,7 +80,7 @@ export default function PublicationsPage() {
           }
           columns={[
             { key: 'id', label: 'ID', render: row => row.id.slice(0, 8) },
-            { key: 'title', label: 'Bien', render: row => row.properties?.title ?? row.property_id.slice(0, 8) },
+            { key: 'title', label: 'Bien', render: row => row.property?.title ?? row.property_id.slice(0, 8) },
             { key: 'status', label: 'Statut' },
             { key: 'payment_status', label: 'Paiement' },
             { key: 'submitted_at', label: 'Début', render: row => formatDate(row.submitted_at) },
