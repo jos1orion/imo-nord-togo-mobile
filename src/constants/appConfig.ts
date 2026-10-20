@@ -31,7 +31,7 @@ export function getContactPhoneDisplay(): string {
 
 export function getContactEmail(): string {
   const email = getExtra().contactEmail?.trim();
-  return email || 'kondgbandi@gmail.com';
+  return email || 'imonordtogo@gmail.com';
 }
 
 export function getWhatsAppDigits(): string {

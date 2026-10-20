@@ -46,14 +46,24 @@ sont appliquées par le workflow ci-dessus après les prérequis. La route serve
 via l’API Storage. Définir `PROPERTY_STORAGE_CLEANUP_SECRET` dans l’environnement
 du back-office et configurer les secrets GitHub `ADMIN_BASE_URL` (URL publique
 du back-office, sans slash final) et `PROPERTY_STORAGE_CLEANUP_SECRET`. Le
-workflow GitHub exécute le worker chaque heure. Il supprime les fichiers
-référencés lors de l’archivage ou du passage à l’état occupé, sans SQL direct
-sur `storage.objects`.
+workflow GitHub exécute le worker chaque heure et échoue explicitement si un
+secret manque ou si l’endpoint ne retourne pas un statut HTTP 2xx. Il supprime
+les fichiers uniquement au passage à l’état occupé, sans SQL direct sur
+`storage.objects`.
 Appliquer également `0021_agent_direct_publishing_now.sql` après `0012` pour
 activer la publication directe des agents dès le 11 octobre 2026.
 `0022_expiration_trigger_single_sync.sql` corrige la fonction d’expiration pour
 laisser le déclencheur de synchronisation mettre à jour chaque publication une
-seule fois ; le workflow l’exécute après `0020`.
+seule fois ; `0023_preserve_expired_listing_images.sql` conserve les photos des
+annonces archivées pour permettre leur renouvellement. Ce dernier annule aussi
+les nettoyages d’images déjà en attente. L’administrateur peut supprimer une
+photo depuis la fiche du bien dans le back-office ; le nettoyage automatique
+reste réservé au passage à l’état occupé. Cette migration est appliquée par le
+workflow GitHub de migrations Storage.
+
+Les nouvelles photos sont compressées côté client pour ne pas dépasser 200 Ko
+par image (au plus 1,6 Mo pour 8 photos). Les photos déjà stockées ne sont pas
+recompressées par ce changement.
 
 Les scripts SQL historiques de `docs/` ne sont pas des migrations à exécuter ;
 certains conservent des opérations de nettoyage Storage obsolètes.

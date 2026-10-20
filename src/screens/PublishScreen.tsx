@@ -448,14 +448,18 @@ const PublishScreen: React.FC = () => {
         return;
       }
       const directPublishing = isDirectPublishingEnabled(currentUser);
-      const preserveListingState = Boolean(
+      const preserveListingState = editingProperty?.status === 'occupied';
+      const isRenewal = Boolean(
         editingProperty &&
+        !preserveListingState &&
         (
-          editingProperty.status === 'occupied' ||
           editingProperty.listingStatus === 'archived' ||
           (editingProperty.expiresAt && new Date(editingProperty.expiresAt).getTime() <= Date.now())
         )
       );
+      const listingStatusOnSave = preserveListingState
+        ? editingProperty?.listingStatus ?? 'pending'
+        : directPublishing ? 'approved' : 'pending';
       if (
         !directPublishing &&
         (!currentUser || (currentUser.role !== 'AGENT' && currentUser.role !== 'ADMIN'))
@@ -478,9 +482,8 @@ const PublishScreen: React.FC = () => {
         city: formData.city.trim(),
         images: draftImages,
         status: preserveListingState ? editingProperty?.status ?? 'available' : 'available',
-        listingStatus: preserveListingState
-          ? editingProperty?.listingStatus ?? 'pending'
-          : directPublishing ? 'approved' : 'pending',
+        listingStatus: listingStatusOnSave,
+        expiresAt: isRenewal ? null : editingProperty?.expiresAt,
         amenities: formData.amenities
           .split(',')
           .map(a => a.trim())
@@ -500,9 +503,7 @@ const PublishScreen: React.FC = () => {
       if (editingProperty) {
         await updateProperty(editingProperty.id, {
           ...propertyData,
-          listingStatus: preserveListingState
-            ? editingProperty.listingStatus
-            : directPublishing ? 'approved' : 'pending',
+          listingStatus: listingStatusOnSave,
           rejectionReason: preserveListingState ? editingProperty.rejectionReason : null,
         });
         addMyPropertyId(editingProperty.id);

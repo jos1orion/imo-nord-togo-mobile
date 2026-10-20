@@ -111,7 +111,7 @@ imo-nord-togo-mobile/
 
 ## 📞 Contact
 
-- **Email** : [kondgbandi@gmail.com](mailto:kondgbandi@gmail.com)
+- **Email** : [imonordtogo@gmail.com](mailto:imonordtogo@gmail.com)
 - **Téléphone** : +228 93 57 62 98
 - **Adresse** : Avenue de la Libération, Kara, Togo
 

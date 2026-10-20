@@ -57,6 +57,28 @@ export async function POST(request: Request) {
 
   for (const job of jobs) {
     try {
+      const { data: property, error: propertyError } = await supabaseAdmin
+        .from('properties')
+        .select('status')
+        .eq('id', job.property_id)
+        .maybeSingle();
+      if (propertyError) throw propertyError;
+
+      if (property && property.status !== 'occupied') {
+        const { error: updateError } = await supabaseAdmin
+          .from('property_storage_cleanup_jobs')
+          .update({
+            status: 'completed',
+            image_urls: [],
+            processing_at: null,
+            completed_at: new Date().toISOString(),
+            last_error: null,
+          })
+          .eq('id', job.id);
+        if (updateError) throw updateError;
+        continue;
+      }
+
       const paths = getPropertyImageStoragePaths(
         job.image_urls,
         process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''

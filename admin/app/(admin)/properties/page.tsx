@@ -21,8 +21,11 @@ import {
   PROPERTY_IMAGE_MAX_BYTES,
   PROPERTY_IMAGE_MAX_COUNT,
   PROPERTY_IMAGE_MIME_TYPES,
+  PROPERTY_IMAGE_MAX_TOTAL_BYTES,
+  validatePropertyImageSelection,
   validatePropertyImages,
 } from '../../../../src/utils/imageUploadValidation';
+import { compressPropertyImages } from '../../../lib/compressPropertyImages';
 
 type PropertyRow = Property & {
   property_images?: { url: string }[];
@@ -58,7 +61,7 @@ const listingTabs: { key: 'ALL' | ListingStatus; label: string }[] = [
   { key: 'ALL', label: 'Tous' },
   { key: 'pending', label: 'En attente' },
   { key: 'approved', label: 'Approuvé' },
-  { key: 'archived', label: 'Archivé' },
+  { key: 'archived', label: 'Archives' },
 ];
 
 const getListingLabel = (status: ListingStatus) => {
@@ -95,7 +98,8 @@ export default function PropertiesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
-  const [files, setFiles] = useState<FileList | null>(null);
+  const [files, setFiles] = useState<File[] | null>(null);
+  const [compressingImages, setCompressingImages] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formErrors, setFormErrors] = useState<
     Partial<Record<'title' | 'price' | 'location' | 'images', string>>
@@ -123,6 +127,9 @@ export default function PropertiesPage() {
   const canSetAdminListingFields = profile?.role === 'ADMIN';
   const canUseBulkActions = profile?.role === 'ADMIN';
   const [supportsFeaturedColumn, setSupportsFeaturedColumn] = useState(true);
+  const existingImageCount = editingId
+    ? properties.find(property => property.id === editingId)?.property_images?.length ?? 0
+    : 0;
   const previewImages = useMemo(
     () =>
       files
@@ -406,14 +413,18 @@ export default function PropertiesPage() {
   };
 
   const handleSubmit = async () => {
-    const selectedFiles = Array.from(files ?? []);
+    if (compressingImages) {
+      setFormMessage('Patientez pendant la compression des photos.');
+      return;
+    }
+    const selectedFiles = files ?? [];
     const nextErrors: typeof formErrors = {};
     if (!form.title.trim()) nextErrors.title = 'Le titre est obligatoire.';
     if (!form.price.trim() || !Number.isFinite(Number(form.price)) || Number(form.price) <= 0) {
       nextErrors.price = 'Saisissez un prix supérieur à zéro.';
     }
     if (!form.location.trim()) nextErrors.location = 'La ville est obligatoire.';
-    const imageError = validatePropertyImages(selectedFiles);
+    const imageError = validatePropertyImages(selectedFiles, existingImageCount);
     if (imageError) nextErrors.images = imageError;
     setFormErrors(nextErrors);
     setFormMessage('');
@@ -1020,20 +1031,47 @@ export default function PropertiesPage() {
                 type="file"
                 accept={PROPERTY_IMAGE_MIME_TYPES.join(',')}
                 multiple
+                disabled={compressingImages || saving}
                 aria-invalid={Boolean(formErrors.images)}
                 aria-describedby={formErrors.images ? 'property-images-error' : 'property-images-help'}
                 onChange={event => {
-                  const nextFiles = event.target.files;
-                  setFiles(nextFiles);
-                  setFormErrors(previous => ({
-                    ...previous,
-                    images: validatePropertyImages(Array.from(nextFiles ?? [])) ?? undefined,
-                  }));
+                  const selected = Array.from(event.target.files ?? []);
+                  event.currentTarget.value = '';
+                  const selectedProperty = editingId
+                    ? properties.find(property => property.id === editingId)
+                    : null;
+                  const savedImageCount = selectedProperty?.property_images?.length ?? 0;
+                  const selectionError = validatePropertyImageSelection(selected, savedImageCount);
+                  if (selectionError) {
+                    setFiles(null);
+                    setFormErrors(previous => ({ ...previous, images: selectionError }));
+                    return;
+                  }
+                  setCompressingImages(true);
+                  setFormMessage('');
+                  void compressPropertyImages(selected)
+                    .then(compressed => {
+                      const compressionError = validatePropertyImages(compressed, savedImageCount);
+                      if (compressionError) throw new Error(compressionError);
+                      setFiles(compressed);
+                      setFormErrors(previous => ({ ...previous, images: undefined }));
+                    })
+                    .catch(error => {
+                      setFiles(null);
+                      setFormErrors(previous => ({
+                        ...previous,
+                        images: error instanceof Error ? error.message : 'Impossible de compresser les photos.',
+                      }));
+                    })
+                    .finally(() => setCompressingImages(false));
                 }}
               />
               <small id="property-images-help" style={{ color: 'var(--muted)' }}>
-                Maximum {PROPERTY_IMAGE_MAX_COUNT} images,{' '}
-                {Math.round(PROPERTY_IMAGE_MAX_BYTES / 1024 / 1024)} Mo par image.
+                Maximum {PROPERTY_IMAGE_MAX_COUNT} photos au total, à{' '}
+                {Math.round(PROPERTY_IMAGE_MAX_BYTES / 1024)} Ko chacune (
+                {(PROPERTY_IMAGE_MAX_TOTAL_BYTES / 1_000_000).toFixed(1).replace('.', ',')} Mo au total),
+                compression automatique.
+                {compressingImages ? ' Compression en cours...' : ''}
               </small>
               {formErrors.images ? (
                 <small id="property-images-error" className="field-error">{formErrors.images}</small>

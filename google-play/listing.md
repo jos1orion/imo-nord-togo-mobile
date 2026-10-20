@@ -70,7 +70,7 @@ Kara et ses environs :
 L'application est entièrement gratuite ! Téléchargez-la maintenant et trouvez le bien de vos rêves.
 
 📞 CONTACT
-Email : kondgbandi@gmail.com
+Email : imonordtogo@gmail.com
 Téléphone : +228 93 57 62 98
 Adresse : Avenue de la Libération, Kara, Togo
 
@@ -145,7 +145,7 @@ immo, immobilier, togolais, togo, kara, vente, location, terrain, villa, maison,
 ## Coordonnées
 
 - **Site web** : https://imo-nord-togo-mobile.vercel.app/privacy
-- **Email** : kondgbandi@gmail.com
+- **Email** : imonordtogo@gmail.com
 - **Téléphone** : +228 93 57 62 98
 - **Adresse** : Avenue de la Libération, Kara, Togo
 

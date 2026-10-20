@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import {
   PROPERTY_IMAGE_MAX_BYTES,
   PROPERTY_IMAGE_MAX_COUNT,
+  PROPERTY_IMAGE_MAX_TOTAL_BYTES,
   TENANT_DOCUMENT_MAX_BYTES,
   validatePropertyImage,
   validatePropertyImages,
@@ -22,7 +23,7 @@ describe('property image upload validation', () => {
   it('rejects unsupported MIME types, empty files and oversized files', () => {
     expect(validatePropertyImage(file('image/gif'))).toContain('format non accepté');
     expect(validatePropertyImage(file('image/jpeg', 0))).toContain('taille');
-    expect(validatePropertyImage(file('image/png', PROPERTY_IMAGE_MAX_BYTES + 1))).toContain('1 Mo');
+    expect(validatePropertyImage(file('image/png', PROPERTY_IMAGE_MAX_BYTES + 1))).toContain('200 Ko');
     expect(validatePropertyImage(file('', 100))).toContain('format non accepté');
   });
 
@@ -31,6 +32,26 @@ describe('property image upload validation', () => {
       file('image/jpeg', 100, `photo-${index}.jpg`)
     );
     expect(validatePropertyImages(images)).toContain(`Maximum ${PROPERTY_IMAGE_MAX_COUNT}`);
+  });
+
+  it('counts previously saved property images against the maximum', () => {
+    const images = Array.from({ length: PROPERTY_IMAGE_MAX_COUNT }, (_, index) =>
+      file('image/jpeg', 100, `photo-${index}.jpg`)
+    );
+
+    expect(validatePropertyImages(images.slice(0, PROPERTY_IMAGE_MAX_COUNT - 1), 1)).toBeNull();
+    expect(validatePropertyImages(images, 1)).toContain(`Maximum ${PROPERTY_IMAGE_MAX_COUNT}`);
+  });
+
+  it('allows 8 photos at 200 KB each within the 1.6 MB total limit', () => {
+    const imagesWithinLimit = Array.from({ length: PROPERTY_IMAGE_MAX_COUNT }, (_, index) =>
+      file('image/jpeg', PROPERTY_IMAGE_MAX_TOTAL_BYTES / PROPERTY_IMAGE_MAX_COUNT, `photo-${index}.jpg`)
+    );
+
+    expect(validatePropertyImages(imagesWithinLimit)).toBeNull();
+    expect(imagesWithinLimit.reduce((total, image) => total + image.size, 0))
+      .toBe(PROPERTY_IMAGE_MAX_TOTAL_BYTES);
+    expect(validatePropertyImage(file('image/jpeg', PROPERTY_IMAGE_MAX_BYTES + 1))).toContain('200 Ko');
   });
 
   it('allows tenant PDFs and supported images but rejects other types and oversized documents', () => {

@@ -21,9 +21,31 @@ jobs:
           ADMIN_BASE_URL: ${{ secrets.ADMIN_BASE_URL }}
           PROPERTY_STORAGE_CLEANUP_SECRET: ${{ secrets.PROPERTY_STORAGE_CLEANUP_SECRET }}
         run: |
-          : "${ADMIN_BASE_URL:?Configure the ADMIN_BASE_URL repository secret}"
-          : "${PROPERTY_STORAGE_CLEANUP_SECRET:?Configure the PROPERTY_STORAGE_CLEANUP_SECRET repository secret}"
-          curl --fail-with-body --silent --show-error \
+          if [ -z "${ADMIN_BASE_URL}" ]; then
+            echo "::error title=Secret ADMIN_BASE_URL absent::Ajoutez l’URL publique du back-office dans Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+          if [ -z "${PROPERTY_STORAGE_CLEANUP_SECRET}" ]; then
+            echo "::error title=Secret PROPERTY_STORAGE_CLEANUP_SECRET absent::Configurez le même secret dans GitHub Actions et dans l’environnement de production du back-office."
+            exit 1
+          fi
+
+          http_status=$(curl --silent --show-error \
+            --output /dev/null \
+            --write-out '%{http_code}' \
+            --connect-timeout 10 \
+            --max-time 120 \
             --request POST \
             --header "x-cleanup-secret: ${PROPERTY_STORAGE_CLEANUP_SECRET}" \
-            "${ADMIN_BASE_URL}/api/internal/cleanup-property-storage"
+            "${ADMIN_BASE_URL}/api/internal/cleanup-property-storage")
+
+          case "${http_status}" in
+            2[0-9][0-9])
+              echo "Cleanup worker completed successfully (HTTP ${http_status})."
+              ;;
+            *)
+              echo "::error title=Échec du worker de nettoyage::Le endpoint a retourné HTTP ${http_status}; vérifiez les logs du back-office."
+              exit 1
+              ;;
+          esac

@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-const contactEmail = 'kondgbandi@gmail.com';
+const contactEmail = 'imonordtogo@gmail.com';
 const emailSubject = encodeURIComponent('Suppression de compte Imo Nord Togo');
 const emailBody = encodeURIComponent(
   'Bonjour,\n\nJe demande la suppression de mon compte Imo Nord Togo et des données personnelles associées.\n\nAdresse e-mail associée au compte : \n\n'

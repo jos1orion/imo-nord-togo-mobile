@@ -6,7 +6,8 @@ import SectionHeader from '../../../../components/SectionHeader';
 import { supabase } from '../../../../lib/supabaseClient';
 import { formatCurrency, formatDate } from '../../../../lib/format';
 import { logActivity } from '../../../../lib/logActivity';
-import { updateAdminRecord } from '../../../../lib/adminMutations';
+import { deleteAdminPropertyImage, updateAdminRecord } from '../../../../lib/adminMutations';
+import { useSession } from '../../../../lib/useSession';
 import type { ListingEvent, ListingStatus, Property, PropertyStatus, Publication } from '../../../../lib/types';
 
 type PropertyRow = Property & { property_images?: { url: string }[] };
@@ -25,12 +26,14 @@ const EVENT_LABELS: Record<string, string> = {
 export default function PropertyDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const { profile } = useSession();
   const propertyId = typeof params?.id === 'string' ? params.id : '';
   const [property, setProperty] = useState<PropertyRow | null>(null);
   const [owner, setOwner] = useState<OwnerProfile | null>(null);
   const [publications, setPublications] = useState<Publication[]>([]);
   const [events, setEvents] = useState<ListingEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingImageUrl, setDeletingImageUrl] = useState<string | null>(null);
 
   const cover = useMemo(() => property?.property_images?.[0]?.url ?? '', [property]);
 
@@ -109,6 +112,19 @@ export default function PropertyDetailsPage() {
     await load();
   };
 
+  const removeImage = async (url: string) => {
+    if (!property || !window.confirm('Supprimer définitivement cette photo du bien ?')) return;
+    setDeletingImageUrl(url);
+    try {
+      await deleteAdminPropertyImage(property.id, url);
+      await load();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur inconnue lors de la suppression.');
+    } finally {
+      setDeletingImageUrl(null);
+    }
+  };
+
   if (loading) return <div className="card">Chargement du bien...</div>;
   if (!property) {
     return (
@@ -148,17 +164,29 @@ export default function PropertyDetailsPage() {
                 }}
               />
             </div>
-            {property.property_images && property.property_images.length > 1 ? (
+            {property.property_images && property.property_images.length > 0 ? (
               <div className="detail-thumbs">
                 {property.property_images.map(image => (
-                  <img
-                    key={image.url}
-                    src={image.url}
-                    alt=""
-                    onError={event => {
-                      event.currentTarget.src = '/property-placeholder.svg';
-                    }}
-                  />
+                  <div key={image.url} style={{ position: 'relative' }}>
+                    <img
+                      src={image.url}
+                      alt=""
+                      onError={event => {
+                        event.currentTarget.src = '/property-placeholder.svg';
+                      }}
+                    />
+                    {profile?.role === 'ADMIN' ? (
+                      <button
+                        className="ghost-button small"
+                        type="button"
+                        disabled={deletingImageUrl !== null}
+                        onClick={() => void removeImage(image.url)}
+                        style={{ marginTop: 6 }}
+                      >
+                        {deletingImageUrl === image.url ? 'Suppression...' : 'Supprimer la photo'}
+                      </button>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             ) : null}

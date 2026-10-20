@@ -44,6 +44,21 @@ export async function deleteAdminRecord(entity: string, id: string): Promise<voi
   }
 }
 
+export async function deleteAdminPropertyImage(propertyId: string, url: string): Promise<void> {
+  const response = await adminApiRequest(`/api/admin/properties/${propertyId}/images`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ url }),
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result?.error ?? 'Erreur lors de la suppression de la photo.');
+  }
+}
+
 export async function updateAdminRecord(
   entity: string,
   id: string,

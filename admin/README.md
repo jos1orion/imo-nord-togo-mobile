@@ -64,6 +64,15 @@ un projet existant.
 Ces limites d’interface sont doublées par les politiques RLS définies dans les
 migrations de [`supabase/migrations/`](../supabase/migrations/).
 
+Les annonces arrivées à expiration sont archivées sans supprimer leurs photos,
+afin que l’agent puisse renouveler l’annonce avec ses images. Un administrateur
+peut supprimer une photo depuis la fiche du bien ; les photos des biens occupés
+restent nettoyées automatiquement.
+
+Les nouvelles photos d’une annonce sont compressées pour rester sous 200 Ko par
+photo, soit au plus 1,6 Mo pour 8 images, depuis le mobile comme depuis le
+back-office. Cette limite ne recompresse pas les photos déjà stockées.
+
 ## Build production
 
 ```bash

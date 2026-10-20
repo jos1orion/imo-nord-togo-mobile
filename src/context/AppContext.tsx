@@ -12,6 +12,11 @@ import {
   supabaseAnonKey,
   supabaseUrl,
 } from '../lib/supabase';
+import {
+  PROPERTY_IMAGE_MAX_BYTES,
+  PROPERTY_IMAGE_MAX_COUNT,
+  PROPERTY_IMAGE_MAX_TOTAL_BYTES,
+} from '../utils/imageUploadValidation';
 import { safeRegisterExpoPushToken, safeScheduleLocalNotification } from '../lib/expoNotificationsSafe';
 import { chunkStoragePaths, getPropertyImageStoragePaths } from '../utils/propertyStorage';
 import {
@@ -1298,7 +1303,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const uploadPropertyImages = useCallback(
     async (propertyId: string, uris: string[], ownerId?: string): Promise<string[]> => {
-      const maxImageBytes = 1 * 1024 * 1024;
+      if (uris.length > PROPERTY_IMAGE_MAX_COUNT) {
+        throw new Error(`Maximum ${PROPERTY_IMAGE_MAX_COUNT} photos par bien.`);
+      }
+      const localImageCount = uris.filter(uri => !uri.startsWith('http')).length;
+      const maxImageBytes = Math.min(
+        PROPERTY_IMAGE_MAX_BYTES,
+        Math.floor(PROPERTY_IMAGE_MAX_TOTAL_BYTES / Math.max(localImageCount, 1))
+      );
       const resolvedOwnerId = ownerId ?? (await resolveAuthUserId());
       if (!resolvedOwnerId) {
         throw new Error('User not logged in');
@@ -1355,9 +1367,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           });
           const compressionAttempts = [
             { maxDimension: 1600, compress: 0.72 },
-            { maxDimension: 1400, compress: 0.6 },
-            { maxDimension: 1200, compress: 0.5 },
-            { maxDimension: 1024, compress: 0.42 },
+            { maxDimension: 1400, compress: 0.64 },
+            { maxDimension: 1200, compress: 0.56 },
+            { maxDimension: 1100, compress: 0.5 },
+            { maxDimension: 1000, compress: 0.44 },
+            { maxDimension: 900, compress: 0.38 },
+            { maxDimension: 800, compress: 0.33 },
+            { maxDimension: 720, compress: 0.29 },
           ];
           let uploadUri: string | null = null;
           for (const attempt of compressionAttempts) {
@@ -1380,7 +1396,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             await FileSystem.deleteAsync(optimized.uri, { idempotent: true });
           }
           if (!uploadUri) {
-            throw new Error("Impossible de réduire cette image sous 1 Mo. Choisissez une photo plus légère.");
+            throw new Error(
+              'Impossible de réduire cette photo sous 200 Ko. Choisissez une autre photo.'
+            );
           }
 
           const contentType = 'image/jpeg';

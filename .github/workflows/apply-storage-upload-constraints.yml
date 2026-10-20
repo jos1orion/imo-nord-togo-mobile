@@ -10,6 +10,7 @@ on:
       - supabase/migrations/0019_storage_api_cleanup.sql
       - supabase/migrations/0020_property_storage_cleanup_queue.sql
       - supabase/migrations/0022_expiration_trigger_single_sync.sql
+      - supabase/migrations/0023_preserve_expired_listing_images.sql
       - .github/workflows/apply-storage-upload-constraints.yml
   workflow_dispatch:
 
@@ -73,4 +74,13 @@ jobs:
         run: |
           psql --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file=supabase/migrations/0022_expiration_trigger_single_sync.sql \
+            "$SUPABASE_DB_URL"
+
+      - name: Preserve images of expired listings
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PGSSLMODE: require
+        run: |
+          psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file=supabase/migrations/0023_preserve_expired_listing_images.sql \
             "$SUPABASE_DB_URL"
