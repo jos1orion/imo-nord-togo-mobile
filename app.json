@@ -29,7 +29,6 @@
         "backgroundColor": "#C2410C"
       },
       "package": "com.imonordtogo.app",
-      "versionCode": 2,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {

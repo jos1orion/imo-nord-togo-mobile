@@ -23,12 +23,17 @@ const documents: Record<LegalDocument, { title: string; intro: string; sections:
       {
         title: 'Informations traitées | Information we handle',
         body:
-          'Selon les fonctions utilisées, nous traitons les informations de compte que vous fournissez (nom, adresse e-mail et téléphone), les annonces que vous créez (description, prix, ville, quartier, caractéristiques et photos), ainsi que les échanges, avis, favoris, recherches et alertes que vous choisissez d’utiliser. Des données techniques nécessaires à l’authentification, à la sécurité et au fonctionnement du service peuvent également être générées. / Depending on the features you use, we handle account details you provide (name, email address and phone number), listings you create (description, price, city, neighborhood, features and photos), and messages, reviews, favorites, searches and alerts you choose to use. Technical data needed for authentication, security and service operation may also be generated.',
+          'Selon les fonctions utilisées, nous traitons les informations de compte que vous fournissez (nom, adresse e-mail et téléphone), les annonces que vous créez (description, prix, ville, quartier, caractéristiques et photos), ainsi que les échanges, avis, favoris, recherches et alertes que vous choisissez d’utiliser. Si vous envoyez une demande de suppression, nous enregistrons l’adresse e-mail fournie et l’état de traitement de la demande. Des données techniques nécessaires à l’authentification, à la sécurité et au fonctionnement du service peuvent également être générées. / Depending on the features you use, we handle account details you provide (name, email address and phone number), listings you create (description, price, city, neighborhood, features and photos), and messages, reviews, favorites, searches and alerts you choose to use. If you submit a deletion request, we store the email address you provide and the request status. Technical data needed for authentication, security and service operation may also be generated.',
       },
       {
         title: 'Photos et localisation | Photos and location',
         body:
           'L’application accède à la caméra ou à la photothèque uniquement lorsque vous choisissez d’ajouter des photos et après autorisation de votre appareil. La ville et le quartier saisis dans une annonce servent à décrire le bien. L’application ne demande pas l’accès à la position GPS de votre appareil. / The app accesses your camera or photo library only when you choose to add photos and grant device permission. The city and neighborhood entered in a listing describe the property. The app does not request access to your device’s GPS location.',
+      },
+      {
+        title: 'Recherche vocale | Voice search',
+        body:
+          'La recherche vocale est facultative et n’active le microphone qu’après votre action et votre autorisation. La reconnaissance est effectuée par le service vocal configuré sur votre appareil, qui peut traiter l’audio selon ses propres conditions et sa politique de confidentialité. Imo Nord Togo utilise le texte reconnu pour renseigner la recherche. / Voice search is optional and accesses the microphone only after you choose the feature and grant permission. Speech recognition is provided by the service configured on your device, which may process audio under its own terms and privacy policy. Imo Nord Togo uses the recognized text to fill in your search.',
       },
       {
         title: 'Utilisation | How we use information',
@@ -48,7 +53,7 @@ const documents: Record<LegalDocument, { title: string; intro: string; sections:
       {
         title: 'Vos choix et suppression du compte | Your choices and account deletion',
         body:
-          `Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte en écrivant à ${contactEmail} depuis l’adresse associée au compte. Indiquez « Suppression de compte Imo Nord Togo » dans l’objet. Nous pouvons demander des éléments raisonnables pour vérifier votre identité. La suppression du compte entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité. / You may request access, correction or deletion of your data and account by emailing ${contactEmail} from the address linked to the account. Use “Imo Nord Togo account deletion” as the subject. We may ask for reasonable information to verify your identity. Account deletion removes or de-links personal data, except information that must be retained for legal or security reasons.`,
+          `Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte via le formulaire en ligne. Un administrateur vérifiera la demande et traitera manuellement la suppression; l’envoi du formulaire ne supprime pas immédiatement le compte. L’adresse e-mail est effacée du dossier lorsque la demande est terminée ou refusée, tandis que le statut et les dates de traitement sont conservés. Vous pouvez aussi écrire à ${contactEmail}. La suppression du compte entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité. / You may request access, correction or deletion of your data and account using the online form. An administrator will verify the request and handle account deletion manually; submitting the form does not delete the account immediately. The email address is cleared from the request when it is completed or rejected, while its status and processing dates are retained. You may also email ${contactEmail}. Account deletion removes or de-links personal data, except information that must be retained for legal or security reasons.`,
       },
       {
         title: 'Mineurs et modifications | Children and changes',
@@ -111,7 +116,7 @@ export default function PublicLegalPage({ document }: { document: LegalDocument 
         <p className="public-legal-eyebrow">Imo Nord Togo</p>
         <h1>{content.title}</h1>
         <p className="public-legal-intro">{content.intro}</p>
-        <p className="public-legal-date">Dernière mise à jour / Last updated: 30 septembre 2026 / September 30, 2026</p>
+        <p className="public-legal-date">Dernière mise à jour / Last updated: 20 octobre 2026 / October 20, 2026</p>
         <nav className="public-legal-nav" aria-label="Documents légaux / Legal documents">
           <Link href="/privacy">Confidentialité / Privacy</Link>
           <Link href="/terms">Conditions / Terms</Link>

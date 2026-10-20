@@ -1,18 +1,37 @@
-import type { Metadata } from 'next';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'Suppression de compte | Imo Nord Togo',
-  description: 'Demandez la suppression de votre compte Imo Nord Togo et des données associées.',
-  robots: { index: true, follow: true },
-};
-
-const contactEmail = 'imonordtogo@gmail.com';
-const emailSubject = encodeURIComponent('Suppression de compte Imo Nord Togo');
-const emailBody = encodeURIComponent(
-  'Bonjour,\n\nJe demande la suppression de mon compte Imo Nord Togo et des données personnelles associées.\n\nAdresse e-mail associée au compte : \n\n'
-);
+import type { FormEvent } from 'react';
+import { useState } from 'react';
 
 export default function DeleteAccountPage() {
+  const [email, setEmail] = useState('');
+  const [website, setWebsite] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+
+  const submitRequest = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    setConfirmation('');
+    try {
+      const response = await fetch('/api/account-deletion-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, website }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? 'Impossible d’envoyer la demande.');
+      setConfirmation(result.message);
+      setEmail('');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Impossible d’envoyer la demande.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <main className="account-deletion-page">
       <article className="account-deletion-card">
@@ -23,33 +42,53 @@ export default function DeleteAccountPage() {
         <p className="account-deletion-eyebrow">Imo Nord Togo</p>
         <h1>Demande de suppression de compte</h1>
         <p>
-          Vous pouvez demander la suppression de votre compte Imo Nord Togo et des données
-          personnelles qui lui sont associées, même si vous avez désinstallé l’application.
+          Utilisez ce formulaire même si l’application de messagerie n’est pas installée. L’équipe
+          vérifiera que l’adresse correspond au compte et traitera la demande manuellement.
         </p>
 
         <section className="account-deletion-steps" aria-labelledby="deletion-steps-title">
-          <h2 id="deletion-steps-title">Comment faire la demande</h2>
+          <h2 id="deletion-steps-title">À savoir</h2>
           <ol>
-            <li>Envoyez-nous un e-mail depuis l’adresse associée à votre compte.</li>
-            <li>Gardez l’objet prérempli « Suppression de compte Imo Nord Togo ».</li>
-            <li>Indiquez l’adresse e-mail de votre compte dans le message.</li>
+            <li>Indiquez l’adresse e-mail associée à votre compte Imo Nord Togo.</li>
+            <li>Un administrateur vérifiera la demande avant toute suppression.</li>
+            <li>Le formulaire n’efface pas le compte immédiatement.</li>
           </ol>
-          <p>
-            Nous pouvons vous demander des informations raisonnables pour vérifier votre identité.
-            Nous traiterons la demande dans un délai raisonnable et supprimerons le compte et les
-            données associées, sauf celles que nous devons conserver pour des obligations légales,
-            de sécurité ou de prévention de la fraude.
-          </p>
         </section>
 
-        <a
-          className="account-deletion-button"
-          href={`mailto:${contactEmail}?subject=${emailSubject}&body=${emailBody}`}
-        >
-          Envoyer une demande par e-mail
-        </a>
+        <form className="account-deletion-form" onSubmit={submitRequest}>
+          <label className="honeypot" aria-hidden="true">
+            Site web
+            <input
+              name="website"
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              value={website}
+              onChange={event => setWebsite(event.target.value)}
+            />
+          </label>
+          <label htmlFor="deletion-email">Adresse e-mail du compte</label>
+          <input
+            id="deletion-email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            maxLength={254}
+            required
+            value={email}
+            onChange={event => setEmail(event.target.value)}
+          />
+          <button className="account-deletion-button" type="submit" disabled={saving}>
+            {saving ? 'Envoi en cours…' : 'Envoyer la demande'}
+          </button>
+        </form>
+        {error ? <p className="account-deletion-notice account-deletion-error" role="alert">{error}</p> : null}
+        {confirmation ? (
+          <p className="account-deletion-notice" role="status">{confirmation}</p>
+        ) : null}
         <p className="account-deletion-contact">
-          Vous pouvez aussi écrire directement à <a href={`mailto:${contactEmail}`}>{contactEmail}</a>.
+          Si le formulaire ne fonctionne pas, écrivez à{' '}
+          <a href="mailto:imonordtogo@gmail.com">imonordtogo@gmail.com</a>.
         </p>
         <nav className="account-deletion-links" aria-label="Informations complémentaires">
           <a href="/privacy">Politique de confidentialité</a>

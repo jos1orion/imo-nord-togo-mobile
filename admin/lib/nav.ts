@@ -29,6 +29,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { href: '/agents', label: 'Agents', short: 'AG', icon: '🧑‍💼', permission: 'admins.read' },
       { href: '/users', label: 'Utilisateurs', short: 'US', icon: '👥', permission: 'admins.read' },
+      { href: '/account-deletion-requests', label: 'Suppressions de compte', short: 'SC', icon: '🗑️', permission: 'admins.read' },
       { href: '/tenants', label: 'Locataires', short: 'TE', icon: '👤', permission: 'tenants.read' },
     ],
   },

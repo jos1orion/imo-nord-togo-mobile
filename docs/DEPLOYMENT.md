@@ -19,11 +19,11 @@ conservés sous `docs/` ne sont plus des entrées de déploiement.
    bootstrap `0002` qui contient déjà `USER`), `0003_production.sql`,
    `0006_admin_platform.sql`, `0004_auth_hardening.sql`, puis `0007` à `0015`
    dans l’ordre numérique, et enfin `0017` à `0020`, `0021` après `0012`, puis
-   `0022`. Ne pas rejouer une migration déjà appliquée.
+   `0022`, `0023`, `0024`, puis `0025`. Ne pas rejouer une migration déjà appliquée.
 3. `0001_rls.sql` est un brouillon hérité explicitement marqué : ne pas
    l’appliquer en production. Ne pas appliquer `0002_bootstrap.sql` à une base
    existante.
-4. Les migrations `0017` à `0020` et `0022` sont appliquées automatiquement par GitHub
+4. Les migrations `0017` à `0020` et `0022` à `0025` sont appliquées automatiquement par GitHub
    Actions lorsqu’elles sont poussées sur `main`. Le workflow attend un schéma
    existant avec les prérequis de `0006_admin_platform.sql` ; il ne consulte pas
    l’historique ni n’applique les migrations antérieures.
@@ -86,10 +86,14 @@ Commandes utiles (depuis la racine) :
 
 ### Versioning
 
-Avant chaque build “store”, incrémenter :
+La source de version Android est distante (`appVersionSource: remote`) et le
+profil `production` incrémente automatiquement le `versionCode` à chaque build.
+Ne pas modifier `android.versionCode` dans `app.json` : cette valeur locale est
+ignorée par EAS et peut induire en erreur.
 
-- `version` (ex. `1.2.0`) dans `app.json`
-- `android.versionCode` dans `app.json` (doit augmenter à chaque soumission Play Store)
+Avant une nouvelle version visible dans le Play Store, mettre à jour `version`
+(ex. `1.2.0`) dans `app.json`. Contrôler le `versionCode` attribué à distance
+dans le résultat du build EAS avant de téléverser l’AAB.
 
 ### Distribution APK (hors Play Store)
 
@@ -193,3 +197,8 @@ relancez le workflow. Ne transmettez jamais cette URI dans une conversation.
 La migration `0024_remove_legacy_storage_delete_triggers.sql` retire les anciens
 triggers qui tentaient de supprimer des fichiers en écrivant directement dans
 `storage.objects`; les suppressions de fichiers doivent passer par l’API Storage.
+La migration `0025_account_deletion_requests.sql` crée la file privée des demandes
+de suppression de compte, accessible uniquement au service serveur. Le formulaire
+public ne supprime pas de compte : un administrateur vérifie la demande, supprime
+le compte depuis le back-office, puis clôture le dossier. Lors de la clôture,
+l’adresse e-mail est effacée de la demande.

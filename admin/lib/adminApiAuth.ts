@@ -6,11 +6,15 @@ import { fetchStaffProfileAccess } from './profileAccess';
 type AdminApiContext = {
   supabaseAdmin: SupabaseClient;
   userId: string;
+  userRole: 'ADMIN' | 'AGENT';
 };
 
 type AdminApiGuardResult = AdminApiContext | { response: NextResponse };
 
-export async function requireAdminApi(request: Request): Promise<AdminApiGuardResult> {
+export async function requireAdminApi(
+  request: Request,
+  options: { allowPropertyAgent?: boolean } = {},
+): Promise<AdminApiGuardResult> {
   let supabaseAdmin: SupabaseClient;
   try {
     supabaseAdmin = getSupabaseAdmin();
@@ -46,12 +50,21 @@ export async function requireAdminApi(request: Request): Promise<AdminApiGuardRe
       ),
     };
   }
-  if (!profile || profile.role !== 'ADMIN' || profile.account_status === 'suspended') {
+  const isAdmin = profile?.role === 'ADMIN';
+  const isActivePropertyAgent =
+    options.allowPropertyAgent &&
+    profile?.role === 'AGENT' &&
+    profile.account_status === 'active';
+  if (!profile || (!isAdmin && !isActivePropertyAgent) || profile.account_status === 'suspended') {
     const message = profile?.account_status === 'suspended' ? 'Compte suspendu.' : 'Accès refusé.';
     return { response: NextResponse.json({ error: message }, { status: 403 }) };
   }
 
-  return { supabaseAdmin, userId: authData.user.id };
+  return {
+    supabaseAdmin,
+    userId: authData.user.id,
+    userRole: isAdmin ? 'ADMIN' : 'AGENT',
+  };
 }
 
 export function isValidUuid(value: string): boolean {

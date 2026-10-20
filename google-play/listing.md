@@ -15,7 +15,7 @@ Immobilier à Kara : maisons, appartements et terrains
 ```
 🏠 Imo Nord Togo - Votre Partenaire Immobilier à Kara
 
-Imo Nord Togo est l'application immobilière de référence dans la région de Kara au Togo. Que vous cherchiez à acheter, vendre ou louer un bien immobilier, notre application vous offre une expérience simple et efficace.
+Imo Nord Togo est une application immobilière consacrée à Kara et à ses environs. Consultez des annonces de vente ou de location, recherchez un bien par critères et contactez son annonceur.
 
 ✨ FONCTIONNALITÉS PRINCIPALES :
 
@@ -29,12 +29,6 @@ Imo Nord Togo est l'application immobilière de référence dans la région de K
 • Appartements
 • Terrains (constructibles et parcelles)
 
-📊 BACK OFFICE ADMINISTRATEUR
-• Gestion complète des annonces
-• Validation des propriétés
-• Suivi des clients
-• Statistiques en temps réel
-
 🔍 RECHERCHE AVANCÉE
 • Filtrez par type, prix et localisation
 • Recherche par mot-clé
@@ -43,15 +37,15 @@ Imo Nord Togo est l'application immobilière de référence dans la région de K
 📱 INTERFACE MODERNE
 • Design élégant et intuitif
 • Navigation fluide
-• Compatible tous appareils Android
+• Interface adaptée aux appareils Android compatibles
 
-💼 POUR LES PROPRIÉTAIRES
-• Publiez vos annonces gratuitement
-• Gérez vos biens en toute simplicité
-• Contactez directement les acheteurs potentiels
+💼 POUR LES ANNONCEURS
+• Demandez l’accès à la publication d’annonces
+• Gérez vos biens lorsque votre accès est activé
+• Échangez directement avec les personnes intéressées
 
 🎯 POUR LES CHERCHEURS
-• Parcourez des centaines d'annonces
+• Parcourez les annonces disponibles
 • Contactez les propriétaires en un clic
 • Visitez les biens qui vous intéressent
 
@@ -61,13 +55,8 @@ Kara et ses environs :
 • Centre-ville, Kparatao, Pya
 • Villages environnants (Tcharé, Agou Nyogbo...)
 
-🔒 SÉCURITÉ
-• Validation des annonces par notre équipe
-• Protection de vos données personnelles
-• Communications sécurisées
-
-💰 GRATUIT
-L'application est entièrement gratuite ! Téléchargez-la maintenant et trouvez le bien de vos rêves.
+🔒 CONFIDENTIALITÉ
+• Consultez notre politique de confidentialité dans l’application et sur notre site
 
 📞 CONTACT
 Email : imonordtogo@gmail.com
@@ -90,8 +79,9 @@ immo, immobilier, togolais, togo, kara, vente, location, terrain, villa, maison,
 ### Téléphone (obligatoire)
 - Minimum : 2 captures
 - Maximum : 8 captures
-- Format : 16:9 ou 9:16
-- Résolution : 1080 x 1920 px minimum
+- Format : JPEG ou PNG 24 bits, sans transparence
+- Dimensions : 320 px minimum et 3840 px maximum; le côté le plus long ne doit pas dépasser deux fois le côté le plus court
+- Recommandation de présentation : captures verticales nettes, par exemple 1080 x 1920 px
 
 Écrans à capturer :
 1. Écran d'accueil avec les biens en vedette
@@ -99,10 +89,6 @@ immo, immobilier, togolais, togo, kara, vente, location, terrain, villa, maison,
 3. Détail d'un bien immobilier
 4. Écran de recherche et filtres
 5. Profil et contact
-
-### Tablette (optionnel)
-- Format : 16:9 ou 9:16
-- Résolution : 1080 x 1920 px minimum
 
 ---
 
@@ -130,8 +116,7 @@ immo, immobilier, togolais, togo, kara, vente, location, terrain, villa, maison,
 
 ## Catégorie
 
-- **Catégorie principale** : Immobilier
-- **Catégorie secondaire** : Maison et habitation
+- **Catégorie principale suggérée** : Immobilier
 
 ---
 
@@ -175,8 +160,7 @@ URL recommandée : https://imo-nord-togo-mobile.vercel.app/terms
    - L'accès aux photos est limité aux parcours de sélection/téléversement choisis par l'utilisateur.
    - Les anciennes permissions générales de stockage et `SYSTEM_ALERT_WINDOW` sont bloquées dans la configuration Android.
 
-3. L'application respecte les politiques Google Play :
-   - Pas de contenu inapproprié
-   - Politique de confidentialité incluse
-   - Conditions d'utilisation incluses
-   - Permissions justifiées
+3. Vérifications à effectuer dans Play Console avant publication :
+   - Confirmer la conformité du contenu et de la fiche aux règles Google Play en vigueur.
+   - Vérifier que les URL de confidentialité et de suppression de compte sont accessibles.
+   - Déclarer les permissions réellement présentes dans le bundle soumis et justifier leur usage.

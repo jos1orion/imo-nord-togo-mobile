@@ -63,7 +63,7 @@ La section **0** ci-dessous **regroupe tout** ce qui a ete evoque (design, produ
 
 | # | Recommandation |
 |---|----------------|
-| S1 | **AAB** en production, **APK** pour tests internes ; **incrementer `versionCode`** e chaque soumission. |
+| S1 | **AAB** en production, **APK** pour tests internes ; laisser EAS incrémenter le `versionCode` distant à chaque build configuré pour l’auto-incrément. |
 | S2 | **Politique de confidentialite** (URL) + formulaire Play (donnees collectees, localisation, etc.) aligne sur la realite. |
 | S3 | **Fiche store** : texte / **ASO** (mots-cles naturels), captures telephone (et tablette si supportee), icene lisible en petit. |
 | S4 | **Secrets** : Supabase et cles dans **EAS Secrets** / env  -  rien d'inutilement sensible en dur cete client. |
@@ -99,7 +99,7 @@ La section **0** ci-dessous **regroupe tout** ce qui a ete evoque (design, produ
 | Identite | Couleurs, typo et splash/icene alignes sur une charte unique |
 | Coherence UI | Theme unique (Paper + ecrans) + composants reutilisables |
 | Qualite pereue | Pas de texte en dur hors i18n sur les ecrans publics ; images soignees |
-| Store | AAB prod, `versionCode` incremente, fiche Play + politique confidentialite |
+| Store | AAB prod, `versionCode` distant géré par EAS, fiche Play + politique de confidentialité |
 | Robustesse | Erreurs reseau claires ; listes performantes ; optionnel : crash reporting |
 
 ---
@@ -212,7 +212,7 @@ Les **8 pistes** ci-dessous sont coneues pour limiter les conflits Git : separer
 ### Piste H  -  Build, securite, Play Store
 
 - [ ] **H1** Verifier cles Supabase : variables d'environnement / EAS Secrets, pas de secrets inutiles cete client.
-- [ ] **H2** Process release : increment `version` + `android.versionCode` avant chaque build store.
+- [ ] **H2** Process release : incrémenter `version` dans `app.json` pour chaque version visible ; vérifier le `versionCode` distant attribué par EAS et ne pas définir `android.versionCode` localement.
 - [ ] **H3** Build `production` (AAB) pour Play ; `preview` (APK) pour tests internes (`eas.json` deje esquisse).
 - [ ] **H4** Page **Politique de confidentialite** (URL) + alignement formulaire Play (donnees, localisation, etc.).
 - [ ] **H5** (Optionnel) Sentry ou equivalent pour crashes production.

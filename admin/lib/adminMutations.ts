@@ -14,7 +14,7 @@ export async function getAdminAccessToken(): Promise<string | null> {
   return token;
 }
 
-async function adminApiRequest(path: string, init: RequestInit): Promise<Response> {
+export async function adminApiRequest(path: string, init: RequestInit): Promise<Response> {
   const token = await getAdminAccessToken();
   if (!token) throw new Error('Session admin introuvable.');
 

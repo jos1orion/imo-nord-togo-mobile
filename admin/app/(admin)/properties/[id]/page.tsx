@@ -11,7 +11,7 @@ import { deleteAdminProperty } from '../../../../lib/propertyStorage';
 import { useSession } from '../../../../lib/useSession';
 import type { ListingEvent, ListingStatus, Property, PropertyStatus, Publication } from '../../../../lib/types';
 
-type PropertyRow = Property & { property_images?: { url: string }[] };
+type PropertyRow = Property & { owner_id: string | null; property_images?: { url: string }[] };
 type OwnerProfile = { id: string; full_name: string | null; phone: string | null };
 
 const EVENT_LABELS: Record<string, string> = {
@@ -154,6 +154,11 @@ export default function PropertyDetailsPage() {
     );
   }
 
+  const agentCanEditOwnDraft =
+    profile?.role === 'AGENT' &&
+    property.owner_id === profile.id &&
+    (property.listing_status === 'pending' || property.listing_status === 'rejected');
+
   return (
     <div className="grid">
       <SectionHeader
@@ -162,9 +167,11 @@ export default function PropertyDetailsPage() {
         actions={
           <div className="pill-row">
             <div className={`status ${property.listing_status}`}>{property.listing_status}</div>
-            <button className="ghost-button" onClick={() => router.push(`/properties?edit=${property.id}`)}>
-              Modifier
-            </button>
+            {profile?.role === 'ADMIN' || agentCanEditOwnDraft ? (
+              <button className="ghost-button" onClick={() => router.push(`/properties?edit=${property.id}`)}>
+                Modifier
+              </button>
+            ) : null}
           </div>
         }
       />
@@ -215,15 +222,17 @@ export default function PropertyDetailsPage() {
               <div><span>Publiée le</span><strong>{property.published_at ? formatDate(property.published_at) : '—'}</strong></div>
               <div><span>Expire le</span><strong>{property.expires_at ? formatDate(property.expires_at) : '—'}</strong></div>
             </div>
-            <div className="detail-actions" style={{ marginTop: 16 }}>
-              <button className="primary-button small" onClick={() => updateListingStatus('approved')}>Approuver</button>
-              <button className="ghost-button small" onClick={() => updateListingStatus('rejected')}>Rejeter</button>
-              <button className="ghost-button small" onClick={() => router.push(`/properties?edit=${property.id}`)}>Modifier</button>
-              <button className="ghost-button small" onClick={toggleFeatured}>
-                {property.featured ? 'Retirer Featured' : 'Mettre Featured'}
-              </button>
-              <button className="ghost-button small" onClick={() => updateAvailability('occupied')}>Marquer occupé</button>
-            </div>
+            {profile?.role === 'ADMIN' ? (
+              <div className="detail-actions" style={{ marginTop: 16 }}>
+                <button className="primary-button small" onClick={() => updateListingStatus('approved')}>Approuver</button>
+                <button className="ghost-button small" onClick={() => updateListingStatus('rejected')}>Rejeter</button>
+                <button className="ghost-button small" onClick={() => router.push(`/properties?edit=${property.id}`)}>Modifier</button>
+                <button className="ghost-button small" onClick={toggleFeatured}>
+                  {property.featured ? 'Retirer Featured' : 'Mettre Featured'}
+                </button>
+                <button className="ghost-button small" onClick={() => updateAvailability('occupied')}>Marquer occupé</button>
+              </div>
+            ) : null}
             {profile?.role === 'ADMIN' ? (
               <div className="card detail-actions" style={{ justifyContent: 'flex-end' }}>
                 <button

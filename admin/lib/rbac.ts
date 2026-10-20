@@ -87,6 +87,7 @@ export function getPermissionForPath(pathname: string): Permission | null {
   if (path.startsWith('/reports')) return 'notifications.read';
   if (path.startsWith('/notifications')) return 'notifications.read';
   if (path.startsWith('/users')) return 'admins.read';
+  if (path.startsWith('/account-deletion-requests')) return 'admins.read';
   if (path.startsWith('/agents')) return 'admins.read';
   if (path.startsWith('/admins')) return 'admins.read';
   if (path.startsWith('/logs')) return 'admins.read';

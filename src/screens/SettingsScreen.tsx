@@ -61,7 +61,7 @@ const LegalScreen: React.FC<LegalScreenProps> = ({ type, onClose }) => {
 const privacyContentFr = `
 POLITIQUE DE CONFIDENTIALITÉ - IMO NORD TOGO
 
-Dernière mise à jour : 11 octobre 2026
+Dernière mise à jour : 20 octobre 2026
 
 1. INTRODUCTION
 
@@ -69,7 +69,7 @@ Cette politique décrit les informations traitées lorsque vous utilisez l'appli
 
 2. INFORMATIONS TRAITÉES
 
-Selon les fonctions utilisées, nous traitons les informations de compte que vous fournissez (nom, adresse e-mail et téléphone), les annonces que vous créez (description, prix, ville, quartier, caractéristiques et photos), ainsi que les messages, avis, favoris, recherches et alertes que vous choisissez d’utiliser. Des données techniques nécessaires à l’authentification, à la sécurité et au fonctionnement du service peuvent également être générées.
+Selon les fonctions utilisées, nous traitons les informations de compte que vous fournissez (nom, adresse e-mail et téléphone), les annonces que vous créez (description, prix, ville, quartier, caractéristiques et photos), ainsi que les messages, avis, favoris, recherches et alertes que vous choisissez d’utiliser. Si vous envoyez une demande de suppression, nous enregistrons l’adresse e-mail fournie et l’état de traitement de la demande. Des données techniques nécessaires à l’authentification, à la sécurité et au fonctionnement du service peuvent également être générées.
 
 3. UTILISATION DES INFORMATIONS
 
@@ -83,21 +83,25 @@ Les annonces publiées et les coordonnées que vous choisissez d’y inclure peu
 
 L’application accède à la caméra ou à la photothèque uniquement lorsque vous choisissez d’ajouter des photos et après autorisation de votre appareil. La ville et le quartier saisis dans une annonce servent à décrire le bien. L’application ne demande pas l’accès à la position GPS de votre appareil.
 
-6. CONSERVATION ET SÉCURITÉ
+6. RECHERCHE VOCALE
 
-Les données sont conservées aussi longtemps que nécessaire au fonctionnement du compte et du service, puis supprimées ou conservées uniquement lorsque cela est nécessaire pour des obligations légales, la sécurité ou le règlement de litiges. Nous mettons en œuvre des mesures raisonnables pour protéger les données, sans pouvoir garantir une sécurité absolue.
+La recherche vocale est facultative et n’active le microphone qu’après votre action et votre autorisation. La reconnaissance est effectuée par le service vocal configuré sur votre appareil, qui peut traiter l’audio selon ses propres conditions et sa politique de confidentialité. Imo Nord Togo utilise le texte reconnu pour renseigner la recherche.
 
-7. VOS CHOIX ET SUPPRESSION DU COMPTE
+7. CONSERVATION ET SÉCURITÉ
 
-Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte en écrivant à ${getContactEmail()} depuis l’adresse associée au compte. Indiquez « Suppression de compte Imo Nord Togo » dans l’objet. Nous pouvons demander des éléments raisonnables pour vérifier votre identité. La suppression entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité.
+Les données sont conservées aussi longtemps que nécessaire au fonctionnement du compte et du service, puis supprimées ou conservées uniquement lorsque cela est nécessaire pour des obligations légales, la sécurité ou le règlement de litiges. Pour une demande de suppression envoyée via le formulaire en ligne, l’adresse e-mail est effacée du dossier lorsque la demande est terminée ou refusée; le statut et les dates de traitement sont conservés. Nous mettons en œuvre des mesures raisonnables pour protéger les données, sans pouvoir garantir une sécurité absolue.
 
-8. CONTACT
+8. VOS CHOIX ET SUPPRESSION DU COMPTE
+
+Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte via le formulaire en ligne. Un administrateur vérifiera la demande et traitera manuellement la suppression; l’envoi du formulaire ne supprime pas immédiatement le compte. L’adresse e-mail est effacée du dossier lorsque la demande est terminée ou refusée, tandis que le statut et les dates de traitement sont conservés. Vous pouvez aussi écrire à ${getContactEmail()}. La suppression entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité.
+
+9. CONTACT
 
 E-mail : ${getContactEmail()}
 Téléphone : +${getContactPhoneDigits()}
 Adresse : Kara, Togo
 
-9. MINEURS ET MODIFICATIONS
+10. MINEURS ET MODIFICATIONS
 
 Le service n’est pas destiné aux personnes de moins de 18 ans. Nous pouvons mettre à jour cette politique ; la date de mise à jour sera alors modifiée sur cette page.
 
@@ -173,7 +177,7 @@ Imo Nord Togo - votre partenaire immobilier a Kara.
 const privacyContentEn = `
 PRIVACY POLICY - IMO NORD TOGO
 
-Last updated: October 11, 2026
+Last updated: October 20, 2026
 
 1. INTRODUCTION
 
@@ -181,7 +185,7 @@ This policy explains how information is handled when you use the Imo Nord Togo m
 
 2. INFORMATION WE HANDLE
 
-Depending on the features you use, we handle account details you provide (name, email address and phone number), listings you create (description, price, city, neighborhood, features and photos), and messages, reviews, favorites, searches and alerts you choose to use. Technical data needed for authentication, security and service operation may also be generated.
+Depending on the features you use, we handle account details you provide (name, email address and phone number), listings you create (description, price, city, neighborhood, features and photos), and messages, reviews, favorites, searches and alerts you choose to use. If you submit an account deletion request, we store the email address you provide and the request status. Technical data needed for authentication, security and service operation may also be generated.
 
 3. USE OF INFORMATION
 
@@ -195,21 +199,25 @@ Published listings and contact details you choose to include may be visible to a
 
 The app accesses your camera or photo library only when you choose to add photos and grant device permission. The city and neighborhood entered in a listing describe the property. The app does not request access to your device’s GPS location.
 
-6. RETENTION AND SECURITY
+6. VOICE SEARCH
 
-Data is kept for as long as needed to operate the account and service, then deleted or retained only where needed for legal obligations, security or dispute resolution. We use reasonable safeguards, but cannot guarantee absolute security.
+Voice search is optional and accesses the microphone only after you choose the feature and grant permission. Speech recognition is provided by the service configured on your device, which may process audio under its own terms and privacy policy. Imo Nord Togo uses the recognized text to fill in your search.
 
-7. YOUR CHOICES AND ACCOUNT DELETION
+7. RETENTION AND SECURITY
 
-You may request access, correction or deletion of your data and account by emailing ${getContactEmail()} from the address linked to the account. Use “Imo Nord Togo account deletion” as the subject. We may ask for reasonable information to verify your identity. Account deletion removes or de-links personal data, except information that must be retained for legal or security reasons.
+Data is kept for as long as needed to operate the account and service, then deleted or retained only where needed for legal obligations, security or dispute resolution. For an online deletion request, the email address is cleared from the request when it is completed or rejected; its status and processing dates are retained. We use reasonable safeguards, but cannot guarantee absolute security.
 
-8. CONTACT
+8. YOUR CHOICES AND ACCOUNT DELETION
+
+You may request access, correction or deletion of your data and account using the online form. An administrator will verify the request and handle deletion manually; submitting the form does not delete the account immediately. The email address is cleared from the request when it is completed or rejected, while its status and processing dates are retained. You may also email ${getContactEmail()}. Account deletion removes or de-links personal data, except information that must be retained for legal or security reasons.
+
+9. CONTACT
 
 Email: ${getContactEmail()}
 Phone: +${getContactPhoneDigits()}
 Address: Kara, Togo
 
-9. CHILDREN AND CHANGES
+10. CHILDREN AND CHANGES
 
 The service is not intended for anyone under 18. We may update this policy and will change the update date on this page.
 `;

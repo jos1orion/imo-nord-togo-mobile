@@ -498,10 +498,19 @@ export default function PropertiesPage() {
         listing_status: listingStatusForSave,
       };
       if (editingId) {
-        const updates = {
-          ...basePayload,
-          ...(supportsFeaturedColumn ? { featured: featuredForSave } : {}),
-        };
+        const updates = canSetAdminListingFields
+          ? {
+              ...basePayload,
+              ...(supportsFeaturedColumn ? { featured: featuredForSave } : {}),
+            }
+          : {
+              title: form.title,
+              type: form.type,
+              price: Number(form.price),
+              location: form.location,
+              neighborhood: form.neighborhood || null,
+              description: form.description,
+            };
         try {
           await updateAdminRecord('properties', editingId, updates);
         } catch (error) {

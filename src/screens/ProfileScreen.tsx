@@ -311,15 +311,13 @@ const ProfileScreen: React.FC = () => {
   };
 
   const handleAccountDeletionRequest = async () => {
-    const subject = encodeURIComponent('Suppression de compte Imo Nord Togo');
-    const body = encodeURIComponent(
-      `Bonjour,\n\nJe demande la suppression de mon compte Imo Nord Togo et des données personnelles associées.\n\nAdresse e-mail associée au compte : ${currentUser?.email ?? ''}\n\n`
-    );
-
     try {
-      await Linking.openURL(`mailto:${getContactEmail()}?subject=${subject}&body=${body}`);
+      await Linking.openURL('https://imo-nord-togo-mobile.vercel.app/delete-account');
     } catch {
-      Alert.alert(t('error'), t('profile_delete_account_email_failed'));
+      Alert.alert(
+        t('error'),
+        `${t('profile_delete_account_email_failed')}\n\nhttps://imo-nord-togo-mobile.vercel.app/delete-account`
+      );
     }
   };
 

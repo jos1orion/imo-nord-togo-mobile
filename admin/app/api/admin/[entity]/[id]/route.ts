@@ -25,8 +25,11 @@ export async function PATCH(
     return NextResponse.json({ error: 'Identifiant ou type d’entité invalide.' }, { status: 400 });
   }
 
-  const guard = await requireAdminApi(request);
+  const guard = await requireAdminApi(request, { allowPropertyAgent: true });
   if ('response' in guard) return guard.response;
+  if (guard.userRole === 'AGENT' && entity !== 'properties') {
+    return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
+  }
 
   let payload: unknown;
   try {
@@ -39,20 +42,45 @@ export async function PATCH(
   if (!updates) {
     return NextResponse.json({ error: 'Modifications invalides ou non autorisées.' }, { status: 400 });
   }
+  if (
+    guard.userRole === 'AGENT' &&
+    Object.keys(updates).some(
+      key => !['title', 'type', 'price', 'location', 'neighborhood', 'description'].includes(key),
+    )
+  ) {
+    return NextResponse.json(
+      { error: 'Un agent peut uniquement corriger le contenu de son brouillon.' },
+      { status: 403 },
+    );
+  }
   if (entity === 'profiles' && id === guard.userId && updates.account_status === 'suspended') {
     return NextResponse.json({ error: 'Impossible de suspendre votre propre compte.' }, { status: 400 });
   }
 
-  const { data, error } = await guard.supabaseAdmin
+  let updateQuery = guard.supabaseAdmin
     .from(entity)
     .update(updates)
-    .eq('id', id)
-    .select('id')
-    .maybeSingle();
+    .eq('id', id);
+  if (guard.userRole === 'AGENT') {
+    updateQuery = updateQuery
+      .eq('owner_id', guard.userId)
+      .in('listing_status', ['pending', 'rejected']);
+  }
+  const { data, error } = await updateQuery.select('id').maybeSingle();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
-  if (!data) return NextResponse.json({ error: 'Enregistrement introuvable.' }, { status: 404 });
+  if (!data) {
+    return NextResponse.json(
+      {
+        error:
+          guard.userRole === 'AGENT'
+            ? 'Brouillon introuvable ou non modifiable.'
+            : 'Enregistrement introuvable.',
+      },
+      { status: 404 },
+    );
+  }
 
   return NextResponse.json({ success: true });
 }
@@ -63,12 +91,21 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: 'Identifiant ou type d’entité invalide.' }, { status: 400 });
   }
 
-  const guard = await requireAdminApi(request);
+  const guard = await requireAdminApi(request, { allowPropertyAgent: true });
   if ('response' in guard) return guard.response;
+  if (guard.userRole === 'AGENT' && entity !== 'properties') {
+    return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
+  }
 
   if (entity === 'properties') {
     try {
-      const result = await deleteAdminProperties(guard.supabaseAdmin, [id]);
+      const result = await deleteAdminProperties(
+        guard.supabaseAdmin,
+        [id],
+        guard.userRole === 'AGENT'
+          ? { ownerId: guard.userId, listingStatuses: ['pending', 'rejected'] }
+          : undefined,
+      );
       await recordAdminAction(guard.supabaseAdmin, guard.userId, 'delete_property', 'property', id);
       return NextResponse.json({ success: true, ...result });
     } catch (error) {
