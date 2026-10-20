@@ -1304,18 +1304,9 @@ button {
 .property-actions-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 8px;
-  opacity: 0;
-  transform: translateY(6px);
-  pointer-events: none;
-  transition: all 0.2s ease;
-}
-
-.property-card.modern:hover .property-actions-row {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
 }
 
 .status-select {
@@ -1471,15 +1462,21 @@ button {
 
 .action-menu {
   position: relative;
+  z-index: 1;
 }
 
 .action-menu summary {
   list-style: none;
   cursor: pointer;
+  flex: 0 0 auto;
 }
 
 .action-menu summary::-webkit-details-marker {
   display: none;
+}
+
+.action-menu[open] {
+  z-index: 20;
 }
 
 .icon-button {
@@ -1491,20 +1488,19 @@ button {
   display: grid;
   place-items: center;
   color: var(--text);
+  font-size: 22px;
+  line-height: 1;
 }
 
 .action-menu-list {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 8px;
-  min-width: 160px;
+  min-width: 190px;
+  margin-top: 8px;
   display: grid;
   gap: 6px;
-  z-index: 10;
   box-shadow: var(--shadow-sm);
 }
 
@@ -1573,6 +1569,13 @@ button {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.row-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .table-muted {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import SectionHeader from '../../../components/SectionHeader';
 import LoadingState from '../../../components/LoadingState';
 import { formatCurrency, formatDate } from '../../../lib/format';
@@ -753,23 +754,32 @@ export default function PropertiesPage() {
 
     if (!canSetAdminListingFields && !agentCanEditOwnDraft) return null;
 
+    const runMenuAction = (event: ReactMouseEvent<HTMLButtonElement>, action: () => void) => {
+      event.currentTarget.closest('details')?.removeAttribute('open');
+      action();
+    };
+
     return (
       <details className="action-menu" onClick={event => event.stopPropagation()}>
-        <summary className="icon-button">...</summary>
+        <summary className="icon-button" aria-label={`Options de l’annonce ${property.title}`} title="Options">
+          ⋮
+        </summary>
         <div className="action-menu-list">
           {canSetAdminListingFields ? (
             <>
-              <button onClick={() => handleListingStatus(property.id, 'approved')}>Approuver</button>
-              <button onClick={() => handleListingStatus(property.id, 'rejected')}>Refuser</button>
-              <button onClick={() => handleFeatured(property.id, !property.featured)}>
+              <button onClick={event => runMenuAction(event, () => handleListingStatus(property.id, 'approved'))}>Approuver</button>
+              <button onClick={event => runMenuAction(event, () => handleListingStatus(property.id, 'rejected'))}>Refuser</button>
+              <button onClick={event => runMenuAction(event, () => handleFeatured(property.id, !property.featured))}>
                 {property.featured ? 'Retirer vedette' : 'Mettre en vedette'}
               </button>
-              <button onClick={() => handleListingStatus(property.id, 'archived')}>Archiver</button>
+              <button onClick={event => runMenuAction(event, () => handleListingStatus(property.id, 'archived'))}>Archiver</button>
             </>
           ) : null}
-          <button onClick={() => handleEdit(property)}>Modifier</button>
+          <button onClick={event => runMenuAction(event, () => handleEdit(property))}>Modifier</button>
           {canSetAdminListingFields ? (
-            <button className="danger" onClick={() => handleDelete(property.id)}>Supprimer</button>
+            <button className="danger" onClick={event => runMenuAction(event, () => void handleDelete(property.id))}>
+              Supprimer
+            </button>
           ) : null}
         </div>
       </details>
@@ -1212,14 +1222,6 @@ export default function PropertiesPage() {
                   </div>
                   <div className="property-actions-row" onClick={event => event.stopPropagation()}>
                     {renderMainAction(property)}
-                    {canSetAdminListingFields ? (
-                      <button
-                        className="danger-button small"
-                        onClick={() => void handleDelete(property.id)}
-                      >
-                        Supprimer
-                      </button>
-                    ) : null}
                     {renderMenu(property)}
                   </div>
                 </div>
@@ -1295,14 +1297,6 @@ export default function PropertiesPage() {
                       <td onClick={event => event.stopPropagation()}>
                         <div className="row-actions">
                           {renderMainAction(property)}
-                          {canSetAdminListingFields ? (
-                            <button
-                              className="danger-button small"
-                              onClick={() => void handleDelete(property.id)}
-                            >
-                              Supprimer
-                            </button>
-                          ) : null}
                           {renderMenu(property)}
                         </div>
                       </td>
