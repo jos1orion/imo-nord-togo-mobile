@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import DataTable from '../../../components/DataTable';
 import SectionHeader from '../../../components/SectionHeader';
 import StatusPill from '../../../components/StatusPill';
 import { supabase } from '../../../lib/supabaseClient';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
-import { formatCurrency, formatDate } from '../../../lib/format';
+import { escapeHtml, formatCurrency, formatDate } from '../../../lib/format';
 import type { Contract, ContractStatus, Property, Tenant } from '../../../lib/types';
 import { logAdminAction } from '../../../lib/adminAudit';
 import { deleteAdminRecord, updateAdminRecord } from '../../../lib/adminMutations';
+import { focusForm } from '../../../lib/formNavigation';
 
 const emptyForm = {
   property_id: '',
@@ -28,12 +29,12 @@ const printContract = (payload: Contract & { property?: string; tenant?: string 
       <head><title>Contrat</title></head>
       <body style="font-family: Arial; padding: 24px;">
         <h2>Contrat de location</h2>
-        <p><strong>Bien:</strong> ${payload.property ?? ''}</p>
-        <p><strong>Locataire:</strong> ${payload.tenant ?? ''}</p>
-        <p><strong>Debut:</strong> ${payload.start_date}</p>
-        <p><strong>Fin:</strong> ${payload.end_date}</p>
-        <p><strong>Loyer mensuel:</strong> ${payload.rent_amount}</p>
-        <p><strong>Statut:</strong> ${payload.status}</p>
+        <p><strong>Bien:</strong> ${escapeHtml(payload.property)}</p>
+        <p><strong>Locataire:</strong> ${escapeHtml(payload.tenant)}</p>
+        <p><strong>Debut:</strong> ${escapeHtml(payload.start_date)}</p>
+        <p><strong>Fin:</strong> ${escapeHtml(payload.end_date)}</p>
+        <p><strong>Loyer mensuel:</strong> ${escapeHtml(payload.rent_amount)}</p>
+        <p><strong>Statut:</strong> ${escapeHtml(payload.status)}</p>
         <p>Signature: ________________________</p>
       </body>
     </html>
@@ -43,24 +44,17 @@ const printContract = (payload: Contract & { property?: string; tenant?: string 
 };
 
 export default function ContractsPage() {
-  const { data: contracts, loading, reload } = useSupabaseTable<Contract>('contracts', { orderBy: 'created_at' });
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const { data: contracts, loading, error, reload } = useSupabaseTable<Contract>('contracts', { orderBy: 'created_at' });
+  const { data: properties, error: propertiesError, reload: reloadProperties } = useSupabaseTable<
+    Pick<Property, 'id' | 'title' | 'location'>
+  >('properties', { select: 'id,title,location' });
+  const { data: tenants, error: tenantsError, reload: reloadTenants } = useSupabaseTable<
+    Pick<Tenant, 'id' | 'full_name'>
+  >('tenants', { select: 'id,full_name' });
+  const optionsError = [propertiesError, tenantsError].filter(Boolean).join(' ; ') || null;
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    const loadOptions = async () => {
-      const [propRes, tenantRes] = await Promise.all([
-        supabase.from('properties').select('id,title,location'),
-        supabase.from('tenants').select('id,full_name'),
-      ]);
-      setProperties((propRes.data as Property[]) ?? []);
-      setTenants((tenantRes.data as Tenant[]) ?? []);
-    };
-    loadOptions();
-  }, []);
 
   const handleSubmit = async () => {
     if (!form.property_id || !form.tenant_id || !form.start_date || !form.end_date || !form.rent_amount) return;
@@ -131,10 +125,35 @@ export default function ContractsPage() {
       <SectionHeader
         title="Gestion des contrats"
         subtitle="Creer, suivre et exporter les contrats de location."
-        actions={<button className="primary-button">Nouveau contrat</button>}
+        actions={
+          <button
+            className="primary-button"
+            onClick={() => {
+              setEditingId(null);
+              setForm(emptyForm);
+              focusForm('contract-form');
+            }}
+          >
+            Nouveau contrat
+          </button>
+        }
       />
 
-      <div className="card form-card">
+      <div id="contract-form" className="card form-card">
+        {optionsError ? (
+          <div className="alert" role="alert">
+            Impossible de charger les biens ou locataires : {optionsError}
+            <button
+              className="ghost-button small"
+              onClick={() => {
+                reloadProperties();
+                reloadTenants();
+              }}
+            >
+              Réessayer
+            </button>
+          </div>
+        ) : null}
         <div className="form-grid">
           <div className="form-field">
             <label>Bien</label>
@@ -212,6 +231,8 @@ export default function ContractsPage() {
 
       <DataTable
         loading={loading}
+        error={error}
+        onRetry={reload}
         rows={contracts}
         emptyLabel={loading ? 'Chargement...' : 'Aucun contrat'}
         columns={[

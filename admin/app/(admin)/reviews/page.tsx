@@ -17,7 +17,7 @@ type ReviewRow = {
 };
 
 export default function ReviewsPage() {
-  const { data, loading, reload } = useSupabaseTable<ReviewRow>('reviews', { orderBy: 'created_at' });
+  const { data, loading, error, reload } = useSupabaseTable<ReviewRow>('reviews', { orderBy: 'created_at' });
 
   const toggle = async (row: ReviewRow) => {
     try {
@@ -35,6 +35,8 @@ export default function ReviewsPage() {
       {loading ? <LoadingState /> : (
         <DataTable
           loading={loading}
+          error={error}
+          onRetry={reload}
           rows={data}
           emptyLabel="Aucun avis. La table reviews est créée par supabase-admin-platform.sql."
           columns={[

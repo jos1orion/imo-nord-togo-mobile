@@ -7,6 +7,7 @@ import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import type { Profile } from '../../../lib/useSession';
 import { supabase } from '../../../lib/supabaseClient';
 import { roleLabels } from '../../../lib/rbac';
+import { focusForm } from '../../../lib/formNavigation';
 
 const emptyForm = {
   full_name: '',
@@ -17,7 +18,7 @@ const emptyForm = {
 };
 
 export default function AdminsPage() {
-  const { data: admins, loading, reload } = useSupabaseTable<Profile>('profiles', { orderBy: 'created_at' });
+  const { data: admins, loading, error: tableError, reload } = useSupabaseTable<Profile>('profiles', { orderBy: 'created_at' });
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,10 +57,22 @@ export default function AdminsPage() {
       <SectionHeader
         title="Gestion des admins"
         subtitle="Creer des comptes et definir les roles (Admin, Agent, Comptable)."
-        actions={<button className="primary-button">Nouveau compte</button>}
+        actions={
+          <button
+            className="primary-button"
+            onClick={() => {
+              setForm(emptyForm);
+              setError(null);
+              setSuccess(null);
+              focusForm('admin-form');
+            }}
+          >
+            Nouveau compte
+          </button>
+        }
       />
 
-      <div className="card form-card">
+      <div id="admin-form" className="card form-card">
         <div className="form-grid">
           <div className="form-field">
             <label>Nom complet</label>
@@ -119,6 +132,8 @@ export default function AdminsPage() {
 
       <DataTable
         loading={loading}
+        error={tableError}
+        onRetry={reload}
         rows={admins}
         emptyLabel={loading ? 'Chargement...' : 'Aucun admin'}
         columns={[

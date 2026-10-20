@@ -13,11 +13,11 @@ const emptyForm = { name: '' };
 type PropertyNeighborhoodRow = { id: string; neighborhood: string | null };
 
 export default function NeighborhoodsPage() {
-  const { data: neighborhoods, loading, reload } = useSupabaseTable<Neighborhood>('neighborhoods', {
+  const { data: neighborhoods, loading, error, reload } = useSupabaseTable<Neighborhood>('neighborhoods', {
     orderBy: 'name',
     ascending: true,
   });
-  const { data: propertyRows } = useSupabaseTable<PropertyNeighborhoodRow>('properties', {
+  const { data: propertyRows, error: propertyRowsError, reload: reloadPropertyRows } = useSupabaseTable<PropertyNeighborhoodRow>('properties', {
     select: 'id, neighborhood',
     orderBy: 'created_at',
   });
@@ -96,7 +96,14 @@ export default function NeighborhoodsPage() {
         title="Quartiers"
         subtitle="Ajoutez, modifiez ou supprimez les quartiers disponibles."
         actions={
-          <button className="primary-button" onClick={() => setEditingId(null)}>
+          <button
+            className="primary-button"
+            onClick={() => {
+              setEditingId(null);
+              setForm(emptyForm);
+              document.getElementById('neighborhood-name')?.focus();
+            }}
+          >
             Nouveau quartier
           </button>
         }
@@ -107,6 +114,7 @@ export default function NeighborhoodsPage() {
           <div className="form-field form-span">
             <label>Nom du quartier</label>
             <input
+              id="neighborhood-name"
               value={form.name}
               onChange={event => setForm({ name: event.target.value })}
               placeholder="Ex: Kpéwa"
@@ -125,6 +133,11 @@ export default function NeighborhoodsPage() {
 
       <DataTable
         loading={loading}
+        error={[error, propertyRowsError].filter(Boolean).join(' ; ') || null}
+        onRetry={() => {
+          reload();
+          reloadPropertyRows();
+        }}
         rows={neighborhoods}
         emptyLabel={loading ? 'Chargement...' : 'Aucun quartier enregistre'}
         columns={[

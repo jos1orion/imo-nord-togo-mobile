@@ -18,7 +18,7 @@ type TxRow = {
 };
 
 export default function TransactionsPage() {
-  const { data, loading } = useSupabaseTable<TxRow>('publication_payments', { orderBy: 'created_at' });
+  const { data, loading, error, reload } = useSupabaseTable<TxRow>('publication_payments', { orderBy: 'created_at' });
 
   return (
     <div className="grid">
@@ -29,6 +29,8 @@ export default function TransactionsPage() {
       {loading ? <LoadingState /> : (
         <DataTable
           loading={loading}
+          error={error}
+          onRetry={reload}
           rows={data}
           emptyLabel="Aucune transaction publication. Les loyers restent dans Paiements."
           columns={[

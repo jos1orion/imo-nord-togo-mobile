@@ -16,7 +16,7 @@ type MessageRow = {
 };
 
 export default function MessagesPage() {
-  const { data, loading } = useSupabaseTable<MessageRow>('messages', { orderBy: 'created_at' });
+  const { data, loading, error, reload } = useSupabaseTable<MessageRow>('messages', { orderBy: 'created_at' });
 
   return (
     <div className="grid">
@@ -24,6 +24,8 @@ export default function MessagesPage() {
       {loading ? <LoadingState /> : (
         <DataTable
           loading={loading}
+          error={error}
+          onRetry={reload}
           rows={data}
           emptyLabel="Aucun message."
           columns={[

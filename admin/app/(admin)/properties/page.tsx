@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SectionHeader from '../../../components/SectionHeader';
 import LoadingState from '../../../components/LoadingState';
 import { formatCurrency, formatDate } from '../../../lib/format';
 import { supabase } from '../../../lib/supabaseClient';
-import { deletePropertyImageFiles } from '../../../lib/propertyStorage';
+import { deleteAdminProperty, deletePropertyImageFiles } from '../../../lib/propertyStorage';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import { useSession } from '../../../lib/useSession';
 import type { ListingStatus, Neighborhood, Property, PropertyStatus } from '../../../lib/types';
@@ -61,6 +61,7 @@ const listingTabs: { key: 'ALL' | ListingStatus; label: string }[] = [
   { key: 'ALL', label: 'Tous' },
   { key: 'pending', label: 'En attente' },
   { key: 'approved', label: 'Approuvé' },
+  { key: 'rejected', label: 'Refusé' },
   { key: 'archived', label: 'Archives' },
 ];
 
@@ -86,11 +87,11 @@ export default function PropertiesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, profile } = useSession();
-  const { data: properties, loading, reload } = useSupabaseTable<PropertyRow>('properties', {
+  const { data: properties, loading, error, reload } = useSupabaseTable<PropertyRow>('properties', {
     select: '*, property_images(url)',
     orderBy: 'created_at',
   });
-  const { data: neighborhoods } = useSupabaseTable<Neighborhood>('neighborhoods', {
+  const { data: neighborhoods, error: neighborhoodsError, reload: reloadNeighborhoods } = useSupabaseTable<Neighborhood>('neighborhoods', {
     orderBy: 'name',
     ascending: true,
   });
@@ -109,8 +110,19 @@ export default function PropertiesPage() {
   const priceRef = useRef<HTMLInputElement>(null);
   const locationRef = useRef<HTMLInputElement>(null);
   const imagesRef = useRef<HTMLInputElement>(null);
-  const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<'ALL' | ListingStatus>('ALL');
+  const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
+  const requestedTab = searchParams.get('tab');
+  const validTabs: ListingStatus[] = ['pending', 'approved', 'rejected', 'archived'];
+  const tab: 'ALL' | ListingStatus = validTabs.includes(requestedTab as ListingStatus)
+    ? requestedTab as ListingStatus
+    : 'ALL';
+  const setTab = useCallback((nextTab: 'ALL' | ListingStatus) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextTab === 'ALL') params.delete('tab');
+    else params.set('tab', nextTab);
+    const query = params.toString();
+    router.replace(query ? `/properties?${query}` : '/properties');
+  }, [router, searchParams]);
   const [statusFilter, setStatusFilter] = useState<PropertyStatus | 'ALL'>('ALL');
   const [typeFilter, setTypeFilter] = useState<Property['type'] | 'ALL'>('ALL');
   const [cityFilter, setCityFilter] = useState('ALL');
@@ -122,11 +134,26 @@ export default function PropertiesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'title' | 'location' | 'price' | 'listing_status' | 'status' | 'created_at'>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [page, setPage] = useState(1);
-  const [didInitEdit, setDidInitEdit] = useState(false);
+  const [pageState, setPageState] = useState({ page: 1, filterKey: '' });
+  const initializedEditId = useRef<string | null>(null);
+  const pageFilterKey = JSON.stringify([
+    search,
+    tab,
+    typeFilter,
+    statusFilter,
+    cityFilter,
+    priceMin,
+    priceMax,
+    dateFrom,
+    dateTo,
+    viewMode,
+  ]);
+  const page = pageState.filterKey === pageFilterKey ? pageState.page : 1;
   const canSetAdminListingFields = profile?.role === 'ADMIN';
   const canUseBulkActions = profile?.role === 'ADMIN';
   const [supportsFeaturedColumn, setSupportsFeaturedColumn] = useState(true);
+  const ownerParam = searchParams.get('owner');
+  const ownerFilter = profile?.role === 'AGENT' ? user?.id ?? null : ownerParam;
   const existingImageCount = editingId
     ? properties.find(property => property.id === editingId)?.property_images?.length ?? 0
     : 0;
@@ -162,6 +189,9 @@ export default function PropertiesPage() {
 
   const filteredProperties = useMemo(() => {
     let items = [...properties];
+    if (ownerFilter) {
+      items = items.filter(item => item.owner_id === ownerFilter);
+    }
     if (tab !== 'ALL') {
       items = items.filter(item => item.listing_status === tab);
     }
@@ -200,7 +230,7 @@ export default function PropertiesPage() {
       items = items.filter(item => new Date(item.created_at).getTime() <= to);
     }
     return items;
-  }, [properties, tab, typeFilter, statusFilter, cityFilter, search, priceMin, priceMax, dateFrom, dateTo]);
+  }, [properties, ownerFilter, tab, typeFilter, statusFilter, cityFilter, search, priceMin, priceMax, dateFrom, dateTo]);
 
   const sortedProperties = useMemo(() => {
     const items = [...filteredProperties];
@@ -233,9 +263,9 @@ export default function PropertiesPage() {
     return sortedProperties.slice(start, start + pageSize);
   }, [page, pageSize, sortedProperties]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [search, tab, typeFilter, statusFilter, cityFilter, priceMin, priceMax, dateFrom, dateTo, viewMode]);
+  const setPage = (nextPage: number) => {
+    setPageState({ page: nextPage, filterKey: pageFilterKey });
+  };
 
   const toggleSort = (key: typeof sortBy) => {
     if (sortBy === key) {
@@ -248,7 +278,6 @@ export default function PropertiesPage() {
 
   const resetFilters = () => {
     setSearch('');
-    setTab('ALL');
     setTypeFilter('ALL');
     setStatusFilter('ALL');
     setCityFilter('ALL');
@@ -256,12 +285,38 @@ export default function PropertiesPage() {
     setPriceMax('');
     setDateFrom('');
     setDateTo('');
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('owner');
+    params.delete('tab');
+    params.delete('q');
+    const query = params.toString();
+    router.replace(query ? `/properties?${query}` : '/properties');
   };
 
-  const activeFilters = useMemo(() => {
+  const activeFilters = (() => {
     const filters: { label: string; onClear: () => void }[] = [];
+    if (ownerParam && profile?.role !== 'AGENT') {
+      filters.push({
+        label: `Agent: ${ownerParam.slice(0, 8)}`,
+        onClear: () => {
+          const params = new URLSearchParams(searchParams.toString());
+          params.delete('owner');
+          const query = params.toString();
+          router.replace(query ? `/properties?${query}` : '/properties');
+        },
+      });
+    }
     if (search.trim()) {
-      filters.push({ label: `Recherche: ${search.trim()}`, onClear: () => setSearch('') });
+      filters.push({
+        label: `Recherche: ${search.trim()}`,
+        onClear: () => {
+          setSearch('');
+          const params = new URLSearchParams(searchParams.toString());
+          params.delete('q');
+          const query = params.toString();
+          router.replace(query ? `/properties?${query}` : '/properties');
+        },
+      });
     }
     if (tab !== 'ALL') {
       filters.push({ label: `Validation: ${getListingLabel(tab)}`, onClear: () => setTab('ALL') });
@@ -294,7 +349,7 @@ export default function PropertiesPage() {
       });
     }
     return filters;
-  }, [search, tab, typeFilter, statusFilter, cityFilter, priceMin, priceMax, dateFrom, dateTo]);
+  })();
 
   const toggleSelection = (propertyId: string) => {
     setSelectedIds(prev => {
@@ -347,23 +402,8 @@ export default function PropertiesPage() {
     if (!window.confirm(`Supprimer le bien « ${propertyTitle ?? 'sélectionné'} » ? Cette action est irréversible.`)) {
       return;
     }
-    const { data: imageRows, error: imageQueryError } = await supabase
-      .from('property_images')
-      .select('url')
-      .eq('property_id', propertyId);
-    if (imageQueryError) {
-      alert(`Impossible de récupérer les images du bien : ${imageQueryError.message}`);
-      return;
-    }
     try {
-      await deleteAdminRecord('properties', propertyId);
-      let imageCleanupError: string | null = null;
-      try {
-        await deletePropertyImageFiles((imageRows ?? []).map(image => image.url));
-      } catch (cleanupError) {
-        imageCleanupError = cleanupError instanceof Error ? cleanupError.message : 'Erreur inconnue';
-      }
-      await logAdminAction('delete_property', 'property', propertyId);
+      const imageCleanupError = await deleteAdminProperty(propertyId);
       reload();
       if (imageCleanupError) alert(imageCleanupError);
     } catch (error) {
@@ -630,7 +670,7 @@ export default function PropertiesPage() {
     reload();
   };
 
-  const handleEdit = (property: PropertyRow) => {
+  const handleEdit = useCallback((property: PropertyRow) => {
     setEditingId(property.id);
     setForm({
       title: property.title,
@@ -644,7 +684,7 @@ export default function PropertiesPage() {
       featured: property.featured ?? false,
     });
     setShowForm(true);
-  };
+  }, []);
 
   const exportCsv = () => {
     const headers = ['Nom', 'Ville', 'Prix', 'Statut', 'Validation', 'Date'];
@@ -675,19 +715,16 @@ export default function PropertiesPage() {
   };
 
   useEffect(() => {
-    if (didInitEdit) return;
     const editId = searchParams.get('edit');
-    if (!editId) return;
+    if (!editId || initializedEditId.current === editId) return;
     const property = properties.find(item => item.id === editId);
     if (!property) return;
-    handleEdit(property);
-    setDidInitEdit(true);
-  }, [didInitEdit, properties, searchParams]);
-
-  useEffect(() => {
-    const q = searchParams.get('q');
-    if (q) setSearch(decodeURIComponent(q));
-  }, [searchParams]);
+    const frame = window.requestAnimationFrame(() => {
+      handleEdit(property);
+      initializedEditId.current = editId;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [handleEdit, properties, searchParams]);
 
   const renderMainAction = (property: PropertyRow) => {
     if (!canSetAdminListingFields) return null;
@@ -743,7 +780,9 @@ export default function PropertiesPage() {
             </>
           ) : null}
           <button onClick={() => handleEdit(property)}>Modifier</button>
-          <button className="danger" onClick={() => handleDelete(property.id)}>Supprimer</button>
+          {canSetAdminListingFields ? (
+            <button className="danger" onClick={() => handleDelete(property.id)}>Supprimer</button>
+          ) : null}
         </div>
       </details>
     );
@@ -856,6 +895,21 @@ export default function PropertiesPage() {
             </button>
           ))}
           <button className="filter-chip clear" onClick={resetFilters}>Tout effacer</button>
+        </div>
+      ) : null}
+
+      {error || neighborhoodsError ? (
+        <div className="alert" role="alert">
+          Erreur de chargement : {[error, neighborhoodsError].filter(Boolean).join(' ; ')}
+          <button
+            className="ghost-button small"
+            onClick={() => {
+              reload();
+              reloadNeighborhoods();
+            }}
+          >
+            Réessayer
+          </button>
         </div>
       ) : null}
 
@@ -1102,7 +1156,7 @@ export default function PropertiesPage() {
       {viewMode === 'grid' ? (
         <div className="property-grid">
           {loading && <LoadingState />}
-          {!loading && sortedProperties.length === 0 ? (
+          {!loading && !error && sortedProperties.length === 0 ? (
             <div className="card table-empty">
               <div className="table-empty-title">Aucun bien trouvé</div>
               <div className="table-empty-subtitle">Ajustez vos filtres.</div>
@@ -1170,6 +1224,14 @@ export default function PropertiesPage() {
                   </div>
                   <div className="property-actions-row" onClick={event => event.stopPropagation()}>
                     {renderMainAction(property)}
+                    {canSetAdminListingFields ? (
+                      <button
+                        className="danger-button small"
+                        onClick={() => void handleDelete(property.id)}
+                      >
+                        Supprimer
+                      </button>
+                    ) : null}
                     {renderMenu(property)}
                   </div>
                 </div>
@@ -1245,6 +1307,14 @@ export default function PropertiesPage() {
                       <td onClick={event => event.stopPropagation()}>
                         <div className="row-actions">
                           {renderMainAction(property)}
+                          {canSetAdminListingFields ? (
+                            <button
+                              className="danger-button small"
+                              onClick={() => void handleDelete(property.id)}
+                            >
+                              Supprimer
+                            </button>
+                          ) : null}
                           {renderMenu(property)}
                         </div>
                       </td>
@@ -1258,11 +1328,11 @@ export default function PropertiesPage() {
       )}
 
       <div className="pagination">
-        <button className="ghost-button" onClick={() => setPage(prev => Math.max(1, prev - 1))} disabled={page <= 1}>
+        <button className="ghost-button" onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}>
           Precedent
         </button>
         <div className="pill">Page {page} / {totalPages}</div>
-        <button className="ghost-button" onClick={() => setPage(prev => Math.min(totalPages, prev + 1))} disabled={page >= totalPages}>
+        <button className="ghost-button" onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}>
           Suivant
         </button>
       </div>

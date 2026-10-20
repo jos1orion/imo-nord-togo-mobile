@@ -8,10 +8,12 @@ import SectionHeader from '../../../components/SectionHeader';
 import { formatDate } from '../../../lib/format';
 import { useCurrentTime } from '../../../lib/useCurrentTime';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
+import { useSession } from '../../../lib/useSession';
+import { deleteAdminProperty } from '../../../lib/propertyStorage';
 import type { Publication } from '../../../lib/types';
 
 type PublicationRow = Publication & {
-  property?: { title: string; location: string } | null;
+  property?: { title: string; location: string; owner_id: string | null } | null;
 };
 
 const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
@@ -19,16 +21,37 @@ const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
 export default function PublicationsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { profile, user } = useSession();
   const currentTime = useCurrentTime();
   const filter = searchParams.get('filter');
+  const ownerFilter = profile?.role === 'AGENT' ? user?.id ?? null : searchParams.get('owner');
   const { data, loading, error, reload } = useSupabaseTable<PublicationRow>('publications', {
-    select: '*, property:properties!publications_property_id_fkey(title, location)',
+    select: '*, property:properties!publications_property_id_fkey(title, location, owner_id)',
     orderBy: 'created_at',
   });
   const [status, setStatus] = useState('ALL');
+  const [deletingPropertyId, setDeletingPropertyId] = useState<string | null>(null);
+
+  const handleDeleteProperty = async (row: PublicationRow) => {
+    const propertyName = row.property?.title ?? row.property_id.slice(0, 8);
+    if (!window.confirm(
+      `Supprimer l’annonce « ${propertyName} » ? Toutes les publications et photos associées seront supprimées. Cette action est irréversible.`
+    )) return;
+    setDeletingPropertyId(row.property_id);
+    try {
+      const cleanupWarning = await deleteAdminProperty(row.property_id);
+      await reload();
+      if (cleanupWarning) alert(cleanupWarning);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur inconnue lors de la suppression.');
+    } finally {
+      setDeletingPropertyId(null);
+    }
+  };
 
   const rows = useMemo(() => {
     return data.filter(row => {
+      if (ownerFilter && row.property?.owner_id !== ownerFilter) return false;
       if (status !== 'ALL' && row.status !== status) return false;
       if (filter === 'expiring') {
         if (currentTime === null || !row.expires_at || row.status !== 'approved') return false;
@@ -37,7 +60,7 @@ export default function PublicationsPage() {
       }
       return true;
     });
-  }, [data, status, filter, currentTime]);
+  }, [data, ownerFilter, status, filter, currentTime]);
 
   return (
     <div className="grid">
@@ -89,9 +112,20 @@ export default function PublicationsPage() {
               key: 'open',
               label: '',
               render: row => (
-                <button className="ghost-button small" onClick={() => router.push(`/properties/${row.property_id}`)}>
-                  Fiche
-                </button>
+                <div className="table-actions">
+                  <button className="ghost-button small" onClick={() => router.push(`/properties/${row.property_id}`)}>
+                    Fiche
+                  </button>
+                  {profile?.role === 'ADMIN' ? (
+                    <button
+                      className="danger-button small"
+                      disabled={deletingPropertyId === row.property_id}
+                      onClick={() => void handleDeleteProperty(row)}
+                    >
+                      {deletingPropertyId === row.property_id ? 'Suppression...' : 'Supprimer'}
+                    </button>
+                  ) : null}
+                </div>
               ),
             },
           ]}

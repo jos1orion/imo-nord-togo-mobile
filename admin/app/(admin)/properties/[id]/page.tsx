@@ -7,6 +7,7 @@ import { supabase } from '../../../../lib/supabaseClient';
 import { formatCurrency, formatDate } from '../../../../lib/format';
 import { logActivity } from '../../../../lib/logActivity';
 import { deleteAdminPropertyImage, updateAdminRecord } from '../../../../lib/adminMutations';
+import { deleteAdminProperty } from '../../../../lib/propertyStorage';
 import { useSession } from '../../../../lib/useSession';
 import type { ListingEvent, ListingStatus, Property, PropertyStatus, Publication } from '../../../../lib/types';
 
@@ -34,6 +35,7 @@ export default function PropertyDetailsPage() {
   const [events, setEvents] = useState<ListingEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingImageUrl, setDeletingImageUrl] = useState<string | null>(null);
+  const [deletingProperty, setDeletingProperty] = useState(false);
 
   const cover = useMemo(() => property?.property_images?.[0]?.url ?? '', [property]);
 
@@ -58,7 +60,7 @@ export default function PropertyDetailsPage() {
   }, [propertyId]);
 
   useEffect(() => {
-    void load();
+    void Promise.resolve().then(load);
   }, [load]);
 
   const updateListingStatus = async (nextStatus: ListingStatus) => {
@@ -122,6 +124,21 @@ export default function PropertyDetailsPage() {
       alert(error instanceof Error ? error.message : 'Erreur inconnue lors de la suppression.');
     } finally {
       setDeletingImageUrl(null);
+    }
+  };
+
+  const removeProperty = async () => {
+    if (!property || !window.confirm(
+      `Supprimer définitivement « ${property.title} » et toutes ses publications et photos ?`
+    )) return;
+    setDeletingProperty(true);
+    try {
+      const cleanupWarning = await deleteAdminProperty(property.id);
+      router.replace('/properties');
+      if (cleanupWarning) alert(cleanupWarning);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erreur inconnue lors de la suppression.');
+      setDeletingProperty(false);
     }
   };
 
@@ -207,6 +224,18 @@ export default function PropertyDetailsPage() {
               </button>
               <button className="ghost-button small" onClick={() => updateAvailability('occupied')}>Marquer occupé</button>
             </div>
+            {profile?.role === 'ADMIN' ? (
+              <div className="card detail-actions" style={{ justifyContent: 'flex-end' }}>
+                <button
+                  className="danger-button"
+                  type="button"
+                  disabled={deletingProperty}
+                  onClick={() => void removeProperty()}
+                >
+                  {deletingProperty ? 'Suppression...' : 'Supprimer définitivement cette annonce'}
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <div className="card">

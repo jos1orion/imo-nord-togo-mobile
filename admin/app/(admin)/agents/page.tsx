@@ -13,8 +13,8 @@ import type { Property } from '../../../lib/types';
 
 export default function AgentsPage() {
   const router = useRouter();
-  const { data: profiles, loading, reload } = useSupabaseTable<Profile>('profiles', { orderBy: 'created_at' });
-  const { data: properties } = useSupabaseTable<Property>('properties', { orderBy: 'created_at' });
+  const { data: profiles, loading, error, reload } = useSupabaseTable<Profile>('profiles', { orderBy: 'created_at' });
+  const { data: properties, error: propertiesError, reload: reloadProperties } = useSupabaseTable<Property>('properties', { orderBy: 'created_at' });
   const agents = profiles.filter(row => row.role === 'AGENT');
 
   const statsByAgent = useMemo(() => {
@@ -58,6 +58,11 @@ export default function AgentsPage() {
       {loading ? <LoadingState /> : (
         <DataTable
           loading={loading}
+          error={[error, propertiesError].filter(Boolean).join(' ; ') || null}
+          onRetry={() => {
+            reload();
+            reloadProperties();
+          }}
           rows={agents}
           emptyLabel="Aucun agent."
           columns={[

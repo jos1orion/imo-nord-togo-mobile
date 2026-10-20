@@ -9,6 +9,7 @@ import { formatDate } from '../../../lib/format';
 import type { Tenant, TenantDocumentType } from '../../../lib/types';
 import { logAdminAction } from '../../../lib/adminAudit';
 import { deleteAdminRecord, updateAdminRecord } from '../../../lib/adminMutations';
+import { focusForm } from '../../../lib/formNavigation';
 import {
   TENANT_DOCUMENT_MAX_BYTES,
   TENANT_DOCUMENT_MIME_TYPES,
@@ -23,7 +24,7 @@ const emptyForm = {
 };
 
 export default function TenantsPage() {
-  const { data: tenants, loading, reload } = useSupabaseTable<Tenant>('tenants', { orderBy: 'created_at' });
+  const { data: tenants, loading, error, reload } = useSupabaseTable<Tenant>('tenants', { orderBy: 'created_at' });
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [docFiles, setDocFiles] = useState<FileList | null>(null);
@@ -170,10 +171,26 @@ export default function TenantsPage() {
       <SectionHeader
         title="Gestion des locataires"
         subtitle="Suivez les profils, documents et historique de location."
-        actions={<button className="primary-button">Nouveau locataire</button>}
+        actions={
+          <button
+            className="primary-button"
+            onClick={() => {
+              setEditingId(null);
+              setForm(emptyForm);
+              setDocFiles(null);
+              setDocType('cni');
+              setFormErrors({});
+              setFormMessage('');
+              if (documentRef.current) documentRef.current.value = '';
+              focusForm('tenant-form');
+            }}
+          >
+            Nouveau locataire
+          </button>
+        }
       />
 
-      <div className="card form-card">
+      <div id="tenant-form" className="card form-card">
         {formMessage ? <p className="form-error-summary" role="alert">{formMessage}</p> : null}
         <div className="form-grid">
           <div className="form-field">
@@ -271,6 +288,8 @@ export default function TenantsPage() {
 
       <DataTable
         loading={loading}
+        error={error}
+        onRetry={reload}
         rows={tenants}
         emptyLabel={loading ? 'Chargement...' : 'Aucun locataire'}
         columns={[

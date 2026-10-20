@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import DataTable from '../../../components/DataTable';
 import SectionHeader from '../../../components/SectionHeader';
 import StatusPill from '../../../components/StatusPill';
 import { supabase } from '../../../lib/supabaseClient';
 import { useSupabaseTable } from '../../../lib/useSupabaseTable';
-import { formatCurrency, formatDate } from '../../../lib/format';
+import { escapeHtml, formatCurrency, formatDate } from '../../../lib/format';
 import type { Contract, Payment, PaymentMethod, PaymentStatus, Tenant } from '../../../lib/types';
 import { logAdminAction } from '../../../lib/adminAudit';
 import { deleteAdminRecord, updateAdminRecord } from '../../../lib/adminMutations';
+import { focusForm } from '../../../lib/formNavigation';
 
 const emptyForm = {
   contract_id: '',
@@ -27,11 +28,11 @@ const printReceipt = (payload: Payment & { tenant?: string }) => {
       <head><title>Recu</title></head>
       <body style="font-family: Arial; padding: 24px;">
         <h2>Recu de paiement</h2>
-        <p><strong>Locataire:</strong> ${payload.tenant ?? ''}</p>
-        <p><strong>Date:</strong> ${payload.paid_at}</p>
-        <p><strong>Montant:</strong> ${payload.amount}</p>
-        <p><strong>Mode:</strong> ${payload.method}</p>
-        <p><strong>Statut:</strong> ${payload.status}</p>
+        <p><strong>Locataire:</strong> ${escapeHtml(payload.tenant)}</p>
+        <p><strong>Date:</strong> ${escapeHtml(payload.paid_at)}</p>
+        <p><strong>Montant:</strong> ${escapeHtml(payload.amount)}</p>
+        <p><strong>Mode:</strong> ${escapeHtml(payload.method)}</p>
+        <p><strong>Statut:</strong> ${escapeHtml(payload.status)}</p>
         <p>Signature: ________________________</p>
       </body>
     </html>
@@ -41,24 +42,17 @@ const printReceipt = (payload: Payment & { tenant?: string }) => {
 };
 
 export default function PaymentsPage() {
-  const { data: payments, loading, reload } = useSupabaseTable<Payment>('payments', { orderBy: 'paid_at' });
-  const [contracts, setContracts] = useState<Contract[]>([]);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const { data: payments, loading, error, reload } = useSupabaseTable<Payment>('payments', { orderBy: 'paid_at' });
+  const { data: contracts, error: contractsError, reload: reloadContracts } = useSupabaseTable<
+    Pick<Contract, 'id' | 'tenant_id'>
+  >('contracts', { select: 'id,tenant_id' });
+  const { data: tenants, error: tenantsError, reload: reloadTenants } = useSupabaseTable<
+    Pick<Tenant, 'id' | 'full_name'>
+  >('tenants', { select: 'id,full_name' });
+  const optionsError = [contractsError, tenantsError].filter(Boolean).join(' ; ') || null;
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    const loadOptions = async () => {
-      const [contractRes, tenantRes] = await Promise.all([
-        supabase.from('contracts').select('id,tenant_id'),
-        supabase.from('tenants').select('id,full_name'),
-      ]);
-      setContracts((contractRes.data as Contract[]) ?? []);
-      setTenants((tenantRes.data as Tenant[]) ?? []);
-    };
-    loadOptions();
-  }, []);
 
   const handleSubmit = async () => {
     if (!form.contract_id || !form.amount || !form.paid_at) return;
@@ -132,10 +126,35 @@ export default function PaymentsPage() {
       <SectionHeader
         title="Gestion des paiements"
         subtitle="Suivi des loyers, impayes et reçus."
-        actions={<button className="primary-button">Nouveau paiement</button>}
+        actions={
+          <button
+            className="primary-button"
+            onClick={() => {
+              setEditingId(null);
+              setForm(emptyForm);
+              focusForm('payment-form');
+            }}
+          >
+            Nouveau paiement
+          </button>
+        }
       />
 
-      <div className="card form-card">
+      <div id="payment-form" className="card form-card">
+        {optionsError ? (
+          <div className="alert" role="alert">
+            Impossible de charger les contrats ou locataires : {optionsError}
+            <button
+              className="ghost-button small"
+              onClick={() => {
+                reloadContracts();
+                reloadTenants();
+              }}
+            >
+              Réessayer
+            </button>
+          </div>
+        ) : null}
         <div className="form-grid">
           <div className="form-field">
             <label>Contrat</label>
@@ -202,6 +221,8 @@ export default function PaymentsPage() {
 
       <DataTable
         loading={loading}
+        error={error}
+        onRetry={reload}
         rows={payments}
         emptyLabel={loading ? 'Chargement...' : 'Aucun paiement'}
         columns={[

@@ -13,6 +13,8 @@ type DataTableProps<T> = {
   rows: T[];
   emptyLabel?: string;
   loading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 };
 
 export default function DataTable<T>({
@@ -20,55 +22,74 @@ export default function DataTable<T>({
   rows,
   emptyLabel = 'Aucune donnee',
   loading = false,
+  error,
+  onRetry,
 }: DataTableProps<T>) {
   if (loading) return <LoadingState />;
 
   if (!rows.length) {
     return (
-      <div className="card table-empty">
-        <div className="table-empty-title">{emptyLabel}</div>
-        <div className="table-empty-subtitle">Ajoutez des donnees pour commencer.</div>
-      </div>
+      <>
+        {error ? (
+          <div className="alert" role="alert">
+            Impossible de charger les données : {error}
+            {onRetry ? <button className="ghost-button small" onClick={onRetry}>Réessayer</button> : null}
+          </div>
+        ) : (
+          <div className="card table-empty">
+            <div className="table-empty-title">{emptyLabel}</div>
+            <div className="table-empty-subtitle">Ajoutez des donnees pour commencer.</div>
+          </div>
+        )}
+      </>
     );
   }
 
   return (
-    <div className="card table-card">
-      <div className="table-toolbar">
-        <div>
-          <div className="table-toolbar-title">Resultats</div>
-          <div className="table-toolbar-subtitle">Liste des donnees disponibles.</div>
+    <>
+      {error ? (
+        <div className="alert" role="alert">
+          Certaines données n’ont pas pu être actualisées : {error}
+          {onRetry ? <button className="ghost-button small" onClick={onRetry}>Réessayer</button> : null}
         </div>
-        <div className="table-toolbar-count">{rows.length}</div>
-      </div>
-      <div className="table-wrapper">
-        <table className="table">
-          <thead>
-            <tr>
-              {columns.map(column => (
-                <th key={String(column.key)} style={{ textAlign: column.align ?? 'left' }}>
-                  {column.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={index}>
+      ) : null}
+      <div className="card table-card">
+        <div className="table-toolbar">
+          <div>
+            <div className="table-toolbar-title">Resultats</div>
+            <div className="table-toolbar-subtitle">Liste des donnees disponibles.</div>
+          </div>
+          <div className="table-toolbar-count">{rows.length}</div>
+        </div>
+        <div className="table-wrapper">
+          <table className="table">
+            <thead>
+              <tr>
                 {columns.map(column => (
-                  <td
-                    key={String(column.key)}
-                    className={clsx({})}
-                    style={{ textAlign: column.align ?? 'left' }}
-                  >
-                    {column.render ? column.render(row) : String((row as Record<string, unknown>)[column.key as string] ?? '')}
-                  </td>
+                  <th key={String(column.key)} style={{ textAlign: column.align ?? 'left' }}>
+                    {column.label}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={index}>
+                  {columns.map(column => (
+                    <td
+                      key={String(column.key)}
+                      className={clsx({})}
+                      style={{ textAlign: column.align ?? 'left' }}
+                    >
+                      {column.render ? column.render(row) : String((row as Record<string, unknown>)[column.key as string] ?? '')}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

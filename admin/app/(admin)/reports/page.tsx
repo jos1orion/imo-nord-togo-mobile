@@ -20,7 +20,7 @@ type ReportRow = {
 
 export default function ReportsPage() {
   const router = useRouter();
-  const { data, loading, reload } = useSupabaseTable<ReportRow>('property_reports', { orderBy: 'created_at' });
+  const { data, loading, error, reload } = useSupabaseTable<ReportRow>('property_reports', { orderBy: 'created_at' });
 
   const resolve = async (id: string) => {
     try {
@@ -47,6 +47,8 @@ export default function ReportsPage() {
       {loading ? <LoadingState /> : (
         <DataTable
           loading={loading}
+          error={error}
+          onRetry={reload}
           rows={data}
           emptyLabel="Aucun signalement."
           columns={[

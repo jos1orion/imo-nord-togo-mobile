@@ -12,7 +12,7 @@ import type { Property } from '../../../lib/types';
 
 export default function FeaturedPage() {
   const router = useRouter();
-  const { data, loading, reload } = useSupabaseTable<Property>('properties', { orderBy: 'created_at' });
+  const { data, loading, error, reload } = useSupabaseTable<Property>('properties', { orderBy: 'created_at' });
   const featured = data.filter(row => row.featured);
 
   const unfeature = async (id: string) => {
@@ -40,6 +40,8 @@ export default function FeaturedPage() {
       {loading ? <LoadingState /> : (
         <DataTable
           loading={loading}
+          error={error}
+          onRetry={reload}
           rows={featured}
           emptyLabel="Aucune annonce featured."
           columns={[

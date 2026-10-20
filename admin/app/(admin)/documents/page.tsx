@@ -16,7 +16,7 @@ type DocRow = {
 };
 
 export default function DocumentsPage() {
-  const { data, loading } = useSupabaseTable<DocRow>('tenant_documents', { orderBy: 'created_at' });
+  const { data, loading, error, reload } = useSupabaseTable<DocRow>('tenant_documents', { orderBy: 'created_at' });
   const openDocument = async (path: string) => {
     if (/^https?:\/\//i.test(path)) {
       window.open(path, '_blank', 'noopener,noreferrer');
@@ -46,6 +46,8 @@ export default function DocumentsPage() {
       {loading ? <LoadingState /> : (
         <DataTable
           loading={loading}
+          error={error}
+          onRetry={reload}
           rows={data}
           emptyLabel="Aucun document."
           columns={[

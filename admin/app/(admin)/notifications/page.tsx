@@ -10,6 +10,7 @@ import { formatDate } from '../../../lib/format';
 import type { Notification } from '../../../lib/types';
 import { logAdminAction } from '../../../lib/adminAudit';
 import { updateAdminRecord } from '../../../lib/adminMutations';
+import { focusForm } from '../../../lib/formNavigation';
 
 const emptyForm = {
   title: '',
@@ -18,7 +19,7 @@ const emptyForm = {
 };
 
 export default function NotificationsPage() {
-  const { data: notifications, loading, reload } = useSupabaseTable<Notification>('notifications', {
+  const { data: notifications, loading, error, reload } = useSupabaseTable<Notification>('notifications', {
     orderBy: 'created_at',
   });
   const [form, setForm] = useState(emptyForm);
@@ -60,10 +61,20 @@ export default function NotificationsPage() {
       <SectionHeader
         title="Notifications"
         subtitle="Rappels automatiques, alertes fin de contrat et messages admin."
-        actions={<button className="primary-button">Nouvelle alerte</button>}
+        actions={
+          <button
+            className="primary-button"
+            onClick={() => {
+              setForm(emptyForm);
+              focusForm('notification-form');
+            }}
+          >
+            Nouvelle alerte
+          </button>
+        }
       />
 
-      <div className="card form-card">
+      <div id="notification-form" className="card form-card">
         <div className="form-grid">
           <div className="form-field">
             <label>Titre</label>
@@ -100,8 +111,14 @@ export default function NotificationsPage() {
         </div>
       </div>
 
+      {error ? (
+        <div className="alert" role="alert">
+          Impossible de charger les notifications : {error}
+          <button className="ghost-button small" onClick={reload}>Réessayer</button>
+        </div>
+      ) : null}
       <div className="grid grid-cols-2">
-        {!loading && notifications.length === 0 ? (
+        {!loading && !error && notifications.length === 0 ? (
           <div className="card">Aucune notification pour le moment.</div>
         ) : null}
         {(loading ? [] : notifications).map(notification => (

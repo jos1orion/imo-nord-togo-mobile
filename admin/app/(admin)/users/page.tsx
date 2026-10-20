@@ -6,6 +6,7 @@ import SectionHeader from '../../../components/SectionHeader';
 import { supabase } from '../../../lib/supabaseClient';
 import type { Profile } from '../../../lib/useSession';
 import { roleLabels, STAFF_ROLES, type AppRole, type Role } from '../../../lib/rbac';
+import { focusForm } from '../../../lib/formNavigation';
 
 const roleOptions: AppRole[] = ['USER', 'ADMIN', 'AGENT', 'ACCOUNTANT'];
 
@@ -69,31 +70,35 @@ export default function UsersPage() {
     if (!response.ok) {
       setError(result.error ?? 'Liste des utilisateurs impossible à charger.');
     } else {
-      setUsers(result.users ?? []);
+      const loadedUsers = result.users as Profile[];
+      setUsers(loadedUsers);
       setTotalUsers(result.total ?? 0);
+      setDraftUsers(previous => {
+        const next = { ...previous };
+        loadedUsers.forEach(user => {
+          if (!next[user.id]) {
+            next[user.id] = {
+              full_name: user.full_name ?? '',
+              phone: user.phone ?? '',
+              role: user.role,
+            };
+          }
+        });
+        return next;
+      });
     }
     setLoading(false);
   }, [page]);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  useEffect(() => {
-    setDraftUsers(prev => {
-      const next = { ...prev };
-      users.forEach(user => {
-        if (!next[user.id]) {
-          next[user.id] = {
-            full_name: user.full_name ?? '',
-            phone: user.phone ?? '',
-            role: user.role,
-          };
-        }
-      });
-      return next;
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) return reload();
     });
-  }, [users]);
+    return () => {
+      active = false;
+    };
+  }, [reload]);
 
   const updateDraft = (id: string, values: Partial<DraftUser>) => {
     setDraftUsers(prev => {
@@ -314,10 +319,21 @@ export default function UsersPage() {
       <SectionHeader
         title="Utilisateurs"
         subtitle="Création, rôles et suppression des comptes."
-        actions={<button className="primary-button">Nouvel utilisateur</button>}
+        actions={
+          <button
+            className="primary-button"
+            onClick={() => {
+              setForm(emptyForm);
+              setSuccess(null);
+              focusForm('user-form');
+            }}
+          >
+            Nouvel utilisateur
+          </button>
+        }
       />
 
-      <div className="card form-card">
+      <div id="user-form" className="card form-card">
         <div className="form-grid">
           <div className="form-field">
             <label>Nom complet</label>

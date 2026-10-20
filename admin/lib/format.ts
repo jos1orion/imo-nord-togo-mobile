@@ -10,3 +10,15 @@ export const formatDate = (value: string) =>
     timeStyle: 'short',
     timeZone: 'Africa/Lome',
   }).format(new Date(value));
+
+export const escapeHtml = (value: string | number | null | undefined) =>
+  String(value ?? '').replace(/[&<>"']/g, character => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return entities[character];
+  });

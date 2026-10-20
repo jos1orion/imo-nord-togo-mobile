@@ -8,7 +8,7 @@ import { useSupabaseTable } from '../../../lib/useSupabaseTable';
 import type { ActivityLog } from '../../../lib/types';
 
 export default function LogsPage() {
-  const { data, loading } = useSupabaseTable<ActivityLog>('activity_logs', { orderBy: 'created_at' });
+  const { data, loading, error, reload } = useSupabaseTable<ActivityLog>('activity_logs', { orderBy: 'created_at' });
 
   return (
     <div className="grid">
@@ -16,6 +16,8 @@ export default function LogsPage() {
       {loading ? <LoadingState /> : (
         <DataTable
           loading={loading}
+          error={error}
+          onRetry={reload}
           rows={data}
           emptyLabel="Aucun log."
           columns={[
