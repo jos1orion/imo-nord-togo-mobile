@@ -185,3 +185,11 @@ puis relancer le run depuis **Actions** avec **Re-run jobs**. Le workflow vérif
 le secret et la connexion avant d’exécuter les migrations. Une modification du
 fichier workflow déclenche aussi cette vérification ainsi que l’application des
 migrations.
+
+Si la connexion échoue avec un timeout du pooler Supabase, remplacez la valeur
+de `SUPABASE_DB_URL` par l’URI PostgreSQL actuelle affichée dans **Supabase →
+Connect** (connexion directe ou pooler de session), avec SSL activé, puis
+relancez le workflow. Ne transmettez jamais cette URI dans une conversation.
+La migration `0024_remove_legacy_storage_delete_triggers.sql` retire les anciens
+triggers qui tentaient de supprimer des fichiers en écrivant directement dans
+`storage.objects`; les suppressions de fichiers doivent passer par l’API Storage.
