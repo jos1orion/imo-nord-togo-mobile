@@ -119,7 +119,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
             <TouchableOpacity
               key={`${uri}-${index}`}
               activeOpacity={1}
-              style={{ width: carouselWidth }}
+              style={{ width: carouselWidth, height: '100%' }}
               onPress={() => openViewerAt(index)}
               accessibilityRole="imagebutton"
               accessibilityLabel={`${property.title}, ${index + 1}/${displayImages.length}`}
@@ -298,7 +298,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
 
 const baseStyles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceAlt,
     borderRadius: RADIUS.lg,
     marginHorizontal: 8,
     marginVertical: 8,
@@ -342,7 +342,7 @@ const baseStyles = StyleSheet.create({
   },
   imageDotActive: {
     width: 16,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceAlt,
   },
   imageCounter: {
     position: 'absolute',
@@ -486,7 +486,7 @@ const baseStyles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   favoriteButtonActive: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceAlt,
   },
   likesBadge: {
     position: 'absolute',

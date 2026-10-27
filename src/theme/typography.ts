@@ -1,7 +1,7 @@
 import type { TextStyle } from 'react-native';
 
 export const typography = {
-  heroTitle: {
+  fontFamily: 'Roboto',
     fontSize: 22,
     fontWeight: '800' as TextStyle['fontWeight'],
     lineHeight: 28,
