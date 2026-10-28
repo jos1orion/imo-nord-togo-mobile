@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
 import { getSupabaseAdmin } from '../../../../lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
@@ -27,7 +25,7 @@ export async function POST(request: Request) {
 
   if (!inputPassword || inputPassword !== masterPassword) {
     return NextResponse.json(
-      { error: 'Mot de passe administrateur incorrect. Vérifiez la valeur de ADMIN_PASSWORD sur Render.' },
+      { error: 'Mot de passe administrateur incorrect. Vérifiez la variable ADMIN_PASSWORD sur Render.' },
       { status: 401 }
     );
   }
@@ -96,7 +94,7 @@ export async function POST(request: Request) {
     }
 
     // 2. Mettre à jour la table profiles avec le rôle ADMIN
-    const { error: profileError } = await supabaseAdmin.from('profiles').upsert(
+    await supabaseAdmin.from('profiles').upsert(
       {
         id: targetUser.id,
         email: adminEmail,
@@ -107,49 +105,27 @@ export async function POST(request: Request) {
       { onConflict: 'id' }
     );
 
-    if (profileError) {
-      await supabaseAdmin.from('profiles').upsert(
-        {
-          id: targetUser.id,
-          email: adminEmail,
-          full_name: 'Super Admin',
-          role: 'ADMIN',
-        },
-        { onConflict: 'id' }
-      );
-    }
-
-    // 3. Connecter la session côté serveur et poser les cookies officiels dans la réponse HTTP
-    const cookieStore = await cookies();
-    const serverSupabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
-        },
-      },
-    });
-
-    const { error: serverSignInError } = await serverSupabase.auth.signInWithPassword({
+    // 3. Obtenir les tokens de session via Supabase Auth
+    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.signInWithPassword({
       email: adminEmail,
       password: masterPassword,
     });
 
-    if (serverSignInError) {
+    if (sessionError || !sessionData.session) {
       return NextResponse.json(
-        { error: `Connexion serveur Supabase refusée : ${serverSignInError.message}` },
+        { error: `Authentification Supabase échouée : ${sessionError?.message ?? 'Session introuvable'}` },
         { status: 401 }
       );
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       email: adminEmail,
+      accessToken: sessionData.session.access_token,
+      refreshToken: sessionData.session.refresh_token,
     });
+
+    return response;
   } catch (error) {
     console.error('Master login exception:', error);
     const message = error instanceof Error ? error.message : 'Erreur inconnue';

@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState } from 'react';
+import { supabase } from '../../lib/supabaseClient';
 
 function LoginForm() {
   const [password, setPassword] = useState('');
@@ -17,6 +18,7 @@ function LoginForm() {
     setError(null);
 
     try {
+      // 1. Validation du mot de passe et préparation du compte admin côté serveur
       const res = await fetch('/api/auth/master-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -31,7 +33,25 @@ function LoginForm() {
         return;
       }
 
-      // Redirection immédiate vers le dashboard
+      if (!data.accessToken || !data.refreshToken) {
+        setLoading(false);
+        setError('Session administrateur incomplète reçue du serveur.');
+        return;
+      }
+
+      // 2. Initialisation des cookies et de la session dans le navigateur
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: data.accessToken,
+        refresh_token: data.refreshToken,
+      });
+
+      if (sessionError) {
+        setLoading(false);
+        setError(`Échec d'initialisation de session : ${sessionError.message}`);
+        return;
+      }
+
+      // 3. Redirection vers le dashboard
       window.location.href = '/';
     } catch (err: unknown) {
       setLoading(false);
