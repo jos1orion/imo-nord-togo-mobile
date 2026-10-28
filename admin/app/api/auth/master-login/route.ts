@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { createServerClient } from '@supabase/ssr';
 import { getSupabaseAdmin } from '../../../../lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
@@ -30,6 +32,16 @@ export async function POST(request: Request) {
     );
   }
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return NextResponse.json(
+      { error: 'Variables NEXT_PUBLIC_SUPABASE_URL ou ANON_KEY manquantes sur Render.' },
+      { status: 503 }
+    );
+  }
+
   const rawAdminEmail = process.env.ADMIN_EMAIL?.trim().replace(/^["']|["']$/g, '') || 'admin@imoprestige.tg';
   const adminEmail = (body.email?.trim() || rawAdminEmail).toLowerCase();
 
@@ -39,7 +51,7 @@ export async function POST(request: Request) {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Variables Supabase manquantes.';
     return NextResponse.json(
-      { error: `Configuration Render incomplète : ${message}` },
+      { error: `Configuration Render : ${message}` },
       { status: 503 }
     );
   }
@@ -64,26 +76,26 @@ export async function POST(request: Request) {
       });
       if (createError || !newUser.user) {
         return NextResponse.json(
-          { error: `Création du compte admin refusée par Supabase : ${createError?.message ?? 'inconnu'}` },
+          { error: `Création admin Supabase refusée : ${createError?.message ?? 'inconnu'}` },
           { status: 400 }
         );
       }
       targetUser = newUser.user;
     } else {
-      // Mettre à jour le mot de passe
+      // Mettre à jour le mot de passe pour qu'il corresponde toujours à masterPassword
       const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(targetUser.id, {
         password: masterPassword,
         email_confirm: true,
       });
       if (updateError) {
         return NextResponse.json(
-          { error: `Mise à jour mot de passe Supabase impossible : ${updateError.message}` },
+          { error: `Mise à jour mot de passe Supabase refusée : ${updateError.message}` },
           { status: 400 }
         );
       }
     }
 
-    // 2. Mettre à jour ou créer la ligne dans la table profiles avec le rôle ADMIN
+    // 2. Mettre à jour la table profiles avec le rôle ADMIN
     const { error: profileError } = await supabaseAdmin.from('profiles').upsert(
       {
         id: targetUser.id,
@@ -96,7 +108,6 @@ export async function POST(request: Request) {
     );
 
     if (profileError) {
-      console.warn('Tentative upsert profile simplifiée suite à:', profileError.message);
       await supabaseAdmin.from('profiles').upsert(
         {
           id: targetUser.id,
@@ -108,6 +119,33 @@ export async function POST(request: Request) {
       );
     }
 
+    // 3. Connecter la session côté serveur et poser les cookies officiels dans la réponse HTTP
+    const cookieStore = await cookies();
+    const serverSupabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
+        },
+      },
+    });
+
+    const { error: serverSignInError } = await serverSupabase.auth.signInWithPassword({
+      email: adminEmail,
+      password: masterPassword,
+    });
+
+    if (serverSignInError) {
+      return NextResponse.json(
+        { error: `Connexion serveur Supabase refusée : ${serverSignInError.message}` },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
       email: adminEmail,
@@ -115,6 +153,6 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Master login exception:', error);
     const message = error instanceof Error ? error.message : 'Erreur inconnue';
-    return NextResponse.json({ error: `Erreur interne : ${message}` }, { status: 500 });
+    return NextResponse.json({ error: `Erreur interne serveur : ${message}` }, { status: 500 });
   }
 }

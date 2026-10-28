@@ -1,17 +1,15 @@
 'use client';
 
 import { Suspense, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '../../lib/supabaseClient';
 
 function LoginForm() {
-  const router = useRouter();
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async () => {
-    if (!password.trim()) {
+    const trimmed = password.trim();
+    if (!trimmed) {
       setError('Veuillez entrer le mot de passe du back-office.');
       return;
     }
@@ -19,37 +17,25 @@ function LoginForm() {
     setError(null);
 
     try {
-      // Vérification du mot de passe défini dans les variables d'environnement Render
       const res = await fetch('/api/auth/master-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: password.trim() }),
+        body: JSON.stringify({ password: trimmed }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
         setLoading(false);
-        setError(data.error ?? 'Mot de passe incorrect.');
+        setError(data.error || `Erreur serveur (${res.status}).`);
         return;
       }
 
-      // Connexion de la session sécurisée
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: password.trim(),
-      });
-
-      if (signInError || !signInData.user) {
-        setLoading(false);
-        setError(signInError?.message ?? 'Échec de la connexion.');
-        return;
-      }
-
-      setLoading(false);
+      // Redirection immédiate vers le dashboard
       window.location.href = '/';
     } catch (err: unknown) {
       setLoading(false);
-      const msg = err instanceof Error ? err.message : 'Erreur réseau ou serveur inaccessible.';
+      const msg = err instanceof Error ? err.message : 'Erreur réseau de connexion.';
       setError(msg);
     }
   };
@@ -81,29 +67,35 @@ function LoginForm() {
           <p>Entrez le mot de passe configuré sur le serveur Render.</p>
         </div>
 
-        <div className="form-field">
-          <label htmlFor="admin-password">Mot de passe Back-Office</label>
-          <input
-            id="admin-password"
-            type="password"
-            placeholder="Entrez votre mot de passe secret"
-            value={password}
-            onChange={event => setPassword(event.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            autoFocus
-          />
-        </div>
+        <form onSubmit={e => { e.preventDefault(); handleLogin(); }}>
+          <div className="form-field">
+            <label htmlFor="admin-password">Mot de passe Back-Office</label>
+            <input
+              id="admin-password"
+              type="password"
+              placeholder="Entrez votre mot de passe secret"
+              value={password}
+              onChange={event => setPassword(event.target.value)}
+              autoFocus
+              autoComplete="current-password"
+            />
+          </div>
 
-        {error ? <div className="alert">{error}</div> : null}
+          {error ? (
+            <div className="alert" style={{ marginTop: 12, display: 'block', visibility: 'visible' }}>
+              {error}
+            </div>
+          ) : null}
 
-        <button
-          className="primary-button"
-          style={{ width: '100%', marginTop: 16 }}
-          onClick={handleLogin}
-          disabled={loading}
-        >
-          {loading ? 'Vérification...' : 'Déverrouiller le Back-Office'}
-        </button>
+          <button
+            type="submit"
+            className="primary-button"
+            style={{ width: '100%', marginTop: 16 }}
+            disabled={loading}
+          >
+            {loading ? 'Connexion en cours...' : 'Déverrouiller le Back-Office'}
+          </button>
+        </form>
       </div>
     </div>
   );
