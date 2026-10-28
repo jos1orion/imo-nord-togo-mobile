@@ -9,6 +9,7 @@ import {
   Modal,
   FlatList,
   StatusBar,
+  Dimensions,
 } from 'react-native';
 import { AppAlert as Alert } from './ui/appAlertService';
 import { Ionicons } from '@expo/vector-icons';
@@ -295,6 +296,8 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
   );
 };
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 const baseStyles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.surface,
@@ -375,13 +378,13 @@ const baseStyles = StyleSheet.create({
     backgroundColor: COLORS.scrim50,
   },
   viewerImageWrap: {
-    width,
+    width: SCREEN_WIDTH,
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
   viewerImage: {
-    width,
+    width: SCREEN_WIDTH,
     height: '80%',
   },
   viewerCounter: {
