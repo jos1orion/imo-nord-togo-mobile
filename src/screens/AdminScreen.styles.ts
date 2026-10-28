@@ -1,10 +1,11 @@
 import { StyleSheet } from 'react-native';
 import { THEME_PALETTES } from '../theme/colors';
+import type { ThemeMode } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { RADIUS, SPACING } from '../theme/spacing';
 
 export type AdminTheme = {
-  name: 'light' | 'dark';
+  name: ThemeMode;
   bg: string;
   surface: string;
   surfaceAlt: string;
@@ -377,6 +378,124 @@ export const createAdminStyles = (theme: AdminTheme) => StyleSheet.create({
     flex: 1,
     padding: 16,
     paddingBottom: 140,
+  },
+  propertyListViewport: {
+    flex: 1,
+  },
+  propertyListContent: {
+    padding: 16,
+  },
+  propertyListChrome: {
+    marginHorizontal: -16,
+    marginTop: -16,
+  },
+  supportInbox: {
+    backgroundColor: theme.surfaceAlt,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.border,
+    padding: 12,
+    marginBottom: 18,
+  },
+  supportConversationCard: {
+    backgroundColor: theme.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.border,
+    padding: 11,
+    marginBottom: 8,
+  },
+  supportConversationCardSelected: {
+    borderColor: theme.accent,
+    borderWidth: 2,
+  },
+  supportPreview: {
+    color: theme.text,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 6,
+  },
+  supportThread: {
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    marginTop: 8,
+    paddingTop: 12,
+  },
+  supportStatusButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 9,
+    backgroundColor: theme.accentSoft,
+    marginLeft: 8,
+  },
+  supportStatusButtonText: {
+    color: theme.accentText,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  supportMessageBubble: {
+    maxWidth: '88%',
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  supportAgentMessage: {
+    alignSelf: 'flex-start',
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  supportAdminMessage: {
+    alignSelf: 'flex-end',
+    backgroundColor: theme.accent,
+  },
+  supportMessageText: {
+    color: theme.text,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  supportAdminMessageText: {
+    color: theme.onBrand,
+  },
+  supportMessageTime: {
+    color: theme.textMuted,
+    fontSize: 9,
+    marginTop: 4,
+    textAlign: 'right',
+  },
+  supportAdminMessageTime: {
+    color: theme.onBrand,
+  },
+  supportReplyInput: {
+    marginTop: 10,
+    minHeight: 76,
+  },
+  supportSendButton: {
+    alignSelf: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    backgroundColor: theme.accent,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 8,
+  },
+  supportSendButtonDisabled: {
+    opacity: 0.55,
+  },
+  supportSendButtonText: {
+    color: theme.onBrand,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  supportError: {
+    color: theme.danger,
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 8,
   },
   backupCard: {
     backgroundColor: theme.surface,

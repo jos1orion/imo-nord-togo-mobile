@@ -19,11 +19,11 @@ conservés sous `docs/` ne sont plus des entrées de déploiement.
    bootstrap `0002` qui contient déjà `USER`), `0003_production.sql`,
    `0006_admin_platform.sql`, `0004_auth_hardening.sql`, puis `0007` à `0015`
    dans l’ordre numérique, et enfin `0017` à `0020`, `0021` après `0012`, puis
-   `0022`, `0023`, `0024`, puis `0025`. Ne pas rejouer une migration déjà appliquée.
+   `0022`, `0023`, `0024`, `0025`, puis `0026`. Ne pas rejouer une migration déjà appliquée.
 3. `0001_rls.sql` est un brouillon hérité explicitement marqué : ne pas
    l’appliquer en production. Ne pas appliquer `0002_bootstrap.sql` à une base
    existante.
-4. Les migrations `0017` à `0020` et `0022` à `0025` sont appliquées automatiquement par GitHub
+4. Les migrations `0017` à `0020` et `0022` à `0026` sont appliquées automatiquement par GitHub
    Actions lorsqu’elles sont poussées sur `main`. Le workflow attend un schéma
    existant avec les prérequis de `0006_admin_platform.sql` ; il ne consulte pas
    l’historique ni n’applique les migrations antérieures.
@@ -115,6 +115,45 @@ Variables d’environnement attendues :
 
 Voir `admin/README.md` et `admin/.env.local.example`.
 
+## Site public (Expo Web)
+
+Le site public et l’application Android partagent le code mobile et les mêmes
+services Supabase. Le site est déployé sur Netlify et reste distinct du
+back-office, toujours déployé sur Vercel avec le répertoire racine `admin`.
+
+Pour créer le site Netlify :
+
+1. Dans Netlify, choisir **Add new site → Import an existing project** et
+   sélectionner le dépôt GitHub `imo-nord-togo-mobile`.
+2. Laisser le **Base directory** vide (racine du dépôt). Le fichier
+   `netlify.toml` configure la commande `npm run web:build`, le dossier de
+   sortie `dist` et le repli des URL de navigation vers `index.html`.
+3. Ajouter les variables d’environnement de production
+   `EXPO_PUBLIC_SUPABASE_URL` et `EXPO_PUBLIC_SUPABASE_ANON_KEY`. Ces variables
+   sont incluses dans le code public du navigateur : ne jamais y mettre une clé
+   `service_role` ni une clé secrète.
+4. Lancer le déploiement, puis tester l’accueil, les liens directs vers les annonces, la
+   connexion, la publication avec sélection de photos et les fonctions adaptées
+   au navigateur. Les permissions et notifications natives ne sont pas toutes
+   disponibles sur le web.
+
+En local, lancer `npm run mobile:web` ; pour produire l’export de production,
+lancer `npm run web:build`. Le dossier `dist` est généré et ignoré par Git.
+Pour que les liens de confirmation et Google reviennent sur le site public,
+définir l’URL de production Netlify comme **Site URL** dans
+**Supabase → Authentication → URL Configuration**, puis ajouter ses callbacks
+à **Redirect URLs**. Si l’URL demandée n’est pas autorisée, Supabase peut
+rediriger vers la **Site URL** configurée (qui ne doit donc pas être le
+back-office Vercel). Pour la production, la **Site URL** est
+`https://curious-starburst-00e9e1.netlify.app`.
+Les annonces partagées depuis le navigateur utilisent automatiquement le domaine
+du site. Si le navigateur ne propose pas le partage natif, le lien est copié dans
+le presse-papiers. La recherche vocale dépend de la prise en charge Web Speech du
+navigateur. Les outils administrateur téléchargent/importent les sauvegardes par
+le navigateur et utilisent le dialogue d’impression pour les reçus. Sur le web,
+le PIN administrateur est conservé dans le stockage local du navigateur ; il ne
+remplace pas la connexion administrateur ni les contrôles d’accès côté serveur.
+
 ### Authentification mobile (Google et mot de passe)
 
 Pour la connexion Google, activer le fournisseur Google dans **Authentication → Sign In / Providers** de Supabase. Dans Google Cloud Console, déclarer l’URL de callback Supabase :
@@ -123,23 +162,29 @@ Pour la connexion Google, activer le fournisseur Google dans **Authentication �
 https://<project-ref>.supabase.co/auth/v1/callback
 ```
 
-Dans **Authentication → URL Configuration → Redirect URLs** de Supabase, autoriser les callbacks HTTPS de l’application :
+Dans **Authentication → URL Configuration → Redirect URLs** de Supabase,
+autoriser les callbacks de production du site public et de l’application mobile :
 
 ```text
+https://curious-starburst-00e9e1.netlify.app/auth/callback
+https://curious-starburst-00e9e1.netlify.app/reset-password
+imonordtogo://auth/callback
+imonordtogo://reset-password
 https://imo-nord-togo-mobile.vercel.app/auth/callback
-```
-
-Ce callback PKCE est utilisé pour la connexion Google et le retour après confirmation de l’inscription. Android déclare un App Link HTTPS vérifié pour ce domaine. Pour activer sa vérification, le domaine doit être contrôlé par le projet et publier `/.well-known/assetlinks.json` avec `com.imonordtogo.app` et l’empreinte SHA-256 du certificat de signature réellement utilisé (EAS Play/App Signing selon le canal). Il faut aussi vérifier que le déploiement Vercel sert ce fichier sans redirection ni authentification. Régénérer le projet natif avec `npx expo prebuild --platform android` après les changements de manifeste.
-
-Le fournisseur Google doit être activé dans le projet Supabase utilisé par les environnements mobiles, et les identifiants OAuth du fournisseur doivent être valides dans Google Cloud Console.
-
-Pour la réinitialisation du mot de passe mobile, ajouter également cette URL aux **Redirect URLs** :
-
-```text
 https://imo-nord-togo-mobile.vercel.app/reset-password
 ```
 
-L’application ouvre cette URL depuis l’email de récupération et permet ensuite de définir un nouveau mot de passe.
+Le callback Netlify PKCE est utilisé par le site pour Google et après confirmation
+de l’inscription ; le site échange le code puis revient sur le profil. Le callback
+Vercel reste nécessaire pour l’App Link HTTPS Android. Pour activer sa
+vérification, le domaine doit être contrôlé par le projet et publier
+`/.well-known/assetlinks.json` avec `com.imonordtogo.app` et l’empreinte SHA-256
+du certificat de signature réellement utilisé (EAS Play/App Signing selon le
+canal). Il faut aussi vérifier que le déploiement Vercel sert ce fichier sans
+redirection ni authentification. Régénérer le projet natif avec
+`npx expo prebuild --platform android` après les changements de manifeste.
+
+Le fournisseur Google doit être activé dans le projet Supabase utilisé par les environnements mobiles, et les identifiants OAuth du fournisseur doivent être valides dans Google Cloud Console.
 
 ### Vercel (Dashboard)
 
@@ -202,3 +247,9 @@ de suppression de compte, accessible uniquement au service serveur. Le formulair
 public ne supprime pas de compte : un administrateur vérifie la demande, supprime
 le compte depuis le back-office, puis clôture le dossier. Lors de la clôture,
 l’adresse e-mail est effacée de la demande.
+La migration `0026_agent_support_inbox.sql` crée les conversations privées entre
+agents et administrateurs. Les agents répondent depuis l’application mobile ;
+les administrateurs consultent et répondent dans **Messages → Demandes agents**
+du back-office. Elle active aussi les événements Realtime si la publication
+`supabase_realtime` existe. Déployer cette migration avant de présenter la
+fonctionnalité aux agents.

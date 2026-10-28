@@ -29,19 +29,26 @@ const isExpiringSoon = (expiresAt?: string | null) => {
   return remaining > 0 && remaining <= 14 * 24 * 60 * 60 * 1000;
 };
 
+const AGENT_SPECIALTY_OPTIONS: PropertyType[] = ['house', 'apartment', 'land', 'shop'];
+
 const AgentDashboardScreen = () => {
   const styles = useThemedStyles(baseStyles);
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Navigation>();
-  const { currentUser, properties, propertyStats, chats, getAgentProfile, createAgentProfile, updateAgentProfile, completeProperty, updateProperty, updatePropertyStatus, t } = useApp();
+  const { currentUser, properties, propertyStats, chats, getAgentProfile, createAgentProfile, updateAgentProfile, updateProfile, completeProperty, updateProperty, updatePropertyStatus, deleteProperty, t, tType } = useApp();
   const [listingFilter, setListingFilter] = useState<'published' | 'pending' | 'rejected' | 'completed' | 'archived'>('published');
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [contactNameDraft, setContactNameDraft] = useState('');
+  const [contactPhoneDraft, setContactPhoneDraft] = useState('');
   const [bioDraft, setBioDraft] = useState('');
-  const [specialtiesDraft, setSpecialtiesDraft] = useState('');
+  const [selectedSpecialties, setSelectedSpecialties] = useState<PropertyType[]>([]);
   const [experienceDraft, setExperienceDraft] = useState('');
+  const [companyDraft, setCompanyDraft] = useState('');
+  const [licenseNumberDraft, setLicenseNumberDraft] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [updatingListingId, setUpdatingListingId] = useState<string | null>(null);
+  const [deletingListingId, setDeletingListingId] = useState<string | null>(null);
   const [completionPropertyId, setCompletionPropertyId] = useState<string | null>(null);
   const [listingActionMode, setListingActionMode] = useState<'complete' | 'reopen'>('complete');
   const [completionOutcome, setCompletionOutcome] = useState<'sold' | 'rented' | null>(null);
@@ -118,27 +125,85 @@ const AgentDashboardScreen = () => {
       setUpdatingListingId(null);
     }
   };
+  const confirmDeleteListing = (propertyId: string, title: string) => {
+    Alert.alert(
+      t('profile_agent_delete_listing_title'),
+      t('profile_agent_delete_listing_confirm').replace('{title}', title),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('profile_agent_delete_listing_action'),
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingListingId(propertyId);
+            try {
+              await deleteProperty(propertyId);
+            } catch (error) {
+              Alert.alert(
+                t('error'),
+                error instanceof Error ? error.message : t('profile_agent_delete_listing_failed')
+              );
+            } finally {
+              setDeletingListingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
   const openProfileEditor = () => {
+    setContactNameDraft(currentUser?.name ?? '');
+    setContactPhoneDraft(currentUser?.phone ?? '');
     setBioDraft(profile?.bio ?? '');
-    setSpecialtiesDraft(profile?.specialties.join(', ') ?? '');
+    setSelectedSpecialties(profile?.specialties ?? []);
     setExperienceDraft(profile ? String(profile.experience) : '0');
+    setCompanyDraft(profile?.company ?? '');
+    setLicenseNumberDraft(profile?.licenseNumber ?? '');
     setProfileEditorOpen(true);
   };
   const saveProfessionalProfile = async () => {
     if (!currentUser) return;
-    const specialties = specialtiesDraft.split(',').map(value => value.trim().toLowerCase()).filter(
-      (value): value is PropertyType => ['house', 'apartment', 'land', 'shop'].includes(value)
-    );
-    if (!bioDraft.trim() || specialties.length === 0) {
+    const experience = Number(experienceDraft);
+    if (!contactNameDraft.trim()) {
+      Alert.alert(t('error'), t('profile_agent_name_required'));
+      return;
+    }
+    if (!contactPhoneDraft.trim()) {
+      Alert.alert(t('error'), t('profile_agent_phone_required'));
+      return;
+    }
+    if (!bioDraft.trim() || selectedSpecialties.length === 0) {
       Alert.alert(t('error'), t('profile_agent_complete_profile'));
       return;
     }
+    if (!Number.isInteger(experience) || experience < 0) {
+      Alert.alert(t('error'), t('profile_agent_invalid_experience'));
+      return;
+    }
+
     setSavingProfile(true);
     try {
+      await updateProfile({
+        name: contactNameDraft.trim(),
+        phone: contactPhoneDraft.trim(),
+      });
+
+      const updates = {
+        bio: bioDraft.trim(),
+        specialties: selectedSpecialties,
+        experience,
+        company: companyDraft.trim(),
+        licenseNumber: licenseNumberDraft.trim(),
+      };
       if (profile) {
-        await updateAgentProfile(currentUser.id, { bio: bioDraft.trim(), specialties, experience: Number(experienceDraft) || 0 });
+        await updateAgentProfile(currentUser.id, updates);
       } else {
-        await createAgentProfile({ userId: currentUser.id, bio: bioDraft.trim(), specialties, experience: Number(experienceDraft) || 0, portfolio: [], verified: false });
+        await createAgentProfile({
+          userId: currentUser.id,
+          ...updates,
+          portfolio: [],
+          verified: false,
+        });
       }
       setProfileEditorOpen(false);
     } catch (error) {
@@ -179,18 +244,62 @@ const AgentDashboardScreen = () => {
             </Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.publishButton} onPress={openPublish}>
-          <Ionicons name="add" size={20} color={colors.onBrand} />
-          <Text style={styles.publishButtonText}>{t('profile_agent_publish')}</Text>
+        <TouchableOpacity
+          style={[
+            styles.publishButton,
+            {
+              backgroundColor: colors.warningContainer,
+              borderColor: colors.gold,
+              borderWidth: 1,
+            },
+          ]}
+          onPress={openPublish}
+          accessibilityRole="button"
+          accessibilityLabel={t('profile_agent_publish')}
+        >
+          <Ionicons name="add-circle" size={21} color={colors.onWarningContainer} />
+          <Text style={[styles.publishButtonText, { color: colors.onWarningContainer }]}>
+            {t('profile_agent_publish')}
+          </Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.stats}>
         {[
-          { icon: 'home-outline' as const, value: active.length, label: t('profile_agent_active_listings'), color: colors.primary },
-          { icon: 'eye-outline' as const, value: views, label: t('profile_agent_views'), color: colors.info },
-          { icon: 'chatbubble-ellipses-outline' as const, value: unread, label: t('profile_agent_unread_messages'), color: colors.success },
-        ].map(item => <View key={item.label} style={styles.stat}><Ionicons name={item.icon} size={18} color={item.color} /><Text style={styles.statValue}>{item.value}</Text><Text style={styles.statLabel}>{item.label}</Text></View>)}
+          {
+            icon: 'home-outline' as const,
+            value: active.length,
+            label: t('profile_agent_active_listings'),
+            color: colors.primary,
+            onPress: () => setListingFilter('published'),
+          },
+          {
+            icon: 'eye-outline' as const,
+            value: views,
+            label: t('profile_agent_views'),
+            color: colors.info,
+            onPress: () => setListingFilter('published'),
+          },
+          {
+            icon: 'chatbubble-ellipses-outline' as const,
+            value: unread,
+            label: t('profile_agent_unread_messages'),
+            color: colors.success,
+            onPress: () => navigation.navigate('Messages'),
+          },
+        ].map(item => (
+          <TouchableOpacity
+            key={item.label}
+            style={styles.stat}
+            onPress={item.onPress}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.label}: ${item.value}`}
+          >
+            <Ionicons name={item.icon} size={18} color={item.color} />
+            <Text style={styles.statValue}>{item.value}</Text>
+            <Text style={styles.statLabel}>{item.label}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {completedSetup < setupSteps.length && (
@@ -210,7 +319,7 @@ const AgentDashboardScreen = () => {
       <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t('profile_agent_today')}</Text></View>
       {!profileReady &&       <TouchableOpacity style={styles.todo} onPress={openProfileEditor} accessibilityRole="button" accessibilityLabel={t('profile_agent_complete_profile')}><Ionicons name="person-circle-outline" size={21} color={colors.warning} /><Text style={styles.todoText}>{t('profile_agent_complete_profile')}</Text><Ionicons name="chevron-forward" size={18} color={colors.onSurfaceMuted} /></TouchableOpacity>}
       {unread > 0 && <TouchableOpacity style={styles.todo} onPress={() => navigation.navigate('Messages')} accessibilityRole="button" accessibilityLabel={t('profile_agent_reply_to_prospect')}><Ionicons name="chatbubble-ellipses-outline" size={21} color={colors.primary} /><Text style={styles.todoText}>{t('profile_agent_reply_to_prospect')}</Text><View style={styles.countBadge}><Text style={styles.countBadgeText}>{unread}</Text></View></TouchableOpacity>}
-      {priority && <TouchableOpacity style={styles.todo} onPress={() => openListing(priority.id)} accessibilityRole="button" accessibilityLabel={`${priority.listingStatus === 'rejected' ? t('profile_agent_fix_rejected') : t('profile_agent_renew_listing')}: ${priority.title}`}><Ionicons name={priority.listingStatus === 'rejected' ? 'alert-circle-outline' : 'time-outline'} size={21} color={priority.listingStatus === 'rejected' ? colors.danger : colors.warning} /><Text style={styles.todoText} numberOfLines={1}>{priority.listingStatus === 'rejected' ? t('profile_agent_fix_rejected') : t('profile_agent_renew_listing')}: {priority.title}</Text><Ionicons name="chevron-forward" size={18} color={colors.onSurfaceMuted} /></TouchableOpacity>}
+      {priority && <TouchableOpacity style={[styles.todo, styles.priorityTodo]} onPress={() => openListing(priority.id)} accessibilityRole="button" accessibilityLabel={`${priority.listingStatus === 'rejected' ? t('profile_agent_fix_rejected') : t('profile_agent_renew_listing')}: ${priority.title}`}><Ionicons name={priority.listingStatus === 'rejected' ? 'alert-circle-outline' : 'time-outline'} size={21} color={colors.danger} /><Text style={[styles.todoText, styles.priorityTodoText]} numberOfLines={1}>{priority.listingStatus === 'rejected' ? t('profile_agent_fix_rejected') : t('profile_agent_renew_listing')}: {priority.title}</Text><Ionicons name="chevron-forward" size={18} color={colors.danger} /></TouchableOpacity>}
       {profileReady && unread === 0 && !priority && <Text style={styles.caughtUp}>{t('profile_agent_all_caught_up')}</Text>}
 
       <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t('profile_agent_manage_listings')}</Text><TouchableOpacity onPress={openPublish} accessibilityRole="button" accessibilityLabel={t('profile_agent_publish')}><Text style={styles.link}>{t('profile_agent_publish')}</Text></TouchableOpacity></View>
@@ -230,6 +339,7 @@ const AgentDashboardScreen = () => {
         const isArchived = property.status !== 'occupied' && (property.listingStatus === 'archived' || expired);
         const canComplete = property.listingStatus === 'approved' && property.status === 'available' && !expired;
         const canReopen = (property.listingStatus === 'approved' && property.status === 'occupied') || isArchived;
+        const canDelete = property.listingStatus === 'pending' || property.listingStatus === 'rejected';
         const statusLabel = isArchived
           ? t('status_archived')
           : property.listingStatus === 'pending'
@@ -268,7 +378,7 @@ const AgentDashboardScreen = () => {
                 </View>
               )}
               <View style={styles.listingCopy}>
-                <Text style={styles.listingTitle} numberOfLines={1}>{property.title}</Text>
+                <Text style={styles.listingTitle}>{property.title}</Text>
                 <Text style={styles.listingPrice}>{formatPrice(property.price)}</Text>
                 <View style={styles.listingStatus}>
                   <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -333,6 +443,22 @@ const AgentDashboardScreen = () => {
                     : <Ionicons name="refresh-outline" size={17} color={colors.info} />}
                   <Text style={[styles.listingActionText, { color: colors.info }]}>
                     {t('profile_agent_reopen_action')}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {canDelete && (
+                <TouchableOpacity
+                  style={[styles.listingActionButton, styles.deleteListingAction]}
+                  onPress={() => confirmDeleteListing(property.id, property.title)}
+                  disabled={deletingListingId === property.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('profile_agent_delete_listing_action')}: ${property.title}`}
+                >
+                  {deletingListingId === property.id
+                    ? <ActivityIndicator size="small" color={colors.danger} />
+                    : <Ionicons name="trash-outline" size={17} color={colors.danger} />}
+                  <Text style={[styles.listingActionText, { color: colors.danger }]}>
+                    {t('profile_agent_delete_listing_action')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -507,64 +633,138 @@ const AgentDashboardScreen = () => {
           style={styles.modalBackdrop}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <ScrollView
-            contentContainerStyle={styles.modalScrollContent}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          >
-            <View style={styles.modalCard}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{t('profile_agent_step_professional')}</Text>
+          <View style={styles.modalScrollContent}>
+            <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, SPACING.md) }]}>
+              <ScrollView
+                style={styles.profileFormScroll}
+                contentContainerStyle={styles.profileFormContent}
+                keyboardShouldPersistTaps="always"
+                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              >
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{t('profile_agent_step_professional')}</Text>
+                  <TouchableOpacity
+                    onPress={() => setProfileEditorOpen(false)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('close')}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="close" size={23} color={colors.onSurfaceMuted} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.formSectionTitle}>{t('profile_agent_step_contact')}</Text>
+                <Text style={styles.inputLabel}>{t('profile_name')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={contactNameDraft}
+                  onChangeText={setContactNameDraft}
+                  accessibilityLabel={t('profile_name')}
+                  autoCapitalize="words"
+                  placeholderTextColor={colors.onSurfaceMuted}
+                />
+                <Text style={styles.inputLabel}>{t('profile_phone')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={contactPhoneDraft}
+                  onChangeText={setContactPhoneDraft}
+                  accessibilityLabel={t('profile_phone')}
+                  keyboardType="phone-pad"
+                  placeholderTextColor={colors.onSurfaceMuted}
+                />
+                <Text style={styles.formSectionTitle}>{t('profile_agent_step_professional')}</Text>
+                <Text style={styles.inputLabel}>{t('profile_agent_bio_label')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={bioDraft}
+                  onChangeText={setBioDraft}
+                  accessibilityLabel={t('profile_agent_bio_label')}
+                  multiline
+                  placeholderTextColor={colors.onSurfaceMuted}
+                  placeholder={t('profile_agent_bio_placeholder')}
+                />
+                <Text style={styles.inputLabel}>{t('specialties')}</Text>
+                <View style={styles.specialtyOptions}>
+                  {AGENT_SPECIALTY_OPTIONS.map(specialty => {
+                    const selected = selectedSpecialties.includes(specialty);
+                    return (
+                      <TouchableOpacity
+                        key={specialty}
+                        style={[
+                          styles.specialtyOption,
+                          selected && {
+                            backgroundColor: colors.primaryContainer,
+                            borderColor: colors.primary,
+                          },
+                        ]}
+                        onPress={() => setSelectedSpecialties(previous =>
+                          selected
+                            ? previous.filter(item => item !== specialty)
+                            : [...previous, specialty]
+                        )}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: selected }}
+                      >
+                        <Ionicons
+                          name={selected ? 'checkbox' : 'square-outline'}
+                          size={18}
+                          color={selected ? colors.primary : colors.onSurfaceMuted}
+                        />
+                        <Text
+                          style={[
+                            styles.specialtyOptionText,
+                            selected && { color: colors.primary },
+                          ]}
+                        >
+                          {tType(specialty)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={styles.inputLabel}>{t('profile_agent_experience_label')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={experienceDraft}
+                  onChangeText={setExperienceDraft}
+                  accessibilityLabel={t('profile_agent_experience_label')}
+                  keyboardType="number-pad"
+                  placeholderTextColor={colors.onSurfaceMuted}
+                  placeholder="0"
+                  returnKeyType="done"
+                />
+                <Text style={styles.inputLabel}>{t('profile_agent_company_label')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={companyDraft}
+                  onChangeText={setCompanyDraft}
+                  accessibilityLabel={t('profile_agent_company_label')}
+                  autoCapitalize="words"
+                  placeholderTextColor={colors.onSurfaceMuted}
+                  placeholder={t('profile_agent_optional_field')}
+                />
+                <Text style={styles.inputLabel}>{t('profile_agent_license_label')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={licenseNumberDraft}
+                  onChangeText={setLicenseNumberDraft}
+                  accessibilityLabel={t('profile_agent_license_label')}
+                  autoCapitalize="characters"
+                  placeholderTextColor={colors.onSurfaceMuted}
+                  placeholder={t('profile_agent_optional_field')}
+                />
+              </ScrollView>
+              <View style={styles.profileFormFooter}>
                 <TouchableOpacity
-                  onPress={() => setProfileEditorOpen(false)}
+                  style={[styles.publishButton, savingProfile && styles.disabled]}
+                  onPress={() => void saveProfessionalProfile()}
+                  disabled={savingProfile}
                   accessibilityRole="button"
-                  accessibilityLabel={t('close')}
                 >
-                  <Ionicons name="close" size={23} color={colors.onSurfaceMuted} />
+                  <Text style={styles.publishButtonText}>{savingProfile ? '…' : t('confirm')}</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.inputLabel}>Bio</Text>
-              <TextInput
-                style={styles.input}
-                value={bioDraft}
-                onChangeText={setBioDraft}
-                accessibilityLabel="Bio professionnelle"
-                multiline
-                placeholderTextColor={colors.onSurfaceMuted}
-                placeholder="Présentez votre activité"
-              />
-              <Text style={styles.inputLabel}>Spécialités</Text>
-              <TextInput
-                style={styles.input}
-                value={specialtiesDraft}
-                onChangeText={setSpecialtiesDraft}
-                accessibilityLabel="Spécialités immobilières"
-                placeholderTextColor={colors.onSurfaceMuted}
-                placeholder="house, land, apartment, shop"
-                autoCapitalize="none"
-                returnKeyType="next"
-              />
-              <Text style={styles.inputLabel}>Expérience (années)</Text>
-              <TextInput
-                style={styles.input}
-                value={experienceDraft}
-                onChangeText={setExperienceDraft}
-                accessibilityLabel="Expérience en années"
-                keyboardType="numeric"
-                placeholderTextColor={colors.onSurfaceMuted}
-                placeholder="0"
-                returnKeyType="done"
-              />
-              <TouchableOpacity
-                style={[styles.publishButton, savingProfile && styles.disabled]}
-                onPress={() => void saveProfessionalProfile()}
-                disabled={savingProfile}
-                accessibilityRole="button"
-              >
-                <Text style={styles.publishButtonText}>{savingProfile ? '…' : t('confirm')}</Text>
-              </TouchableOpacity>
             </View>
-          </ScrollView>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
     </ScrollView>
@@ -576,11 +776,13 @@ const baseStyles = StyleSheet.create({
   hero: { backgroundColor: COLORS.brand, padding: 20, borderRadius: RADIUS.xl, gap: 18 }, heroTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   eyebrow: { color: COLORS.brandAccent, fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: .6 }, title: { color: COLORS.white, fontSize: 22, fontWeight: '800', marginTop: 4 },
   verified: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, height: 32, borderRadius: RADIUS.full }, verifiedText: { fontSize: 12, fontWeight: '800' },
-  publishButton: { minHeight: 48, borderRadius: RADIUS.md, backgroundColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }, publishButtonText: { color: COLORS.white, fontSize: 14, fontWeight: '800' },
+  publishButton: { minHeight: 52, borderRadius: RADIUS.md, backgroundColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }, publishButtonText: { color: COLORS.white, fontSize: 14, fontWeight: '800' },
   stats: { flexDirection: 'row', backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.lg, paddingVertical: 14 }, stat: { flex: 1, alignItems: 'center', gap: 3, paddingHorizontal: 5 }, statValue: { color: COLORS.onSurface, fontSize: 18, fontWeight: '800' }, statLabel: { color: COLORS.onSurfaceMuted, fontSize: 12, fontWeight: '700', textAlign: 'center' },
   setupCard: { backgroundColor: COLORS.primaryContainer, borderColor: COLORS.borderStrong, borderWidth: 1, borderRadius: RADIUS.lg, padding: 14, gap: 10 }, setupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, setupTitle: { color: COLORS.onSurface, fontSize: 15, fontWeight: '800' }, setupSub: { marginTop: 2, color: COLORS.onSurfaceMuted, fontSize: 12, fontWeight: '600' }, progressTrack: { height: 7, borderRadius: RADIUS.full, overflow: 'hidden', backgroundColor: COLORS.surface }, progressFill: { height: '100%', borderRadius: RADIUS.full, backgroundColor: COLORS.primary }, setupNext: { color: COLORS.primary, fontSize: 12, fontWeight: '800' },
   sectionHeader: { marginTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, sectionTitle: { color: COLORS.onSurface, fontSize: 17, fontWeight: '800' }, link: { color: COLORS.primary, fontSize: 13, fontWeight: '800' },
   todo: { minHeight: 58, backgroundColor: COLORS.surface, borderColor: COLORS.border, borderWidth: 1, borderRadius: RADIUS.md, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 13 }, todoText: { flex: 1, color: COLORS.onSurface, fontSize: 13, fontWeight: '700' }, countBadge: { minWidth: 23, height: 23, borderRadius: 12, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' }, countBadgeText: { color: COLORS.white, fontSize: 12, fontWeight: '800' }, caughtUp: { color: COLORS.onSurfaceMuted, fontSize: 13, paddingVertical: 8 },
+  priorityTodo: { backgroundColor: COLORS.dangerContainer, borderColor: COLORS.danger },
+  priorityTodoText: { color: COLORS.danger },
   tabs: { gap: 8 }, tab: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: RADIUS.full, backgroundColor: COLORS.surfaceAlt, borderWidth: 1, borderColor: COLORS.border }, tabActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary }, tabText: { color: COLORS.onSurfaceMuted, fontSize: 12, fontWeight: '800' }, tabTextActive: { color: COLORS.white }, empty: { color: COLORS.onSurfaceMuted, fontSize: 13, paddingVertical: 10 }, rejection: { marginTop: 3, color: COLORS.danger, fontSize: 12, fontWeight: '600' },
   listing: { minHeight: 88, backgroundColor: COLORS.surface, borderColor: COLORS.border, borderWidth: 1, borderRadius: RADIUS.lg, gap: SPACING.sm, padding: SPACING.sm },
   listingMain: { width: '100%', minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -598,6 +800,7 @@ const baseStyles = StyleSheet.create({
   listingActionButton: { flex: 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: RADIUS.md, paddingHorizontal: SPACING.xs },
   editListingAction: { backgroundColor: COLORS.surfaceAlt, borderWidth: 1, borderColor: COLORS.border },
   completeListingAction: { borderWidth: 1, borderColor: COLORS.border },
+  deleteListingAction: { backgroundColor: COLORS.dangerContainer, borderWidth: 1, borderColor: COLORS.dangerContainer },
   listingActionText: { fontSize: 12, fontWeight: '800' },
   completionBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: COLORS.scrimStrong },
   completionDismissArea: { flex: 1 },
@@ -631,12 +834,19 @@ const baseStyles = StyleSheet.create({
   completionCancel: { alignItems: 'center', paddingVertical: SPACING.xs },
   completionCancelText: { color: COLORS.onSurfaceMuted, fontSize: 14, fontWeight: '700' },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: COLORS.scrim50 },
-  modalScrollContent: { flexGrow: 1, justifyContent: 'flex-end' },
-  modalCard: { maxHeight: '90%', backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, padding: 20, gap: 8 },
+  modalScrollContent: { flex: 1, justifyContent: 'flex-end' },
+  modalCard: { maxHeight: '90%', backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, paddingTop: 20 },
+  profileFormScroll: { flexShrink: 1 },
+  profileFormContent: { paddingHorizontal: 20, paddingBottom: 8, gap: 8 },
+  profileFormFooter: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   modalTitle: { flex: 1, color: COLORS.onSurface, fontSize: 18, fontWeight: '800' },
+  formSectionTitle: { color: COLORS.onSurface, fontSize: 14, fontWeight: '800', marginTop: 10 },
   inputLabel: { color: COLORS.onSurfaceMuted, fontSize: 12, fontWeight: '800', marginTop: 6 },
   input: { minHeight: 46, paddingHorizontal: 12, paddingVertical: 10, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderStrong, color: COLORS.onSurface, fontSize: 14, backgroundColor: COLORS.background },
+  specialtyOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  specialtyOption: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 11, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderStrong, backgroundColor: COLORS.background },
+  specialtyOptionText: { color: COLORS.onSurfaceMuted, fontSize: 13, fontWeight: '700' },
   disabled: { opacity: 0.6 },
   gate: { flex: 1, backgroundColor: COLORS.background, paddingHorizontal: 28, alignItems: 'center' }, gateIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primaryContainer, marginBottom: 18 }, gateTitle: { color: COLORS.onSurface, fontSize: 20, fontWeight: '800', textAlign: 'center' }, gateBody: { color: COLORS.onSurfaceMuted, fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 10 }, primaryButton: { marginTop: 22, minHeight: 46, paddingHorizontal: 18, justifyContent: 'center', borderRadius: RADIUS.md, backgroundColor: COLORS.primary }, primaryButtonText: { color: COLORS.white, fontWeight: '800' },
 });

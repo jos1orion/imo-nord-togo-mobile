@@ -35,6 +35,7 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import PublishScreen from './src/screens/PublishScreen';
 import MessagesScreen from './src/screens/MessagesScreen';
 import ChatScreen from './src/screens/ChatScreen';
+import AgentSupportChatScreen from './src/screens/AgentSupportChatScreen';
 import AgentProfileScreen from './src/screens/AgentProfileScreen';
 import AgentDashboardScreen from './src/screens/AgentDashboardScreen';
 import ReviewsScreen from './src/screens/ReviewsScreen';
@@ -44,13 +45,14 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { AppDialogProvider } from './src/components/ui/AppDialogProvider';
 import { AppAlert as Alert } from './src/components/ui/appAlertService';
-import { lightPaperTheme, darkPaperTheme } from './src/theme/paperTheme';
+import { createPaperTheme } from './src/theme/paperTheme';
 import { THEME_PALETTES } from './src/theme/colors';
 import { typography } from './src/theme/typography';
 import {
   exchangeAuthCallback,
-  resetPasswordCallbackUrl,
-  supabase,
+  getAuthCallbackUrl,
+  getResetPasswordCallbackUrl,
+  matchesAuthCallbackUrl,
 } from './src/lib/supabase';
 import { logger } from './src/lib/logger';
 
@@ -83,6 +85,7 @@ export type RootStackParamList = {
   Publish: { propertyId?: string } | undefined;
   Messages: undefined;
   Chat: { chatId: string; otherUserId: string; propertyId?: string };
+  AgentSupportChat: undefined;
   AgentProfile: { userId: string };
   Reviews: { propertyId: string };
   Notifications: undefined;
@@ -99,9 +102,10 @@ LogBox.ignoreLogs([
 ]);
 
 const TabNavigator = () => {
-  const { t, language, currentUser } = useApp();
+  const { t, language, currentUser, theme } = useApp();
   const paper = useTheme();
   const insets = useSafeAreaInsets();
+  const colors = THEME_PALETTES[theme];
   const hasAgentWorkspace = currentUser?.role === 'AGENT' || currentUser?.role === 'ADMIN';
   return (
     <Tab.Navigator
@@ -165,15 +169,21 @@ const TabNavigator = () => {
         tabBarStyle: {
           backgroundColor: paper.colors.surface,
           borderTopWidth: 1,
-          borderTopColor: paper.colors.outlineVariant,
+          borderTopColor: paper.colors.outline,
           paddingBottom: Math.max(insets.bottom, 10),
-          paddingTop: 6,
-          height: 68 + Math.max(insets.bottom, 10),
+          paddingTop: 8,
+          height: 72 + Math.max(insets.bottom, 10),
+          shadowColor: colors.shadow,
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: theme !== 'light' ? 0 : 0.06,
+          shadowRadius: 10,
+          elevation: 10,
         },
         tabBarHideOnKeyboard: true,
         tabBarLabelStyle: {
           ...typography.tabLabel,
-          marginTop: 2,
+          marginTop: 3,
+          fontWeight: '700',
         },
         headerShown: false,
       })}
@@ -186,7 +196,13 @@ const TabNavigator = () => {
           options={{ tabBarLabel: t('tab_activity') }}
         />
       )}
-      <Tab.Screen name="Messages" component={MessagesScreen} options={{ tabBarLabel: t('support_title') }} />
+      <Tab.Screen
+        name="Messages"
+        component={MessagesScreen}
+        options={{
+          tabBarLabel: currentUser?.role === 'AGENT' ? t('support_title') : t('messages_inbox_title'),
+        }}
+      />
       {hasAgentWorkspace ? (
         <Tab.Screen name="Agent" component={AgentDashboardScreen} options={{ tabBarLabel: t('profile_agent_dashboard') }} />
       ) : null}
@@ -198,7 +214,8 @@ const TabNavigator = () => {
 const AppContent = () => {
   const { theme, t } = useApp();
   const colors = THEME_PALETTES[theme];
-  const paperTheme = theme === 'light' ? lightPaperTheme : darkPaperTheme;
+  const paperTheme = createPaperTheme(theme);
+  const navigationTheme = theme === 'light' ? NavigationLightTheme : NavigationDarkTheme;
   const [navReady, setNavReady] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [guideSection, setGuideSection] = useState<GuideSection | null>(null);
@@ -206,11 +223,18 @@ const AppContent = () => {
   const checkedGuideSectionsRef = React.useRef(new Set<GuideSection>());
   const guideDisabledRef = React.useRef(false);
   const pendingResetNavigationRef = React.useRef(false);
+  const pendingAuthNavigationRef = React.useRef(false);
 
   const navigateToPendingResetPassword = React.useCallback(() => {
     if (!pendingResetNavigationRef.current || !navigationRef.isReady()) return;
     pendingResetNavigationRef.current = false;
     navigationRef.navigate('ResetPassword');
+  }, []);
+
+  const navigateToPendingAuthProfile = React.useCallback(() => {
+    if (!pendingAuthNavigationRef.current || !navigationRef.isReady()) return;
+    pendingAuthNavigationRef.current = false;
+    navigationRef.navigate('MainTabs', { screen: 'Profile' });
   }, []);
 
   const checkFirstVisitGuide = React.useCallback((routeName?: string) => {
@@ -266,31 +290,50 @@ const AppContent = () => {
 
   useEffect(() => {
     const handleAuthUrl = async (url: string | null) => {
-      if (
-        !url ||
-        !(
-          url === resetPasswordCallbackUrl ||
-          url.startsWith(`${resetPasswordCallbackUrl}?`) ||
-          url.startsWith(`${resetPasswordCallbackUrl}#`)
-        )
-      ) {
-        return;
-      }
+      if (!url) return;
+      const isResetPassword = matchesAuthCallbackUrl(url, getResetPasswordCallbackUrl());
+      const isAuthCallback = matchesAuthCallbackUrl(url, getAuthCallbackUrl());
+      if (!isResetPassword && !isAuthCallback) return;
       try {
         const result = await exchangeAuthCallback(url);
         if (!result) {
-          Alert.alert(t('reset_link_invalid_title'), t('reset_link_invalid_message'));
+          if (isResetPassword) {
+            Alert.alert(t('reset_link_invalid_title'), t('reset_link_invalid_message'));
+          } else {
+            pendingAuthNavigationRef.current = true;
+            navigateToPendingAuthProfile();
+            Alert.alert(t('auth_callback_failed_title'), t('auth_callback_failed_message'));
+          }
           return;
         }
         if (result.error) {
-          Alert.alert(t('reset_link_invalid_title'), t('reset_link_expired_message'));
+          if (isResetPassword) {
+            Alert.alert(t('reset_link_invalid_title'), t('reset_link_expired_message'));
+          } else {
+            logger.error('Unable to complete the sign-in or registration callback.', result.error);
+            pendingAuthNavigationRef.current = true;
+            navigateToPendingAuthProfile();
+            Alert.alert(t('auth_callback_failed_title'), t('auth_callback_failed_message'));
+          }
           return;
         }
-        pendingResetNavigationRef.current = true;
-        navigateToPendingResetPassword();
+        if (isResetPassword) {
+          pendingResetNavigationRef.current = true;
+          navigateToPendingResetPassword();
+        } else {
+          pendingAuthNavigationRef.current = true;
+          navigateToPendingAuthProfile();
+        }
       } catch (error) {
-        logger.error('Unable to complete the password reset callback.', error);
-        Alert.alert(t('reset_link_invalid_title'), t('reset_link_expired_message'));
+        if (isResetPassword) {
+          logger.error('Unable to complete the password reset callback.', error);
+          Alert.alert(t('reset_link_invalid_title'), t('reset_link_expired_message'));
+        } else {
+          logger.error('Unable to complete the sign-in or registration callback.', error);
+          pendingAuthNavigationRef.current = true;
+          navigateToPendingAuthProfile();
+          Alert.alert(t('auth_callback_failed_title'), t('auth_callback_failed_message'));
+        }
       }
     };
 
@@ -304,7 +347,7 @@ const AppContent = () => {
       void handleAuthUrl(event.url);
     });
     return () => subscription.remove();
-  }, [navigateToPendingResetPassword, t]);
+  }, [navigateToPendingAuthProfile, navigateToPendingResetPassword, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -340,21 +383,49 @@ const AppContent = () => {
       <NavigationContainer
         ref={navigationRef}
         linking={{
-          prefixes: ['imonordtogo://'],
+          prefixes: [
+            'imonordtogo://',
+            ...(Platform.OS === 'web' && typeof window !== 'undefined'
+              ? [window.location.origin]
+              : []),
+          ],
           config: {
             screens: {
+              MainTabs: {
+                path: 'MainTabs',
+                screens: {
+                  Home: 'Home',
+                  Publish: 'Publish',
+                  Messages: 'Messages',
+                  Agent: 'Agent',
+                  Profile: 'Profile',
+                },
+              },
               PropertyDetail: 'property/:propertyId',
+              ResetPassword: 'reset-password',
             },
           },
         }}
-        theme={theme === 'dark' ? NavigationDarkTheme : NavigationLightTheme}
+        theme={{
+          ...navigationTheme,
+          colors: {
+            ...navigationTheme.colors,
+            primary: colors.primary,
+            background: colors.background,
+            card: colors.surface,
+            text: colors.onSurface,
+            border: colors.border,
+            notification: colors.danger,
+          },
+        }}
         onReady={() => {
           navigateToPendingResetPassword();
+          navigateToPendingAuthProfile();
           checkFirstVisitGuide(navigationRef.getCurrentRoute()?.name);
         }}
         onStateChange={() => checkFirstVisitGuide(navigationRef.getCurrentRoute()?.name)}
       >
-        <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+        <StatusBar style={theme === 'light' ? 'dark' : 'light'} />
         <Stack.Navigator
           initialRouteName={showOnboarding ? 'Onboarding' : 'MainTabs'}
           screenOptions={{
@@ -386,6 +457,7 @@ const AppContent = () => {
           <Stack.Screen name="Publish" component={PublishScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="Messages" component={MessagesScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="Chat" component={ChatScreen} options={{ presentation: 'card' }} />
+          <Stack.Screen name="AgentSupportChat" component={AgentSupportChatScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="AgentProfile" component={AgentProfileScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="Reviews" component={ReviewsScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ presentation: 'card' }} />

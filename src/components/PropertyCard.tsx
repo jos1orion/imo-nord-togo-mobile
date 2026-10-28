@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
+  useWindowDimensions,
   ScrollView,
   Modal,
   FlatList,
@@ -31,8 +31,6 @@ import LazyImage from './LazyImage';
 import PropertyImage from './ui/PropertyImage';
 import { isFeaturedProperty } from '../utils/propertyVisibility';
 
-const { width } = Dimensions.get('window');
-
 interface PropertyCardProps {
   property: Property;
   onPress: () => void;
@@ -42,6 +40,7 @@ interface PropertyCardProps {
 const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact = false }) => {
   const styles = useThemedStyles(baseStyles);
   const themeColors = useThemeColors();
+  const { width } = useWindowDimensions();
   const cardWidth = compact ? width * 0.8 : width - 32;
   const carouselWidth = cardWidth - 2;
   const { toggleFavorite, isFavorite, propertyStats, tType, t, language } = useApp();
@@ -185,15 +184,15 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
         accessibilityRole="button"
         accessibilityLabel={`${t('view_details')}: ${property.title}`}
       >
-        <Text style={styles.title} numberOfLines={1}>{property.title}</Text>
+        <Text style={styles.title}>{property.title}</Text>
         <View style={styles.locationRow}>
           <Ionicons name="location" size={14} color={themeColors.onSurfaceSoft} />
-          <Text style={styles.location} numberOfLines={1}>{locationLabel}</Text>
+          <Text style={styles.location}>{locationLabel}</Text>
         </View>
         {neighborhoodLabel && (
           <View style={styles.neighborhoodBadge}>
             <Ionicons name="navigate" size={12} color={themeColors.primary} />
-            <Text style={styles.neighborhoodBadgeText} numberOfLines={1}>{neighborhoodLabel}</Text>
+            <Text style={styles.neighborhoodBadgeText}>{neighborhoodLabel}</Text>
           </View>
         )}
         <View style={styles.metaRow}>
@@ -298,17 +297,17 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
 
 const baseStyles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.surfaceAlt,
-    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
     marginHorizontal: 8,
-    marginVertical: 8,
+    marginVertical: 9,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: COLORS.onSurface,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.06,
-    shadowRadius: 14,
-    elevation: 4,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 3,
     overflow: 'hidden',
   },
   compactCard: {
@@ -316,10 +315,10 @@ const baseStyles = StyleSheet.create({
   },
   imageContainer: {
     position: 'relative',
-    height: 170,
+    height: 205,
   },
   imageContainerCompact: {
-    height: 160,
+    height: 176,
   },
   image: {
     width: '100%',
@@ -509,8 +508,8 @@ const baseStyles = StyleSheet.create({
     color: COLORS.overlayWhite70,
   },
   content: {
-    padding: SPACING.md,
-    minHeight: 148,
+    padding: SPACING.lg,
+    minHeight: 156,
   },
   contentCompact: {
     paddingVertical: 10,
@@ -537,6 +536,7 @@ const baseStyles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     alignSelf: 'flex-start',
+    maxWidth: '100%',
     backgroundColor: COLORS.background,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -549,7 +549,7 @@ const baseStyles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.primary,
-    maxWidth: 160,
+    flexShrink: 1,
   },
   metaRow: {
     flexDirection: 'row',
@@ -610,10 +610,10 @@ const baseStyles = StyleSheet.create({
     color: COLORS.primary,
   },
   detailsButton: {
-    backgroundColor: COLORS.primaryDark,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: RADIUS.full,
   },
   detailsButtonText: {
     fontSize: 12,

@@ -71,6 +71,7 @@ const HomeScreen: React.FC = () => {
     tType,
     hydrated,
     language,
+    setLanguage,
     theme,
   } = useApp();
   const propertiesByType = useMemo(() => {
@@ -356,31 +357,31 @@ const HomeScreen: React.FC = () => {
       type: 'apartment',
       label: tType('apartment'),
       icon: 'business-outline',
-      color: themeColors.info,
-      container: themeColors.infoContainer,
+      color: themeColors.primary,
+      container: themeColors.primaryContainer,
       count: propertiesByType.find(item => item.type === 'apartment')?.count ?? 0,
     },
     {
       type: 'land',
       label: tType('land'),
       icon: 'map-outline',
-      color: themeColors.success,
-      container: themeColors.successContainer,
+      color: themeColors.primary,
+      container: themeColors.primaryContainer,
       count: propertiesByType.find(item => item.type === 'land')?.count ?? 0,
     },
     {
       type: 'shop',
       label: tType('shop'),
       icon: 'storefront-outline',
-      color: themeColors.warning,
-      container: themeColors.warningContainer,
+      color: themeColors.primary,
+      container: themeColors.primaryContainer,
       count: propertiesByType.find(item => item.type === 'shop')?.count ?? 0,
     },
     {
       label: t('home_more_categories'),
       icon: 'grid-outline',
-      color: themeColors.accent,
-      container: themeColors.successContainer,
+      color: themeColors.primary,
+      container: themeColors.primaryContainer,
       action: 'picker',
     },
   ];
@@ -469,8 +470,42 @@ const HomeScreen: React.FC = () => {
           style={[styles.headerBlock, { paddingTop: insets.top + 18 }]}
           imageStyle={styles.headerImage}
         >
-          <View style={styles.headerScrim} pointerEvents="none" />
           <View style={styles.headerContent}>
+            <View style={styles.headerTopRow}>
+              <Text style={styles.headerBrand}>ImoPrestige</Text>
+              <View
+                style={styles.homeLanguageSelector}
+                accessibilityRole="radiogroup"
+                accessibilityLabel={t('language')}
+              >
+                {(['fr', 'en'] as const).map(option => {
+                  const selected = language === option;
+                  return (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.homeLanguageOption,
+                        selected && styles.homeLanguageOptionActive,
+                      ]}
+                      onPress={() => setLanguage(option)}
+                      accessibilityRole="radio"
+                      accessibilityLabel={option === 'fr' ? 'Français' : 'English'}
+                      accessibilityState={{ selected }}
+                      hitSlop={4}
+                    >
+                      <Text
+                        style={[
+                          styles.homeLanguageText,
+                          selected && styles.homeLanguageTextActive,
+                        ]}
+                      >
+                        {option.toUpperCase()}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
             <View style={styles.locationPill}>
               <Ionicons name="location" size={13} color={themeColors.brandAccent} />
               <Text style={styles.locationPillText}>{t('footer_location')}</Text>
@@ -860,14 +895,24 @@ const HomeScreen: React.FC = () => {
       {/* Quick Categories */}
       <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
         <Text style={styles.sectionTitle}>{t('categories_title')}</Text>
-        <View style={styles.categoryGrid}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryGrid}
+        >
           {homeCategoryItems.map(item => (
             <TouchableOpacity
               key={item.type ?? item.label}
-              style={styles.categoryTile}
+              style={[
+                styles.categoryTile,
+                item.action === 'all' && styles.categoryTileActive,
+              ]}
               onPress={() => handleCategoryTilePress(item)}
               accessibilityRole="button"
               accessibilityLabel={item.label}
+              accessibilityState={{
+                selected: item.action === 'all',
+              }}
             >
               <View style={[styles.categoryTileIcon, { backgroundColor: item.container }]}>
                 <Ionicons name={item.icon} size={21} color={item.color} />
@@ -878,7 +923,7 @@ const HomeScreen: React.FC = () => {
               )}
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(400).delay(40)} style={styles.trustStatsCard}>
@@ -1112,22 +1157,63 @@ const baseStyles = StyleSheet.create({
     paddingTop: 18,
     paddingHorizontal: 20,
     paddingBottom: 34,
-    minHeight: 226,
+    minHeight: 252,
     justifyContent: 'flex-end',
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
     overflow: 'hidden',
   },
   headerImage: {
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-  },
-  headerScrim: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: COLORS.overlayNavy72,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
   headerContent: {
     position: 'relative',
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 13,
+  },
+  headerBrand: {
+    flex: 1,
+    color: COLORS.brandAccent,
+    fontSize: 19,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+    textShadowColor: '#00000099',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  homeLanguageSelector: {
+    flexDirection: 'row',
+    padding: 3,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.scrimStrong,
+    borderWidth: 1,
+    borderColor: COLORS.overlayWhite35,
+  },
+  homeLanguageOption: {
+    minWidth: 42,
+    minHeight: 34,
+    paddingHorizontal: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.full,
+  },
+  homeLanguageOptionActive: {
+    backgroundColor: COLORS.brandAccent,
+  },
+  homeLanguageText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  homeLanguageTextActive: {
+    color: COLORS.brand,
   },
   heroCta: {
     alignSelf: 'flex-start',
@@ -1224,6 +1310,9 @@ const baseStyles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.white,
     textAlign: 'left',
+    textShadowColor: '#00000099',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   headerTitleEm: {
     fontSize: 24,
@@ -1232,6 +1321,9 @@ const baseStyles = StyleSheet.create({
     color: COLORS.brandAccent,
     textAlign: 'left',
     marginTop: 0,
+    textShadowColor: '#00000099',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   headerSubtitle: {
     marginTop: 9,
@@ -1295,15 +1387,15 @@ const baseStyles = StyleSheet.create({
   },
   searchCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 24,
+    borderRadius: RADIUS.xl,
     padding: SPACING.lg,
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: COLORS.shadow,
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 8,
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
   searchHeader: {
     flexDirection: 'row',
@@ -1347,16 +1439,16 @@ const baseStyles = StyleSheet.create({
     paddingBottom: 6,
   },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: COLORS.borderStrong,
     backgroundColor: COLORS.surface,
   },
   filterChipActive: {
-    backgroundColor: COLORS.onSurface,
-    borderColor: COLORS.onSurface,
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   filterChipText: {
     fontSize: 12,
@@ -1364,7 +1456,7 @@ const baseStyles = StyleSheet.create({
     fontWeight: '600',
   },
   filterChipTextActive: {
-    color: COLORS.surface,
+    color: COLORS.white,
   },
   activeFiltersRow: {
     marginTop: 12,
@@ -1376,7 +1468,7 @@ const baseStyles = StyleSheet.create({
     gap: 8,
   },
   activeFilterChip: {
-    backgroundColor: COLORS.onSurface,
+    backgroundColor: COLORS.primary,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
@@ -1687,13 +1779,9 @@ const baseStyles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: COLORS.onSurface,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.primary,
-    paddingLeft: 10,
-    borderTopLeftRadius: 2,
-    borderBottomLeftRadius: 2,
+    paddingLeft: 0,
   },
   neighborhoods: {
     marginTop: 8,
@@ -1758,40 +1846,51 @@ const baseStyles = StyleSheet.create({
   },
   categoryGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: SPACING.sm,
-    marginTop: SPACING.md,
+    gap: SPACING.md,
+    paddingRight: SPACING.lg,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.xs,
   },
   categoryTile: {
-    width: '31%',
-    minHeight: 112,
+    width: 104,
+    minHeight: 118,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.md,
     backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS.xl,
     borderWidth: 1,
     borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.045,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  categoryTileActive: {
+    backgroundColor: COLORS.primaryContainer,
+    borderColor: COLORS.primary,
   },
   categoryTileIcon: {
-    width: 42,
-    height: 42,
+    width: 46,
+    height: 46,
     borderRadius: RADIUS.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.sm,
   },
   categoryTileLabel: {
     ...typography.button,
     color: COLORS.onSurface,
     textAlign: 'center',
+    fontSize: 12,
   },
   categoryTileCount: {
     ...typography.caption,
     color: COLORS.onSurfaceMuted,
-    marginTop: 2,
+    marginTop: 4,
+    textAlign: 'center',
   },
   categoryNavigationBar: {
     flexDirection: 'row',

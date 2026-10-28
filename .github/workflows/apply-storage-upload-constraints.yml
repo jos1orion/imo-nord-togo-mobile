@@ -13,6 +13,7 @@ on:
       - supabase/migrations/0023_preserve_expired_listing_images.sql
       - supabase/migrations/0024_remove_legacy_storage_delete_triggers.sql
       - supabase/migrations/0025_account_deletion_requests.sql
+      - supabase/migrations/0026_agent_support_inbox.sql
       - .github/workflows/apply-storage-upload-constraints.yml
   workflow_dispatch:
 
@@ -103,4 +104,13 @@ jobs:
         run: |
           psql --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file=supabase/migrations/0025_account_deletion_requests.sql \
+            "$SUPABASE_DB_URL"
+
+      - name: Create agent support inbox
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PGSSLMODE: require
+        run: |
+          psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file=supabase/migrations/0026_agent_support_inbox.sql \
             "$SUPABASE_DB_URL"

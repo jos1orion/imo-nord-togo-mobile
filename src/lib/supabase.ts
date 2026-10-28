@@ -16,6 +16,42 @@ export const supabaseAnonKey =
 export const authCallbackUrl = 'imonordtogo://auth/callback';
 export const resetPasswordCallbackUrl = 'imonordtogo://reset-password';
 
+export const getAuthCallbackUrl = () => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      return new URL('/auth/callback', window.location.origin).toString();
+    } catch (e) {
+      return authCallbackUrl;
+    }
+  }
+  return authCallbackUrl;
+};
+
+export const getResetPasswordCallbackUrl = () => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      return new URL('/reset-password', window.location.origin).toString();
+    } catch (e) {
+      return resetPasswordCallbackUrl;
+    }
+  }
+  return resetPasswordCallbackUrl;
+};
+
+export const matchesAuthCallbackUrl = (url: string | null, callbackUrl: string) => {
+  if (!url) return false;
+  try {
+    const parsedUrl = new URL(url);
+    const parsedCallback = new URL(callbackUrl);
+    return (
+      parsedUrl.origin === parsedCallback.origin &&
+      parsedUrl.pathname === parsedCallback.pathname
+    );
+  } catch (e) {
+    return url === callbackUrl || url.startsWith(`${callbackUrl}?`) || url.startsWith(`${callbackUrl}#`);
+  }
+};
+
 const isValidHttpUrl = (value: string) => {
   if (!value) return false;
   const trimmed = value.trim();
@@ -184,8 +220,19 @@ const authCodeExchanges = new Map<
   Promise<{ error: Error | null }>
 >();
 
+const clearAuthExchange = (code: string) => {
+  setTimeout(() => {
+    authCodeExchanges.delete(code);
+  }, 1000 * 60 * 5); // Clear after 5 minutes
+};
+
 export const exchangeAuthCallback = async (url: string) => {
-  const callbackUrl = new URL(url);
+  let callbackUrl: URL;
+  try {
+    callbackUrl = new URL(url);
+  } catch (e) {
+    return { error: new Error('Invalid callback URL') };
+  }
   const fragmentParams = new URLSearchParams(callbackUrl.hash.slice(1));
   const oauthError =
     callbackUrl.searchParams.get('error') || fragmentParams.get('error');
@@ -205,9 +252,12 @@ export const exchangeAuthCallback = async (url: string) => {
     const existingExchange = authCodeExchanges.get(code);
     if (existingExchange) return existingExchange;
 
-    const exchange = supabase.auth.exchangeCodeForSession(code).then(({ error }) => ({
-      error: error ?? null,
-    }));
+    const exchange = supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+      clearAuthExchange(code);
+      return {
+        error: error ?? null,
+      };
+    });
     authCodeExchanges.set(code, exchange);
     return exchange;
   }

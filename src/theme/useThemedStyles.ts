@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { resolveColorToken, THEME_PALETTES, type ThemePalette } from './colors';
+import { resolveColorToken, THEME_PALETTES, type ThemeMode, type ThemePalette } from './colors';
 
 type StyleValues = Record<string, unknown>;
 
-const resolveStyleTokens = (style: unknown, mode: 'light' | 'dark'): unknown => {
+const resolveStyleTokens = (style: unknown, mode: ThemeMode): unknown => {
   if (Array.isArray(style)) return style.map(value => resolveStyleTokens(value, mode));
   if (style === null || typeof style !== 'object') {
     return typeof style === 'string' ? resolveColorToken(style, mode) : style;

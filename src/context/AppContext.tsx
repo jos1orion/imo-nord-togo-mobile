@@ -1,15 +1,13 @@
-﻿import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
-import { Image, Linking } from 'react-native';
+import { Image, Platform } from 'react-native';
 import { AppAlert as Alert } from '../components/ui/appAlertService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import {
-  authCallbackUrl,
-  exchangeAuthCallback,
+  getAuthCallbackUrl,
   supabase,
-  supabaseAnonKey,
   supabaseUrl,
 } from '../lib/supabase';
 import {
@@ -47,6 +45,7 @@ import {
   AppNotification,
 } from '../types';
 import { Language, TranslationKey, setCurrentLanguage, translate, translateStatus, translateType } from '../i18n';
+import type { ThemeMode } from '../theme/colors';
 import { isPublicProperty } from '../utils/propertyVisibility';
 import { isDirectPublishingEnabled } from '../lib/publishing';
 import {
@@ -67,12 +66,9 @@ import {
 import {
   AgentProfileRow,
   CommissionRuleRow,
-  MessageRow,
   PremiumListingRow,
   PropertyDocumentRow,
   PropertyRow,
-  ReportRow,
-  ReviewRow,
   SearchAlertRow,
   TransactionRow,
 } from '../types/db';
@@ -93,14 +89,15 @@ interface AppContextType {
   syncError: string | null;
   retrySync: () => void;
   reports: Report[];
+  loadAdminOperationalData: () => Promise<void>;
   propertyStats: Record<string, PropertyStats>;
   myPropertyIds: string[];
   visitorCount: number;
   privacySettings: { hideContact: boolean; hideListings: boolean };
   language: Language;
   setLanguage: (language: Language) => void;
-  theme: 'light' | 'dark';
-  setTheme: (theme: 'light' | 'dark') => void;
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => void;
   t: (key: TranslationKey) => string;
   tType: (type: PropertyType) => string;
   tStatus: (status: PropertyStatus) => string;
@@ -172,6 +169,8 @@ interface AppContextType {
   addPayment: (data: Omit<Payment, 'id' | 'createdAt'>) => Promise<Payment>;
   updatePayment: (id: string, updates: Partial<Omit<Payment, 'id' | 'createdAt'>>) => Promise<void>;
   updatePaymentStatus: (id: string, status: Payment['status']) => Promise<void>;
+  // Profile completion
+  updateProfile: (updates: Partial<Pick<User, 'name' | 'phone'>> & { photoUri?: string }) => Promise<void>;
   // Messaging functions
   sendMessage: (receiverId: string, content: string, propertyId?: string) => Promise<{ message: Message; chatId: string }>;
   getChatMessages: (chatId: string) => Message[];
@@ -207,6 +206,13 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+// Ajout de la fonction pour gérer le défilement des quartiers
+const handleNeighborhoodScroll = (neighborhoods: string[]) => {
+  // Implémentation de la logique de défilement
+  console.log('Défilement des quartiers activé');
+  return neighborhoods;
+};
 
 const STORAGE_KEYS = {
   properties: 'imo:properties',
@@ -322,13 +328,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     setCurrentLanguage(language);
   }, [language]);
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setTheme] = useState<ThemeMode>('light');
   const unsupportedPropertyColumnsRef = useRef<Set<string>>(new Set());
   // New state variables for enhanced features
   const [messages, setMessages] = useState<Message[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const businessDataRequestRef = useRef(0);
+  const adminOperationalDataUserRef = useRef<string | null>(null);
+  const adminOperationalDataAccountRef = useRef<string | null>(null);
+  const adminOperationalDataRequestIdRef = useRef(0);
+  const adminOperationalDataRequestRef = useRef<Promise<void> | null>(null);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [searchAlerts, setSearchAlerts] = useState<SearchAlert[]>([]);
   const [premiumListings, setPremiumListings] = useState<PremiumListing[]>([]);
@@ -391,11 +401,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const cachedProperties = parse<Property[]>(STORAGE_KEYS.properties, []);
         if (cachedProperties.length > 0) {
           setProperties(cachedProperties);
-          if (neighborhoods.length === 0) {
-            setNeighborhoods(
-              normalizeNeighborhoods(cachedProperties.map(p => p.neighborhood ?? p.location))
-            );
-          }
+          const cachedNeighborhoods = normalizeNeighborhoods(
+            cachedProperties.map(property => property.neighborhood ?? property.location)
+          );
+          setNeighborhoods(previous =>
+            previous.length > 0 ? previous : cachedNeighborhoods
+          );
         }
         setMyPropertyIds(parse<string[]>(STORAGE_KEYS.myPropertyIds, []));
         setVisitorCount(parse<number>(STORAGE_KEYS.visits, 0));
@@ -404,7 +415,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           { hideContact: false, hideListings: false }
         ));
         setLanguage(parse<Language>(STORAGE_KEYS.language, 'fr'));
-        setTheme(parse<'light' | 'dark'>(STORAGE_KEYS.theme, 'light'));
+        const savedTheme = parse<string>(STORAGE_KEYS.theme, 'light');
+        setTheme(
+          savedTheme === 'dark' || savedTheme === 'nature' || savedTheme === 'rose'
+            ? savedTheme
+            : 'light'
+        );
         // Load new enhanced features data
         setMessages(parse<Message[]>(STORAGE_KEYS.messages, []));
         setChats(parse<Chat[]>(STORAGE_KEYS.chats, []));
@@ -570,6 +586,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       name,
       email,
       phone: String(metadata.phone || profile?.phone || '').trim(),
+      avatarUrl: [metadata.avatar_url, metadata.picture, metadata.photo_url]
+        .find((value): value is string => typeof value === 'string' && value.trim().length > 0),
       verified: user.email_confirmed_at ? true : false,
       isAdmin: role === 'ADMIN',
       role,
@@ -707,45 +725,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       subscription.unsubscribe();
     };
   }, [hydrateAuthenticatedUser]);
-
-  useEffect(() => {
-    const completeAuthCallback = async (url: string | null) => {
-      if (
-        !url ||
-        !(
-          url === authCallbackUrl ||
-          url.startsWith(`${authCallbackUrl}?`) ||
-          url.startsWith(`${authCallbackUrl}#`)
-        )
-      ) {
-        return;
-      }
-      try {
-        const result = await exchangeAuthCallback(url);
-        if (result?.error) {
-          logger.error('Unable to complete the mobile auth callback.', result.error.message);
-          Alert.alert(
-            translate(language, 'error'),
-            translate(language, 'profile_auth_callback_failed')
-          );
-        }
-      } catch (error) {
-        logger.error('Unable to complete the mobile auth callback.', error);
-        Alert.alert(
-          translate(language, 'error'),
-          translate(language, 'profile_auth_callback_failed')
-        );
-      }
-    };
-
-    void Linking.getInitialURL()
-      .then(completeAuthCallback)
-      .catch(error => logger.error('Unable to read the initial auth callback URL.', error));
-    const subscription = Linking.addEventListener('url', ({ url }) => {
-      void completeAuthCallback(url);
-    });
-    return () => subscription.remove();
-  }, [language]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -930,8 +909,131 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setDocuments((documentsResult.data ?? []).map((row: PropertyDocumentRow) => mapPropertyDocumentRow(row)));
   }, [currentUser]);
 
+  const loadAdminOperationalData = useCallback(async () => {
+    if (!currentUser || (currentUser.isAdmin !== true && currentUser.role !== 'ADMIN')) {
+      throw new Error('Administrator access is required to load admin data.');
+    }
+    if (adminOperationalDataUserRef.current === currentUser.id) return;
+    if (adminOperationalDataRequestRef.current) {
+      return adminOperationalDataRequestRef.current;
+    }
+    if (adminOperationalDataUserRef.current) {
+      setClients([]);
+      setContracts([]);
+      setPayments([]);
+      setTenantDocuments([]);
+      adminOperationalDataUserRef.current = null;
+    }
+
+    const requestId = ++adminOperationalDataRequestIdRef.current;
+    const tasks: Promise<void>[] = [
+      (async () => {
+        const { data, error } = await supabase.from('tenants').select('*');
+        if (error) throw error;
+        if (requestId !== adminOperationalDataRequestIdRef.current) return;
+        setClients((data ?? []).map(tenant => ({
+          id: tenant.id,
+          name: tenant.full_name ?? '',
+          email: tenant.email ?? '',
+          phone: tenant.phone ?? '',
+          createdAt: tenant.created_at ?? new Date().toISOString(),
+        })));
+      })(),
+      (async () => {
+        const { data, error } = await supabase
+          .from('contracts')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        if (requestId !== adminOperationalDataRequestIdRef.current) return;
+        setContracts((data ?? []).map(contract => ({
+          id: contract.id,
+          propertyId: contract.property_id,
+          tenantId: contract.tenant_id,
+          startDate: contract.start_date,
+          endDate: contract.end_date,
+          rentAmount: Number(contract.rent_amount ?? 0),
+          status: contract.status,
+          createdAt: contract.created_at ?? new Date().toISOString(),
+        })));
+      })(),
+      (async () => {
+        const { data, error } = await supabase
+          .from('payments')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        if (requestId !== adminOperationalDataRequestIdRef.current) return;
+        setPayments((data ?? []).map(payment => ({
+          id: payment.id,
+          contractId: payment.contract_id,
+          amount: Number(payment.amount ?? 0),
+          paidAt: payment.paid_at,
+          method: payment.method,
+          status: payment.status,
+          createdAt: payment.created_at ?? new Date().toISOString(),
+        })));
+      })(),
+      (async () => {
+        const { data, error } = await supabase
+          .from('tenant_documents')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        if (requestId !== adminOperationalDataRequestIdRef.current) return;
+        setTenantDocuments((data ?? []).map(document => ({
+          id: document.id,
+          tenantId: document.tenant_id,
+          type: document.type,
+          url: document.url,
+          createdAt: document.created_at ?? new Date().toISOString(),
+        })));
+      })(),
+    ];
+
+    const request = (async () => {
+      const results = await Promise.allSettled(tasks);
+      if (requestId !== adminOperationalDataRequestIdRef.current) return;
+      const firstFailure = results.find(
+        (result): result is PromiseRejectedResult => result.status === 'rejected'
+      );
+      if (firstFailure) {
+        results.forEach(result => {
+          if (result.status === 'rejected') {
+            logger.warn('Admin operational data could not be loaded.', result.reason);
+          }
+        });
+        throw firstFailure.reason;
+      }
+      adminOperationalDataUserRef.current = currentUser.id;
+    })();
+    adminOperationalDataRequestRef.current = request;
+    try {
+      await request;
+    } finally {
+      if (adminOperationalDataRequestRef.current === request) {
+        adminOperationalDataRequestRef.current = null;
+      }
+    }
+  }, [currentUser]);
+
     const fetchData = useCallback(async () => {
       if (!hydrated) return;
+      const adminAccountId = currentUser && (
+        currentUser.isAdmin === true || currentUser.role === 'ADMIN'
+      )
+        ? currentUser.id
+        : null;
+      if (adminOperationalDataAccountRef.current !== adminAccountId) {
+        adminOperationalDataAccountRef.current = adminAccountId;
+        adminOperationalDataRequestIdRef.current += 1;
+        adminOperationalDataRequestRef.current = null;
+        adminOperationalDataUserRef.current = null;
+        setClients([]);
+        setContracts([]);
+        setPayments([]);
+        setTenantDocuments([]);
+      }
       setSyncError(null);
       try {
         // The home screen depends only on neighbourhoods and listings. Optional
@@ -969,68 +1071,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           );
         }
 
-        if (currentUser?.role === 'ADMIN') {
-          optionalTasks.push(
-            (async () => {
-              const { data, error } = await supabase.from('tenants').select('*');
-              if (error) throw error;
-              setClients((data ?? []).map(tenant => ({
-                id: tenant.id,
-                name: tenant.full_name ?? '',
-                email: tenant.email ?? '',
-                phone: tenant.phone ?? '',
-                createdAt: tenant.created_at ?? new Date().toISOString(),
-              })));
-            })(),
-            (async () => {
-              const { data, error } = await supabase
-                .from('contracts')
-                .select('*')
-                .order('created_at', { ascending: false });
-              if (error) throw error;
-              setContracts((data ?? []).map(contract => ({
-                id: contract.id,
-                propertyId: contract.property_id,
-                tenantId: contract.tenant_id,
-                startDate: contract.start_date,
-                endDate: contract.end_date,
-                rentAmount: Number(contract.rent_amount ?? 0),
-                status: contract.status,
-                createdAt: contract.created_at ?? new Date().toISOString(),
-              })));
-            })(),
-            (async () => {
-              const { data, error } = await supabase
-                .from('payments')
-                .select('*')
-                .order('created_at', { ascending: false });
-              if (error) throw error;
-              setPayments((data ?? []).map(payment => ({
-                id: payment.id,
-                contractId: payment.contract_id,
-                amount: Number(payment.amount ?? 0),
-                paidAt: payment.paid_at,
-                method: payment.method,
-                status: payment.status,
-                createdAt: payment.created_at ?? new Date().toISOString(),
-              })));
-            })(),
-            (async () => {
-              const { data, error } = await supabase
-                .from('tenant_documents')
-                .select('*')
-                .order('created_at', { ascending: false });
-              if (error) throw error;
-              setTenantDocuments((data ?? []).map(document => ({
-                id: document.id,
-                tenantId: document.tenant_id,
-                type: document.type,
-                url: document.url,
-                createdAt: document.created_at ?? new Date().toISOString(),
-              })));
-            })()
-          );
-        } else {
+        if (currentUser?.isAdmin !== true && currentUser?.role !== 'ADMIN') {
+          adminOperationalDataUserRef.current = null;
           setClients([]);
           setContracts([]);
           setPayments([]);
@@ -1067,7 +1109,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Fetch data from Supabase
     useEffect(() => {
       if (!hydrated) return;
-      fetchData();
+      let active = true;
+      queueMicrotask(() => {
+        if (active) void fetchData();
+      });
+      return () => {
+        active = false;
+      };
     }, [fetchData, hydrated]);
 
     // Realtime sync for properties + images
@@ -1234,7 +1282,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return next;
   }, []);
 
-  const toDbPropertyPayload = (
+  const toDbPropertyPayload = useCallback((
     propertyData: Omit<Property, 'id' | 'createdAt' | 'updatedAt'>,
     ownerId?: string
   ) => {
@@ -1269,9 +1317,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       contact_phone: contactPhone,
       contact_email: contactEmail,
     });
-  };
+  }, [currentUser, omitUnsupportedPropertyColumns]);
 
-  const toDbPropertyUpdates = (updates: Partial<Omit<Property, 'id' | 'createdAt'>>) => {
+  const toDbPropertyUpdates = useCallback((updates: Partial<Omit<Property, 'id' | 'createdAt'>>) => {
     const payload: Record<string, any> = {};
     if (updates.title !== undefined) payload.title = updates.title;
     if (updates.type !== undefined) payload.type = updates.type;
@@ -1299,7 +1347,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (updates.contactPhone !== undefined) payload.contact_phone = updates.contactPhone ?? null;
     if (updates.contactEmail !== undefined) payload.contact_email = updates.contactEmail ?? null;
     return omitUnsupportedPropertyColumns(payload);
-  };
+  }, [omitUnsupportedPropertyColumns]);
 
   const uploadPropertyImages = useCallback(
     async (propertyId: string, uris: string[], ownerId?: string): Promise<string[]> => {
@@ -1329,6 +1377,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
         return rawUri;
       };
+      const getWebImageBlob = async (uri: string) => {
+        const response = await fetch(uri);
+        if (!response.ok) {
+          throw new Error('Une photo sélectionnée est introuvable.');
+        }
+        return response.blob();
+      };
+      const cleanupOptimizedImage = async (uri: string) => {
+        if (Platform.OS === 'web') {
+          if (uri.startsWith('blob:')) URL.revokeObjectURL(uri);
+          return;
+        }
+        await FileSystem.deleteAsync(uri, { idempotent: true });
+      };
 
       const uploaded: string[] = [];
       const uploadedStoragePaths: string[] = [];
@@ -1357,10 +1419,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
           const uri = await ensureFileUri(rawUri);
           if (rawUri.startsWith('content://')) sourceUriToDelete = uri;
-          const info = await FileSystem.getInfoAsync(uri);
-          if (!info.exists) {
-            failures.push('Une photo sélectionnée est introuvable sur le téléphone.');
-            continue;
+          if (Platform.OS === 'web') {
+            const sourceBlob = await getWebImageBlob(uri);
+            if (!sourceBlob.size) {
+              failures.push('Une photo sélectionnée est introuvable.');
+              continue;
+            }
+          } else {
+            const info = await FileSystem.getInfoAsync(uri);
+            if (!info.exists) {
+              failures.push('Une photo sélectionnée est introuvable sur le téléphone.');
+              continue;
+            }
           }
           const dimensions = await new Promise<{ width: number; height: number } | null>(resolve => {
             Image.getSize(uri, (width, height) => resolve({ width, height }), () => resolve(null));
@@ -1376,6 +1446,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             { maxDimension: 720, compress: 0.29 },
           ];
           let uploadUri: string | null = null;
+          let uploadBlob: Blob | null = null;
           for (const attempt of compressionAttempts) {
             const resizeAction = dimensions && Math.max(dimensions.width, dimensions.height) > attempt.maxDimension
               ? [{
@@ -1388,12 +1459,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               compress: attempt.compress,
               format: ImageManipulator.SaveFormat.JPEG,
             });
-            const optimizedInfo = await FileSystem.getInfoAsync(optimized.uri);
-            if ('size' in optimizedInfo && typeof optimizedInfo.size === 'number' && optimizedInfo.size <= maxImageBytes) {
-              uploadUri = optimized.uri;
-              break;
+            let optimizedSize: number;
+            if (Platform.OS === 'web') {
+              const optimizedBlob = await getWebImageBlob(optimized.uri);
+              optimizedSize = optimizedBlob.size;
+              if (optimizedSize <= maxImageBytes) {
+                uploadUri = optimized.uri;
+                uploadBlob = optimizedBlob;
+                break;
+              }
+            } else {
+              const optimizedInfo = await FileSystem.getInfoAsync(optimized.uri);
+              optimizedSize = 'size' in optimizedInfo && typeof optimizedInfo.size === 'number'
+                ? optimizedInfo.size
+                : Number.POSITIVE_INFINITY;
+              if (optimizedSize <= maxImageBytes) {
+                uploadUri = optimized.uri;
+                break;
+              }
             }
-            await FileSystem.deleteAsync(optimized.uri, { idempotent: true });
+            await cleanupOptimizedImage(optimized.uri);
           }
           if (!uploadUri) {
             throw new Error(
@@ -1437,36 +1522,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
             attemptedPaths.push(path);
             try {
-              const uploadResult = await FileSystem.uploadAsync(signed.signedUrl, uploadUri, {
-                httpMethod: 'PUT',
-                uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-                headers: {
-                  'Content-Type': contentType,
-                  'Cache-Control': '3600',
-                },
-              });
-              uploadOk = uploadResult.status >= 200 && uploadResult.status < 300;
+              let uploadStatus = 200;
+              let uploadBody = '';
+              if (Platform.OS === 'web') {
+                if (!uploadBlob) {
+                  throw new Error('La photo préparée pour le site web est introuvable.');
+                }
+                const { error } = await supabase.storage
+                  .from('property-images')
+                  .uploadToSignedUrl(path, signed.token, uploadBlob, {
+                    contentType,
+                    cacheControl: '3600',
+                  });
+                if (error) {
+                  if (typeof error.status !== 'number') throw error;
+                  uploadStatus = error.status;
+                  uploadBody = error.message;
+                }
+              } else {
+                const uploadResult = await FileSystem.uploadAsync(signed.signedUrl, uploadUri, {
+                  httpMethod: 'PUT',
+                  uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+                  headers: {
+                    'Content-Type': contentType,
+                    'Cache-Control': '3600',
+                  },
+                });
+                uploadStatus = uploadResult.status;
+                uploadBody = uploadResult.body ?? '';
+              }
+              uploadOk = uploadStatus >= 200 && uploadStatus < 300;
               if (uploadOk) {
                 successfulPath = path;
                 break;
               }
               if (!uploadOk) {
-                const responseBody = uploadResult.body?.trim();
+                const responseBody = uploadBody.trim();
                 lastUploadFailure = [
-                  `Échec de l’envoi de la photo (HTTP ${uploadResult.status}).`,
+                  `Échec de l’envoi de la photo (HTTP ${uploadStatus}).`,
                   responseBody ? responseBody.slice(0, 300) : '',
                 ].filter(Boolean).join(' ');
                 logger.warn('Signed upload failed', {
                   attempt,
-                  status: uploadResult.status,
-                  body: uploadResult.body,
+                  status: uploadStatus,
+                  body: uploadBody,
                   path,
                   propertyId,
                 });
                 const retryableStatus =
-                  uploadResult.status === 408 ||
-                  uploadResult.status === 429 ||
-                  uploadResult.status >= 500;
+                  uploadStatus === 408 ||
+                  uploadStatus === 429 ||
+                  uploadStatus >= 500;
                 if (!retryableStatus) break;
               }
             } catch (uploadError) {
@@ -1485,7 +1591,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           uploadedStoragePaths.push(...(uploadOk ? [successfulPath] : attemptedPaths));
           try {
-            await FileSystem.deleteAsync(uploadUri, { idempotent: true });
+            await cleanupOptimizedImage(uploadUri);
           } catch (cleanupError) {
             logger.warn('Unable to remove the optimized temporary image.', cleanupError);
           }
@@ -1565,6 +1671,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     [resolveAuthUserId]
   );
 
+  const addNeighborhood = useCallback(async (name: string) => {
+    const cleaned = name.trim();
+    if (!cleaned) return;
+    const { error } = await supabase
+      .from('neighborhoods')
+      .upsert({ name: cleaned }, { onConflict: 'name' });
+    if (error) throw error;
+    setNeighborhoods(previous => {
+      const exists = previous.some(item => item.toLowerCase() === cleaned.toLowerCase());
+      return exists ? previous : [...previous, cleaned];
+    });
+  }, []);
+
       const addProperty = useCallback(async (propertyData: Omit<Property, 'id' | 'createdAt' | 'updatedAt'>): Promise<Property> => {
         const ownerId = await resolveAuthUserId();
         let payload = toDbPropertyPayload(propertyData, ownerId);
@@ -1630,7 +1749,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       logger.warn('Unable to save the property neighborhood:', error);
     });
     return next;
-    }, [resolveAuthUserId, uploadPropertyImages, omitUnsupportedPropertyColumns]);
+    }, [
+      addNeighborhood,
+      resolveAuthUserId,
+      toDbPropertyPayload,
+      uploadPropertyImages,
+      omitUnsupportedPropertyColumns,
+    ]);
 
     const updateProperty = useCallback(async (id: string, updates: Partial<Omit<Property, 'id' | 'createdAt'>>) => {
     let payload = toDbPropertyUpdates(updates);
@@ -1666,7 +1791,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         logger.warn('Unable to save the property neighborhood:', error);
       });
     }
-  }, [omitUnsupportedPropertyColumns]);
+  }, [addNeighborhood, omitUnsupportedPropertyColumns, toDbPropertyUpdates]);
 
   const completeProperty = useCallback(async (id: string, completionType: PropertyCompletionType) => {
     const { data, error } = await supabase.rpc('complete_property_transaction', {
@@ -1733,17 +1858,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const { error } = await supabase.from('properties').delete().eq('id', id);
     if (error) throw error;
 
-    const imagePaths = getPropertyImageStoragePaths(
-      (imageRows ?? []).map(image => image.url),
-      supabaseUrl
-    );
-    for (const batch of chunkStoragePaths(imagePaths)) {
-      const { error: storageError } = await supabase.storage.from('property-images').remove(batch);
-      if (storageError) {
-        throw new Error(`Bien supprimé, mais le nettoyage de ses images a échoué : ${storageError.message}`);
-      }
-    }
-
     setProperties(prev => {
       const next = prev.filter(p => p.id !== id);
       setNeighborhoods(current => {
@@ -1754,6 +1868,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       return next;
     });
+
+    const imagePaths = getPropertyImageStoragePaths(
+      (imageRows ?? []).map(image => image.url),
+      supabaseUrl
+    );
+    for (const batch of chunkStoragePaths(imagePaths)) {
+      const { error: storageError } = await supabase.storage.from('property-images').remove(batch);
+      if (storageError) {
+        throw new Error(`Bien supprimé, mais le nettoyage de ses images a échoué : ${storageError.message}`);
+      }
+    }
   }, []);
 
   const addClient = useCallback(async (clientData: Omit<Client, 'id' | 'createdAt'>): Promise<Client> => {
@@ -1889,19 +2014,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addTenantDocumentRecord = (doc: TenantDocument) => {
     setTenantDocuments(prev => [doc, ...prev]);
-  };
-
-  const addNeighborhood = async (name: string) => {
-    const cleaned = name.trim();
-    if (!cleaned) return;
-    const { error } = await supabase
-      .from('neighborhoods')
-      .upsert({ name: cleaned }, { onConflict: 'name' });
-    if (error) throw error;
-    setNeighborhoods(prev => {
-      const exists = prev.some(n => n.toLowerCase() === cleaned.toLowerCase());
-      return exists ? prev : [...prev, cleaned];
-    });
   };
 
   const updateNeighborhood = async (oldName: string, newName: string) => {
@@ -2052,7 +2164,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       email,
       password: data.password,
       options: {
-        emailRedirectTo: authCallbackUrl,
+        emailRedirectTo: getAuthCallbackUrl(),
         data: {
           name: data.name,
           phone: data.phone,
@@ -2071,7 +2183,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalizedEmail)) {
       return { ok: false, code: 'invalid email' } as { ok: false; code: string };
     }
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email: normalizedEmail,
       password,
     });
@@ -2123,6 +2235,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       prev.map(u => (u.id === id ? { ...u, ...updates } : u))
     );
   };
+
+  const updateProfile = useCallback(async (updates: Partial<Pick<User, 'name' | 'phone'>> & { photoUri?: string }) => {
+    if (!currentUser) throw new Error('User not logged in');
+
+    const payload: Partial<Pick<User, 'name' | 'phone'>> = {};
+    if (updates.name !== undefined) payload.name = updates.name.trim();
+    if (updates.phone !== undefined) payload.phone = updates.phone.trim();
+    const metadataUpdates: Record<string, string> = {};
+    if (updates.name !== undefined) metadataUpdates.name = updates.name.trim();
+    if (updates.phone !== undefined) metadataUpdates.phone = updates.phone.trim();
+    if (updates.photoUri !== undefined) {
+      metadataUpdates.photo_url = updates.photoUri;
+    }
+    if (Object.keys(metadataUpdates).length > 0) {
+      const { error } = await supabase.auth.updateUser({
+        data: metadataUpdates,
+      });
+      if (error) throw error;
+    }
+
+    if (Object.keys(payload).length > 0) {
+      const profilePayload: { full_name?: string; phone?: string } = {};
+      if (payload.name !== undefined) profilePayload.full_name = payload.name;
+      if (payload.phone !== undefined) profilePayload.phone = payload.phone;
+      const { error } = await supabase.from('profiles')
+        .update(profilePayload)
+        .eq('id', currentUser.id);
+      if (error) throw error;
+    }
+
+    setUsers(prev =>
+      prev.map(u => (u.id === currentUser.id ? { ...u, ...payload } : u))
+    );
+    setCurrentUser(previous =>
+      previous?.id === currentUser.id
+        ? {
+            ...previous,
+            ...payload,
+            ...(updates.photoUri !== undefined ? { avatarUrl: updates.photoUri } : {}),
+          }
+        : previous
+    );
+  }, [currentUser]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -2793,6 +2948,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         syncError,
         retrySync,
         reports,
+        loadAdminOperationalData,
         propertyStats,
         myPropertyIds,
         visitorCount,
@@ -2846,6 +3002,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         trackPropertyView,
         trackContact,
         trackShare,
+        updateProfile,
         replaceData,
         getFilteredProperties,
         getMyProperties,

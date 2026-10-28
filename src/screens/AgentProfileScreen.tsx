@@ -172,7 +172,7 @@ const AgentProfileScreen = () => {
               style={styles.propertyItem}
               onPress={() => navigation.navigate('PropertyDetail', { propertyId: property.id })}
             >
-              <Text style={styles.propertyTitle} numberOfLines={1}>
+              <Text style={styles.propertyTitle}>
                 {property.title}
               </Text>
               <Text style={styles.propertyPrice}>

@@ -1,11 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { THEME_PALETTES, type ThemePalette } from '../theme/colors';
+import { THEME_PALETTES, type ThemeMode, type ThemePalette } from '../theme/colors';
 import { getCurrentLanguage, translate } from '../i18n';
 import { logger } from '../lib/logger';
 
-type Props = { children: ReactNode; theme?: 'light' | 'dark' };
+type Props = { children: ReactNode; theme?: ThemeMode };
 
 type State = {
   hasError: boolean;

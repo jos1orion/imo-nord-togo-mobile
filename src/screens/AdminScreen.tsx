@@ -10,12 +10,12 @@ import {
   ActivityIndicator,
   Image,
   Share,
-  KeyboardAvoidingView,
   LayoutAnimation,
   Platform,
   Linking,
 } from 'react-native';
 import { AppAlert as Alert } from '../components/ui/appAlertService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import TextInput from '../components/ui/AccessibleTextInput';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,14 +40,19 @@ import {
 import { formatPrice } from '../utils/format';
 import Skeleton from '../components/ui/Skeleton';
 import { logger } from '../lib/logger';
-import { createAdminTheme, createAdminStyles, type AdminTheme } from './AdminScreen.styles';
+import { shareContent } from '../lib/shareContent';
+import { createAdminTheme, createAdminStyles } from './AdminScreen.styles';
+import AdminNavigation, { type AdminTab } from './AdminNavigation';
+import { useAdminSupportInbox } from './admin/useAdminSupportInbox';
+import AdminAccountsTab from './admin/tabs/AdminAccountsTab';
+import AdminSupportInbox from './admin/tabs/AdminSupportInbox';
+import AdminGate from './admin/AdminGate';
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 
-type TabType = 'dashboard' | 'properties' | 'clients' | 'accounts' | 'neighborhoods' | 'reports' | 'add' | 'messages' | 'reviews' | 'agents' | 'premium' | 'commissions' | 'transactions' | 'contracts' | 'documents';
 type SearchScope =
   | 'ALL'
   | 'PROPERTIES'
@@ -63,6 +68,10 @@ type SearchScope =
   | 'COMMISSIONS'
   | 'TRANSACTIONS'
   | 'DOCUMENTS';
+
+const createTenantDocumentPath = (tenantId: string, fileName: string) =>
+  `${tenantId}/${Date.now()}-${fileName}`;
+
 type ListLimitKey =
   | 'properties'
   | 'clients'
@@ -92,11 +101,11 @@ const AdminScreen: React.FC = () => {
     tType,
     neighborhoods,
     reports,
+    loadAdminOperationalData,
     resolveReport,
     updatePropertyStatus,
     deleteProperty,
     addProperty,
-    addClient,
     updateProperty,
     updateClient,
     reviewAgentRequest,
@@ -107,7 +116,6 @@ const AdminScreen: React.FC = () => {
     visitorCount,
     // New enhanced features
     messages,
-    chats,
     reviews,
     setReviewVerified,
     premiumListings,
@@ -124,14 +132,18 @@ const AdminScreen: React.FC = () => {
     addTenantDocumentRecord,
     toggleCommissionRule,
   } = useApp();
-  const tAdmin = (key: AdminTranslationKey) => translateAdmin(language, key);
+  const tAdmin = useCallback(
+    (key: AdminTranslationKey) => translateAdmin(language, key),
+    [language]
+  );
+  const hasAdminAccess = currentUser?.isAdmin === true || currentUser?.role === 'ADMIN';
   const dateLocale = language === 'en' ? 'en-US' : 'fr-FR';
   const formatAdminDate = (value: string | number | Date) =>
     new Date(value).toLocaleDateString(dateLocale);
   const formatAdminDateTime = (value: string | number | Date) =>
     new Date(value).toLocaleString(dateLocale);
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
-  const handleTabChange = (tab: TabType) => {
+  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  const handleTabChange = (tab: AdminTab) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setActiveTab(tab);
   };
@@ -205,6 +217,47 @@ const AdminScreen: React.FC = () => {
   const [unlocked, setUnlocked] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
+  useEffect(() => {
+    if (!unlocked || !hasAdminAccess) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      void loadAdminOperationalData().catch(error => {
+        if (active) {
+          Alert.alert(
+            tAdmin("Erreur"),
+            error instanceof Error
+              ? error.message
+              : tAdmin("Impossible de charger les données administratives.")
+          );
+        }
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, [hasAdminAccess, loadAdminOperationalData, tAdmin, unlocked]);
+
+  const supportInbox = useAdminSupportInbox({
+    active: activeTab === 'messages',
+    enabled: unlocked && hasAdminAccess,
+    currentUserId: currentUser?.id ?? null,
+    translate: tAdmin,
+  });
+  const {
+    conversations: supportConversations,
+    selectedConversationId: selectedSupportId,
+    setSelectedConversationId: setSelectedSupportId,
+    messages: supportMessages,
+    reply: supportReply,
+    setReply: setSupportReply,
+    loading: supportLoading,
+    error: supportError,
+    sending: supportSending,
+    loadConversations: loadSupportConversations,
+    sendReply: sendSupportReply,
+    toggleConversationStatus: toggleSupportConversationStatus,
+  } = supportInbox;
 
   // Form state
   const [formData, setFormData] = useState({
@@ -462,24 +515,11 @@ const AdminScreen: React.FC = () => {
       return map[char] ?? char;
     });
 
-  const loadPrintModule = () => {
-    try {
-      return require('expo-print');
-    } catch {
-      return null;
-    }
-  };
+  const loadPrintModule = async () => import('expo-print');
 
   const printPaymentReceipt = async (payment: Payment) => {
     try {
-      const PrintModule = loadPrintModule();
-      if (!PrintModule?.printToFileAsync) {
-        Alert.alert(
-          tAdmin("Recu PDF"),
-          tAdmin("L'impression PDF n'est pas disponible dans Expo Go. Utilise un dev build.")
-        );
-        return;
-      }
+      const PrintModule = await loadPrintModule();
 
       const contract = contracts.find(c => c.id === payment.contractId);
       const property = properties.find(p => p.id === contract?.propertyId);
@@ -515,6 +555,11 @@ const AdminScreen: React.FC = () => {
         </html>
       `;
 
+      if (Platform.OS === 'web') {
+        await PrintModule.printAsync({ html });
+        return;
+      }
+
       const { uri } = await PrintModule.printToFileAsync({ html });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
@@ -522,7 +567,8 @@ const AdminScreen: React.FC = () => {
       } else {
         await Share.share({ message: tAdmin("Reçu de paiement"), url: uri });
       }
-    } catch {
+    } catch (error) {
+      logger.error('Unable to generate payment receipt.', error);
       Alert.alert(tAdmin("Erreur"), tAdmin("Impossible de générer le reçu PDF."));
     }
   };
@@ -542,7 +588,7 @@ const AdminScreen: React.FC = () => {
 
       setUploadingTenantDocId(tenant.id);
       const safeName = (file.name || 'document').replace(/\s+/g, '-');
-      const path = `${tenant.id}/${Date.now()}-${safeName}`;
+      const path = createTenantDocumentPath(tenant.id, safeName);
       const { data: signed, error: signedError } = await supabase.storage
         .from('tenant-documents')
         .createSignedUploadUrl(path);
@@ -555,22 +601,44 @@ const AdminScreen: React.FC = () => {
         throw signedError ?? new Error('Signed upload error');
       }
 
-      const uploadResult = await FileSystem.uploadAsync(signed.signedUrl, file.uri, {
-        httpMethod: 'PUT',
-        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-        headers: {
-          'Content-Type': file.mimeType || 'application/octet-stream',
-          'Cache-Control': '3600',
-        },
-      });
-      if (uploadResult.status < 200 || uploadResult.status >= 300) {
-        logger.warn('Signed upload failed (tenant doc)', {
-          status: uploadResult.status,
-          body: uploadResult.body,
-          path,
-          tenantId: tenant.id,
+      if (Platform.OS === 'web') {
+        const response = await fetch(file.uri);
+        if (!response.ok) {
+          throw new Error(`Unable to read selected document (${response.status}).`);
+        }
+        const blob = await response.blob();
+        const { error } = await supabase.storage
+          .from('tenant-documents')
+          .uploadToSignedUrl(path, signed.token, blob, {
+            contentType: file.mimeType || blob.type || 'application/octet-stream',
+            cacheControl: '3600',
+          });
+        if (error) {
+          logger.warn('Signed upload failed (tenant doc)', {
+            error: error.message,
+            path,
+            tenantId: tenant.id,
+          });
+          throw error;
+        }
+      } else {
+        const uploadResult = await FileSystem.uploadAsync(signed.signedUrl, file.uri, {
+          httpMethod: 'PUT',
+          uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+          headers: {
+            'Content-Type': file.mimeType || 'application/octet-stream',
+            'Cache-Control': '3600',
+          },
         });
-        throw new Error(`Upload failed: ${uploadResult.status}`);
+        if (uploadResult.status < 200 || uploadResult.status >= 300) {
+          logger.warn('Signed upload failed (tenant doc)', {
+            status: uploadResult.status,
+            body: uploadResult.body,
+            path,
+            tenantId: tenant.id,
+          });
+          throw new Error(`Upload failed: ${uploadResult.status}`);
+        }
       }
       const { data: docRow, error: docError } = await supabase
         .from('tenant_documents')
@@ -592,7 +660,8 @@ const AdminScreen: React.FC = () => {
         });
       }
       Alert.alert(tAdmin("Succes"), tAdmin("Document ajoute."));
-    } catch (err) {
+    } catch (error) {
+      logger.error('Unable to upload tenant document.', error);
       Alert.alert(tAdmin("Erreur"), tAdmin("Impossible d'ajouter le document."));
     } finally {
       setUploadingTenantDocId(null);
@@ -642,12 +711,18 @@ const AdminScreen: React.FC = () => {
     } finally {
       setAccountsLoading(false);
     }
-  }, [language]);
+  }, [tAdmin]);
 
   useEffect(() => {
-    if (!['accounts', 'agents'].includes(activeTab) || !unlocked || !currentUser?.isAdmin) return;
-    void loadAdminAccounts().catch(() => {});
-  }, [activeTab, currentUser?.isAdmin, loadAdminAccounts, unlocked]);
+    if (!['accounts', 'agents'].includes(activeTab) || !unlocked || !hasAdminAccess) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (active) void loadAdminAccounts().catch(() => {});
+    });
+    return () => {
+      active = false;
+    };
+  }, [activeTab, hasAdminAccess, loadAdminAccounts, unlocked]);
 
   const handleSaveUser = async () => {
     if (!editingUserId) return;
@@ -758,9 +833,16 @@ const AdminScreen: React.FC = () => {
     let mounted = true;
     (async () => {
       try {
-        const pin = await SecureStore.getItemAsync('admin_pin');
+        const pin = Platform.OS === 'web'
+          ? await AsyncStorage.getItem('admin_pin')
+          : await SecureStore.getItemAsync('admin_pin');
         if (!mounted) return;
         setStoredPin(pin);
+      } catch (error) {
+        logger.error('Unable to load the admin PIN.', error);
+        if (mounted) {
+          Alert.alert(tAdmin("Erreur"), tAdmin("Impossible de charger le PIN Admin."));
+        }
       } finally {
         if (mounted) setGateLoading(false);
       }
@@ -768,7 +850,7 @@ const AdminScreen: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [tAdmin]);
 
   const stats = useMemo(() => {
     const pending = properties.filter(p => p.status === 'available');
@@ -789,8 +871,22 @@ const AdminScreen: React.FC = () => {
     };
   }, [properties, clients]);
 
-  const theme = useMemo(() => createAdminTheme(appTheme), [appTheme]);
-  const styles = useMemo(() => createAdminStyles(theme), [theme]);
+  const dashboardMetrics = useMemo(() => ({
+    pendingListings: properties.filter(property => (property.listingStatus ?? 'pending') === 'pending').length,
+    unreadMessages: messages.filter(message => !message.read).length,
+    pendingTransactions: payments.filter(payment => payment.status === 'pending').length,
+    recentProperties: [...properties]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 12),
+  }), [messages, payments, properties]);
+
+  const { theme, styles } = useMemo(() => {
+    const nextTheme = createAdminTheme(appTheme);
+    return {
+      theme: nextTheme,
+      styles: createAdminStyles(nextTheme),
+    };
+  }, [appTheme]);
 
   const contractCountByTenant = useMemo(() => {
     const map = new Map<string, number>();
@@ -800,7 +896,7 @@ const AdminScreen: React.FC = () => {
     return map;
   }, [contracts]);
 
-  if (!currentUser || !currentUser.isAdmin) {
+  if (!currentUser || !hasAdminAccess) {
     return (
       <View style={[styles.container, styles.gateContainer]}>
         <View style={styles.gateCard}>
@@ -817,7 +913,7 @@ const AdminScreen: React.FC = () => {
   const query = searchQuery.trim().toLowerCase();
   const hasQuery = query.length > 0;
 
-  const scopeToTab: Record<SearchScope, TabType | null> = {
+  const scopeToTab: Record<SearchScope, AdminTab | null> = {
     ALL: null,
     PROPERTIES: 'properties',
     CLIENTS: 'clients',
@@ -1088,7 +1184,10 @@ const AdminScreen: React.FC = () => {
   const handleShareDocument = async (document: TenantDocument) => {
     try {
       const url = await resolveTenantDocumentUrl(document);
-      await Share.share({ message: url, url });
+      const result = await shareContent({ message: url, url });
+      if (result === 'copied') {
+        Alert.alert(tAdmin("Succes"), tAdmin("Lien copie dans le presse-papiers."));
+      }
     } catch (error) {
       Alert.alert(tAdmin("Erreur"), error instanceof Error ? error.message : tAdmin("Impossible de partager le document."));
     }
@@ -1120,7 +1219,11 @@ const AdminScreen: React.FC = () => {
       return;
     }
     try {
-      await SecureStore.setItemAsync('admin_pin', pinInput);
+      if (Platform.OS === 'web') {
+        await AsyncStorage.setItem('admin_pin', pinInput);
+      } else {
+        await SecureStore.setItemAsync('admin_pin', pinInput);
+      }
       setStoredPin(pinInput);
       setUnlocked(true);
       setPinInput('');
@@ -1152,6 +1255,19 @@ const AdminScreen: React.FC = () => {
 
       const json = JSON.stringify(payload, null, 2);
       const safeDate = new Date().toISOString().replace(/[:.]/g, '-');
+      if (Platform.OS === 'web') {
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `imo-nord-togo-backup-${safeDate}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return;
+      }
+
       const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
       if (!baseDir) throw new Error('NO_FS_DIR');
 
@@ -1193,9 +1309,16 @@ const AdminScreen: React.FC = () => {
         return;
       }
 
-      const content = await FileSystem.readAsStringAsync(picked.uri, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
+      let content: string;
+      if (Platform.OS === 'web') {
+        const response = await fetch(picked.uri);
+        if (!response.ok) throw new Error(`Unable to read selected backup (${response.status}).`);
+        content = await response.text();
+      } else {
+        content = await FileSystem.readAsStringAsync(picked.uri, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+      }
       const parsed = JSON.parse(content);
 
       if (!isValidBackup(parsed)) {
@@ -1382,12 +1505,7 @@ const AdminScreen: React.FC = () => {
   };
 
   const renderDashboard = () => {
-    const pendingListings = properties.filter(p => (p.listingStatus ?? 'pending') === 'pending').length;
-    const unreadMessages = messages.filter(m => !m.read).length;
-    const pendingTransactions = payments.filter(p => p.status === 'pending').length;
-    const recentProperties = [...properties]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 12);
+    const { pendingListings, unreadMessages, pendingTransactions, recentProperties } = dashboardMetrics;
 
     return (
       <ScrollView
@@ -1444,7 +1562,7 @@ const AdminScreen: React.FC = () => {
       <View style={styles.quickLinks}>
         <TouchableOpacity
           style={styles.quickLinkButton}
-          onPress={() => setActiveTab('neighborhoods')}
+          onPress={() => handleTabChange('neighborhoods')}
         >
           <Ionicons name="location" size={16} color={theme.accentText} />
           <Text style={styles.quickLinkText}>{tAdmin("Gerer quartiers")}</Text>
@@ -1556,7 +1674,7 @@ const AdminScreen: React.FC = () => {
           <Text style={styles.sectionSubtitle}>{tAdmin("Dernieres actions sur les annonces.")}</Text>
         </View>
         {properties.length > recentProperties.length && (
-          <TouchableOpacity onPress={() => setActiveTab('properties')}>
+          <TouchableOpacity onPress={() => handleTabChange('properties')}>
             <Text style={styles.sectionLink}>{tAdmin("Voir tout")}</Text>
           </TouchableOpacity>
         )}
@@ -1689,10 +1807,19 @@ const AdminScreen: React.FC = () => {
 
     return (
       <FlatList
-        style={styles.tabContent}
+        style={styles.propertyListViewport}
+        contentContainerStyle={[
+          styles.propertyListContent,
+          { paddingBottom: Math.max(insets.bottom + 32, 48) },
+        ]}
         data={visibleProperties}
         keyExtractor={item => item.id}
-        ListHeaderComponent={listHeader}
+        ListHeaderComponent={
+          <>
+            <View style={styles.propertyListChrome}>{renderAdminChrome()}</View>
+            {listHeader}
+          </>
+        }
         ListFooterComponent={
           hasMoreProperties ? (
             <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('properties')}>
@@ -1752,7 +1879,7 @@ const AdminScreen: React.FC = () => {
                 </View>
               </View>
 
-              <Text style={styles.propertyTitle} numberOfLines={1}>{property.title}</Text>
+              <Text style={styles.propertyTitle}>{property.title}</Text>
               <Text style={styles.propertyLocation}>
                 {[property.neighborhood, property.location].filter(Boolean).join(' | ')}
               </Text>
@@ -1914,132 +2041,26 @@ const AdminScreen: React.FC = () => {
   };
 
   const renderAccounts = () => {
-    const filteredUsers = shouldFilter
-      ? adminAccounts.filter(user =>
-          includesQuery(user.name) ||
-          includesQuery(user.email) ||
-          includesQuery(user.phone) ||
-          includesQuery(user.id)
-        )
-      : adminAccounts;
-    const visibleUsers = filteredUsers.slice(0, listLimits.users);
-    const hasMoreUsers = filteredUsers.length > listLimits.users;
-
-    const listHeader = (
-      <View>
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>{tAdmin("Comptes")}</Text>
-            <Text style={styles.sectionSubtitle}>{tAdmin("Verification et acces utilisateurs.")}</Text>
-          </View>
-          <View style={styles.sectionCount}>
-            <Text style={styles.sectionCountText}>{filteredUsers.length}</Text>
-          </View>
-        </View>
-        {accountsLoading && !adminAccounts.length ? (
-          <View style={styles.accountsLoading}>
-            <ActivityIndicator color={theme.accent} />
-            <Text style={styles.accountMeta}>{tAdmin("Chargement des comptes...")}</Text>
-          </View>
-        ) : null}
-        {accountsError ? <Text style={styles.accountsError}>{accountsError}</Text> : null}
-      </View>
-    );
-
     return (
-      <FlatList
-        style={styles.tabContent}
-        refreshControl={<RefreshControl refreshing={refreshing || accountsLoading} onRefresh={onRefresh} />}
-        data={visibleUsers}
-        keyExtractor={item => item.id}
-        ListHeaderComponent={listHeader}
-        ListEmptyComponent={
-          accountsLoading ? null : (
-            <Text style={styles.emptyText}>
-              {accountsError ? tAdmin("Impossible de charger les comptes.") : tAdmin("Aucun compte pour le moment.")}
-            </Text>
-          )
-        }
-        ListFooterComponent={
-          hasMoreUsers ? (
-            <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('users')}>
-              <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
-            </TouchableOpacity>
-          ) : null
-        }
-        renderItem={({ item: user }) => (
-          <View style={styles.accountItem}>
-            <View style={styles.accountAvatar}>
-              <Text style={styles.accountInitials}>{user.name.charAt(0)}</Text>
-            </View>
-            <View style={styles.accountInfo}>
-              <Text style={styles.accountName}>{user.name}</Text>
-              <Text style={styles.accountMeta}>{user.email}</Text>
-              <Text style={styles.accountMeta}>{user.phone}</Text>
-              <Text style={styles.accountMeta}>
-                {user.role ?? 'USER'} · {tAdmin(user.accountStatus === 'suspended'
-                  ? "Compte suspendu"
-                  : user.accountStatus === 'pending' ? "Compte en attente" : "Compte actif")}
-              </Text>
-              {user.agentStatus === 'pending' ? (
-                <Text style={styles.accountMeta}>{tAdmin("Demande agent en attente")}</Text>
-              ) : null}
-            </View>
-            <View style={styles.accountActions}>
-              {user.id !== currentUser?.id ? (
-                <TouchableOpacity
-                  style={[
-                    styles.accountVerifyButton,
-                    user.accountStatus === 'suspended' ? styles.accountVerifyOn : styles.accountVerifyOff,
-                  ]}
-                  disabled={accountUpdateId === user.id}
-                  onPress={() => void handleAccountStatus(user)}
-                >
-                  <Text style={styles.accountVerifyText}>
-                    {user.accountStatus === 'suspended' ? tAdmin("Reactiver") : tAdmin("Suspendre")}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-              {user.agentStatus === 'pending' ? (
-                <>
-                  <TouchableOpacity
-                    style={[styles.accountVerifyButton, styles.accountVerifyOn]}
-                    onPress={() => void handleReviewAgent(user, true)}
-                  >
-                    <Text style={styles.accountVerifyText}>{tAdmin("Approuver")}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.accountVerifyButton, styles.accountVerifyOff]}
-                    onPress={() => void handleReviewAgent(user, false)}
-                  >
-                    <Text style={[styles.accountVerifyText, { color: theme.textMuted }]}>{tAdmin("Refuser")}</Text>
-                  </TouchableOpacity>
-                </>
-              ) : null}
-              <TouchableOpacity
-                style={[
-                  styles.accountVerifyButton,
-                  user.verified ? styles.accountVerifyOff : styles.accountVerifyOn,
-                ]}
-                disabled={accountUpdateId === user.id}
-                onPress={() => void handleVerifyUser(user, !user.verified)}
-              >
-                <Text style={[
-                  styles.accountVerifyText,
-                  user.verified && { color: theme.textMuted },
-                ]}>
-                  {user.verified ? tAdmin("Retirer") : tAdmin("Verifier")}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.accountEditButton}
-                onPress={() => openEditUserModal(user)}
-              >
-                <Ionicons name="create-outline" size={16} color={theme.accent} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+      <AdminAccountsTab
+        accounts={adminAccounts}
+        currentUserId={currentUser?.id ?? ''}
+        search={includesQuery}
+        searching={shouldFilter}
+        limit={listLimits.users}
+        onLoadMore={() => increaseLimit('users')}
+        loading={accountsLoading}
+        error={accountsError}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        accountUpdateId={accountUpdateId}
+        onAccountStatus={user => void handleAccountStatus(user)}
+        onReviewAgent={(user, approved) => void handleReviewAgent(user, approved)}
+        onVerify={(user, verified) => void handleVerifyUser(user, verified)}
+        onEdit={openEditUserModal}
+        translate={tAdmin}
+        theme={theme}
+        styles={styles}
       />
     );
   };
@@ -2203,6 +2224,27 @@ const AdminScreen: React.FC = () => {
       : messages;
     const visibleMessages = filteredMessages.slice(0, listLimits.messages);
     const hasMoreMessages = filteredMessages.length > listLimits.messages;
+    const supportInbox = (
+      <AdminSupportInbox
+        conversations={supportConversations}
+        selectedConversationId={selectedSupportId}
+        messages={supportMessages}
+        currentUserId={currentUser?.id ?? ''}
+        reply={supportReply}
+        loading={supportLoading}
+        error={supportError}
+        sending={supportSending}
+        onRefresh={() => void loadSupportConversations()}
+        onSelectConversation={setSelectedSupportId}
+        onToggleStatus={conversation => void toggleSupportConversationStatus(conversation)}
+        onReplyChange={setSupportReply}
+        onSend={() => void sendSupportReply()}
+        formatDateTime={formatAdminDateTime}
+        translate={tAdmin}
+        theme={theme}
+        styles={styles}
+      />
+    );
 
     return (
       <FlatList
@@ -2210,13 +2252,16 @@ const AdminScreen: React.FC = () => {
         data={visibleMessages}
         keyExtractor={message => message.id}
         ListHeaderComponent={
-          <View style={styles.sectionHeaderRow}>
-            <View>
-              <Text style={styles.sectionTitle}>{tAdmin("Messages")}</Text>
-              <Text style={styles.sectionSubtitle}>{tAdmin("Suivi des conversations en cours.")}</Text>
-            </View>
-            <View style={styles.sectionCount}>
-              <Text style={styles.sectionCountText}>{filteredMessages.length}</Text>
+          <View>
+            {supportInbox}
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.sectionTitle}>{tAdmin("Messages")}</Text>
+                <Text style={styles.sectionSubtitle}>{tAdmin("Suivi des conversations en cours.")}</Text>
+              </View>
+              <View style={styles.sectionCount}>
+                <Text style={styles.sectionCountText}>{filteredMessages.length}</Text>
+              </View>
             </View>
           </View>
         }
@@ -2756,105 +2801,8 @@ const AdminScreen: React.FC = () => {
       />
     );
   };
-  if (!hydrated || gateLoading) {
-    return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <Skeleton style={styles.loadingHeaderSkeleton} />
-        <Skeleton style={styles.loadingSummarySkeleton} />
-        {[0, 1, 2].map(item => (
-          <Skeleton key={item} style={styles.loadingRowSkeleton} />
-        ))}
-      </View>
-    );
-  }
-
-  if (!storedPin) {
-    return (
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          contentContainerStyle={styles.gateScrollContent}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="none"
-        >
-          <View style={[styles.container, styles.gateContainer]}>
-            <View style={styles.gateCard}>
-              <Ionicons name="lock-closed" size={28} color={theme.accent} />
-              <Text style={styles.gateTitle}>{tAdmin("Creer un PIN Admin")}</Text>
-              <Text style={styles.gateSubtitle}>
-                {tAdmin("Ce PIN protege l'acces au back-office et la sauvegarde.")}
-              </Text>
-
-              <TextInput
-                style={styles.gateInput}
-                value={pinInput}
-                onChangeText={setPinInput}
-                placeholder={tAdmin("Nouveau PIN (min 4)")}
-                keyboardType="number-pad"
-                secureTextEntry
-              />
-              <TextInput
-                style={styles.gateInput}
-                value={pinConfirm}
-                onChangeText={setPinConfirm}
-                placeholder={tAdmin("Confirmer le PIN")}
-                keyboardType="number-pad"
-                secureTextEntry
-              />
-
-              <TouchableOpacity style={styles.gateButton} onPress={handleSetupPin}>
-                <Text style={styles.gateButtonText}>{tAdmin("Enregistrer")}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    );
-  }
-
-  if (!unlocked) {
-    return (
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          contentContainerStyle={styles.gateScrollContent}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="none"
-        >
-          <View style={[styles.container, styles.gateContainer]}>
-            <View style={styles.gateCard}>
-              <Ionicons name="shield-checkmark" size={28} color={theme.accent} />
-              <Text style={styles.gateTitle}>{tAdmin("Acces Admin")}</Text>
-              <Text style={styles.gateSubtitle}>
-                {tAdmin("Saisie securisee pour acceder au mini back-office.")}
-              </Text>
-
-              <TextInput
-                style={styles.gateInput}
-                value={pinInput}
-                onChangeText={setPinInput}
-                placeholder={tAdmin("PIN")}
-                keyboardType="number-pad"
-                secureTextEntry
-              />
-
-              <TouchableOpacity style={styles.gateButton} onPress={handleUnlock}>
-                <Text style={styles.gateButtonText}>{tAdmin("Deverrouiller")}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      {/* Header */}
+  const renderAdminChrome = () => (
+    <>
       <View style={[styles.header, { paddingTop: Math.max(insets.top + 16, 48) }]}>
         <View style={styles.headerLeft}>
           <View style={styles.headerBadgeRow}>
@@ -2927,7 +2875,7 @@ const AdminScreen: React.FC = () => {
               onPress={() => {
                 setSearchScope(scope.value);
                 const nextTab = scopeToTab[scope.value];
-                if (nextTab) setActiveTab(nextTab);
+                if (nextTab) handleTabChange(nextTab);
               }}
             >
               <Text
@@ -2944,43 +2892,82 @@ const AdminScreen: React.FC = () => {
         </ScrollView>
       </View>
 
-      {/* Navigation */}
-      <View style={styles.navCard}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.tabs}
-          contentContainerStyle={styles.tabsContent}
-        >
-          {[
-            { id: 'dashboard' as TabType, label: tAdmin("Dashboard"), icon: 'stats-chart' },
-            { id: 'properties' as TabType, label: tAdmin("Annonces"), icon: 'list' },
-            { id: 'clients' as TabType, label: tAdmin("Locataires"), icon: 'people' },
-            { id: 'contracts' as TabType, label: tAdmin("Contrats"), icon: 'document-text' },
-            { id: 'transactions' as TabType, label: tAdmin("Paiements"), icon: 'card' },
-            { id: 'neighborhoods' as TabType, label: tAdmin("Quartiers"), icon: 'location' },
-            { id: 'accounts' as TabType, label: tAdmin("Comptes"), icon: 'person-circle' },
-          ].map(tab => (
-            <TouchableOpacity
-              key={tab.id}
-              style={[styles.tab, activeTab === tab.id && styles.tabActive]}
-              onPress={() => handleTabChange(tab.id)}
-            >
-              <Ionicons
-                name={tab.icon as any}
-                size={13}
-                color={activeTab === tab.id ? theme.headerText : theme.textMuted}
-              />
-              <Text
-                numberOfLines={1}
-                style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+      <AdminNavigation
+        activeTab={activeTab}
+        onChange={handleTabChange}
+        theme={theme}
+        styles={styles}
+        labels={{
+          dashboard: tAdmin("Dashboard"),
+          properties: tAdmin("Annonces"),
+          clients: tAdmin("Locataires"),
+          accounts: tAdmin("Comptes"),
+          neighborhoods: tAdmin("Quartiers"),
+          reports: tAdmin("Signalements"),
+          add: tAdmin("Autres"),
+          messages: tAdmin("Messages"),
+          reviews: tAdmin("Avis"),
+          agents: tAdmin("Profils agents"),
+          premium: tAdmin("Premium"),
+          commissions: tAdmin("Regles de commission"),
+          transactions: tAdmin("Paiements"),
+          contracts: tAdmin("Contrats"),
+          documents: tAdmin("Documents"),
+        }}
+        closeLabel={tAdmin("Fermer")}
+      />
+    </>
+  );
+
+  if (!hydrated || gateLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Skeleton style={styles.loadingHeaderSkeleton} />
+        <Skeleton style={styles.loadingSummarySkeleton} />
+        {[0, 1, 2].map(item => (
+          <Skeleton key={item} style={styles.loadingRowSkeleton} />
+        ))}
       </View>
+    );
+  }
+
+  if (!storedPin) {
+    return (
+      <AdminGate
+        mode="setup"
+        pinInput={pinInput}
+        setPinInput={setPinInput}
+        pinConfirm={pinConfirm}
+        setPinConfirm={setPinConfirm}
+        onSetup={handleSetupPin}
+        onUnlock={handleUnlock}
+        translate={tAdmin}
+        theme={theme}
+        styles={styles}
+      />
+    );
+  }
+
+  if (!unlocked) {
+    return (
+      <AdminGate
+        mode="unlock"
+        pinInput={pinInput}
+        setPinInput={setPinInput}
+        pinConfirm={pinConfirm}
+        setPinConfirm={setPinConfirm}
+        onSetup={handleSetupPin}
+        onUnlock={handleUnlock}
+        translate={tAdmin}
+        theme={theme}
+        styles={styles}
+      />
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {activeTab !== 'properties' && renderAdminChrome()}
 
       {/* Content */}
       {activeTab === 'dashboard' && renderDashboard()}

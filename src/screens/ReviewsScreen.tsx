@@ -128,7 +128,7 @@ const ReviewsScreen = () => {
       </View>
 
       <View style={styles.propertyInfo}>
-        <Text style={styles.propertyTitle} numberOfLines={1}>
+        <Text style={styles.propertyTitle}>
           {property.title}
         </Text>
         <View style={styles.ratingSummary}>

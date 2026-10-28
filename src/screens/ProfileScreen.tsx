@@ -3,21 +3,21 @@ import {
   View,
   Text,
   Image,
+  ImageBackground,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Modal,
-  Share,
   ActivityIndicator,
   InteractionManager,
   Linking,
   Platform,
   KeyboardAvoidingView,
+  Animated,
 } from 'react-native';
 import { AppAlert as Alert } from '../components/ui/appAlertService';
 import TextInput from '../components/ui/AccessibleTextInput';
 
-import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -28,14 +28,14 @@ import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { authCallbackUrl, exchangeAuthCallback, resetPasswordCallbackUrl, supabase } from '../lib/supabase';
-import { getContactEmail } from '../constants/appConfig';
 import PropertyCard from '../components/PropertyCard';
-import COLORS from '../theme/colors';
+import COLORS, { THEME_PALETTES } from '../theme/colors';
 import { isPublicProperty } from '../utils/propertyVisibility';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { logger } from '../lib/logger';
 import { formatPrice } from '../utils/format';
+import type { ThemeMode } from '../theme/colors';
 
 type ProfileRouteProp = RouteProp<
   { Profile: { authMode?: 'login' | 'register' } | undefined },
@@ -58,6 +58,7 @@ const ProfileScreen: React.FC = () => {
   const {
     properties,
     propertyStats,
+    favorites,
     savedSearches,
     removeSavedSearch,
     searchHistory,
@@ -74,16 +75,18 @@ const ProfileScreen: React.FC = () => {
     setFilterType,
     resetFilters,
     setFilters,
-    language,
-    setLanguage,
-    theme,
+    theme: selectedTheme,
     setTheme,
     t,
     tType,
     notifications,
+    setPrivacySetting,
+    updateProfile,
   } = useApp();
+  const theme = selectedTheme === 'light' ? 'light' : 'dark';
   const secretTapCount = useRef(0);
   const secretTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
   const authScrollRef = useRef<ScrollView>(null);
   const recentViewedProperties = recentViewedIds
     .map(id => properties.find(p => p.id === id))
@@ -102,6 +105,19 @@ const ProfileScreen: React.FC = () => {
   const [agentListingFilter, setAgentListingFilter] = useState<
     'pending' | 'published' | 'rejected' | 'completed'
   >('published');
+  const [profileName, setProfileName] = useState(currentUser?.name ?? '');
+  const [profilePhone, setProfilePhone] = useState(currentUser?.phone ?? '');
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [themePreview, setThemePreview] = useState<ThemeMode | null>(null);
+  const [expandedActivitySection, setExpandedActivitySection] = useState<
+    'favorites' | 'savedSearches' | 'searchHistory' | 'recentViews' | null
+  >(null);
+
+  useEffect(() => {
+    setProfileName(currentUser?.name ?? '');
+    setProfilePhone(currentUser?.phone ?? '');
+  }, [currentUser?.name, currentUser?.phone]);
 
   useEffect(() => {
     if (route.params?.authMode) {
@@ -110,6 +126,15 @@ const ProfileScreen: React.FC = () => {
       setAuthNotice('');
     }
   }, [route.params?.authMode]);
+
+  // Simple fade‑in animation for premium UI components
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const emailValid = useMemo(
     () => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(authEmail.trim()),
@@ -137,44 +162,6 @@ const ProfileScreen: React.FC = () => {
     InteractionManager.runAfterInteractions(() =>
       navigation.navigate('MainTabs', { screen: 'Home' })
     );
-  };
-
-  const resolveApkDownloadUrl = () => {
-    const extra =
-      ((Constants.expoConfig?.extra ??
-        // Classic manifest (Expo Go / older environments)
-        (Constants.manifest as any)?.extra ??
-        // EAS Updates manifest can carry extra params.
-        (() => {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const Updates = require('expo-updates');
-            return Updates?.manifest?.extra ?? null;
-          } catch {
-            return null;
-          }
-        })() ??
-        {}) as Record<string, any>);
-
-    return (
-      process.env.EXPO_PUBLIC_APK_URL ||
-      extra.apkDownloadUrl ||
-      extra.apk_url ||
-      extra.downloadUrl ||
-      null
-    );
-  };
-
-  const handleInvite = async () => {
-    const apkUrl = resolveApkDownloadUrl();
-    if (!apkUrl) {
-      Alert.alert(t('profile_invite_friend'), t('profile_invite_missing_apk_link'));
-      await Share.share({ message: t('profile_invite_message') });
-      return;
-    }
-    await Share.share({
-      message: `${t('profile_invite_message')}\n\n${t('profile_invite_download_label')}\n${apkUrl}`,
-    });
   };
 
   const resolveAuthError = (code: string) => {
@@ -321,7 +308,27 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
-    const handleLogoutPress = async () => {
+  const handleProfileSave = async () => {
+    const name = profileName.trim();
+    if (!name) {
+      Alert.alert(t('error'), t('profile_auth_invalid'));
+      return;
+    }
+
+    setProfileSaving(true);
+    try {
+      await updateProfile({ name, phone: profilePhone });
+      setIsEditingProfile(false);
+      Alert.alert(t('success'), t('profile_update_success'));
+    } catch (error) {
+      logger.error('Unable to update the profile.', error);
+      Alert.alert(t('error'), t('profile_update_failed'));
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleLogoutPress = async () => {
     if (logoutLoading) return;
     setLogoutLoading(true);
     try {
@@ -333,15 +340,7 @@ const ProfileScreen: React.FC = () => {
     }
   };
   const handleSecretTap = () => {
-    const enableAdminShortcut =
-      __DEV__ === true ||
-      currentUser?.isAdmin === true ||
-      Constants.expoConfig?.extra?.enableAdminShortcut === true;
-    if (!enableAdminShortcut) return;
-    if (!currentUser?.isAdmin) {
-      Alert.alert(t('error'), t('profile_admin_required'));
-      return;
-    }
+    if (currentUser?.isAdmin !== true && currentUser?.role !== 'ADMIN') return;
 
     secretTapCount.current += 1;
     if (secretTapTimer.current) {
@@ -349,7 +348,7 @@ const ProfileScreen: React.FC = () => {
     }
     secretTapTimer.current = setTimeout(() => {
       secretTapCount.current = 0;
-    }, 2000);
+    }, 4000);
     if (secretTapCount.current >= 7) {
       secretTapCount.current = 0;
       if (secretTapTimer.current) {
@@ -379,7 +378,7 @@ const ProfileScreen: React.FC = () => {
               <Text style={styles.authLogoText}>IMO</Text>
             </View>
             <View style={styles.authBrandCopy}>
-              <Text style={styles.authTitle}>Imo Nord Togo</Text>
+              <Text style={styles.authTitle}>ImoPrestige</Text>
               <Text style={styles.authSubtitle}>{t('app_tagline')}</Text>
             </View>
           </TouchableOpacity>
@@ -390,30 +389,6 @@ const ProfileScreen: React.FC = () => {
             <View style={styles.authWelcomeCopy}>
               <Text style={styles.authWelcomeSubtitle}>{t('profile_auth_hero_subtitle')}</Text>
             </View>
-          </View>
-          <View style={styles.guestLanguageRow}>
-            <Text style={styles.guestLanguageLabel}>{t('language')}</Text>
-            {(['fr', 'en'] as const).map(option => (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  styles.languageChip,
-                  language === option && styles.languageChipActive,
-                ]}
-                onPress={() => setLanguage(option)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: language === option }}
-              >
-                <Text
-                  style={[
-                    styles.languageText,
-                    language === option && styles.languageTextActive,
-                  ]}
-                >
-                  {option === 'fr' ? 'Français' : 'English'}
-                </Text>
-              </TouchableOpacity>
-            ))}
           </View>
         </View>
 
@@ -614,6 +589,7 @@ const ProfileScreen: React.FC = () => {
 
   const accountVerified = currentUser.verified;
   const isAgent = currentUser.role === 'AGENT';
+  const hasProfessionalWorkspace = isAgent || currentUser.role === 'ADMIN';
   const canRequestAgentAccess =
     !isAgent &&
     currentUser.role !== 'ADMIN' &&
@@ -626,6 +602,23 @@ const ProfileScreen: React.FC = () => {
     ? properties.filter(property => property.ownerId === currentUser.id)
     : [];
   const profileProperties = getMyProperties();
+  const favoriteProperties = properties.filter(
+    property => favorites.includes(property.id) && isPublicProperty(property)
+  );
+  const profileViews = profileProperties.reduce(
+    (total, property) => total + (propertyStats[property.id]?.views ?? 0),
+    0
+  );
+  const profileContacts = profileProperties.reduce(
+    (total, property) => total + (propertyStats[property.id]?.contacts ?? 0),
+    0
+  );
+  const hasProfileViews = profileProperties.some(
+    property => typeof propertyStats[property.id]?.views === 'number'
+  );
+  const hasProfileContacts = profileProperties.some(
+    property => typeof propertyStats[property.id]?.contacts === 'number'
+  );
   const unreadMessageCount = currentUser
     ? chats
         .filter(chat => chat.participants.includes(currentUser.id))
@@ -678,49 +671,302 @@ const ProfileScreen: React.FC = () => {
     ),
   };
   const selectedAgentListings = agentListingsByStatus[agentListingFilter];
+  const profileInitials = currentUser.name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(part => part.charAt(0))
+    .join('')
+    .toUpperCase() || 'U';
+  const profileRoleKey = currentUser.role === 'AGENT'
+    ? 'profile_role_agent'
+    : currentUser.role === 'ADMIN'
+      ? 'profile_role_admin'
+      : currentUser.role === 'ACCOUNTANT'
+        ? 'profile_role_accountant'
+        : 'profile_client_badge';
+  const notificationUnreadCount = notifications.filter(notification => !notification.read).length;
+  const profileStats = [
+    {
+      key: 'listings',
+      value: profileProperties.length,
+      label: t('my_listings'),
+      icon: 'home-outline' as const,
+      onPress: () => navigation.navigate(
+        'MainTabs',
+        {screen: hasProfessionalWorkspace ? 'Agent' : 'Publish'}
+      ),
+    },
+    {
+      key: 'favorites',
+      value: favoriteProperties.length,
+      label: t('favorites'),
+      icon: 'heart-outline' as const,
+      onPress: () => setExpandedActivitySection('favorites'),
+    },
+    ...(hasProfileViews
+      ? [{
+          key: 'views',
+          value: profileViews,
+          label: t('profile_views_count'),
+          icon: 'eye-outline' as const,
+          onPress: () => navigation.navigate(
+            'MainTabs',
+            {screen: hasProfessionalWorkspace ? 'Agent' : 'Publish'}
+          ),
+        }]
+      : []),
+    ...(hasProfileContacts
+      ? [{
+          key: 'contacts',
+          value: profileContacts,
+          label: t('profile_contacts_count'),
+          icon: 'chatbubble-ellipses-outline' as const,
+          onPress: () => navigation.navigate('MainTabs', { screen: 'Messages' }),
+        }]
+      : []),
+  ];
+  const profileMenuItems = [
+    {
+      key: 'listings',
+      icon: 'home-outline' as const,
+      label: t('my_listings'),
+      description: t('profile_menu_listings_description'),
+      onPress: () => navigation.navigate(
+        'MainTabs',
+        {screen: hasProfessionalWorkspace ? 'Agent' : 'Publish'}
+      ),
+    },
+    {
+      key: 'favorites',
+      icon: 'heart-outline' as const,
+      label: t('favorites'),
+      description: t('profile_menu_favorites_description'),
+      count: favoriteProperties.length,
+      onPress: () => setExpandedActivitySection('favorites'),
+    },
+    {
+      key: 'messages',
+      icon: 'chatbubble-ellipses-outline' as const,
+      label: t('messages_inbox_title'),
+      description: t('profile_menu_messages_description'),
+      count: unreadMessageCount,
+      onPress: () => navigation.navigate('MainTabs', { screen: 'Messages' }),
+    },
+    {
+      key: 'notifications',
+      icon: 'notifications-outline' as const,
+      label: t('notifications_title'),
+      description: t('profile_menu_notifications_description'),
+      count: notificationUnreadCount,
+      onPress: () => navigation.navigate('Notifications'),
+    },
+    {
+      key: 'account',
+      icon: 'person-circle-outline' as const,
+      label: t('profile_edit_action'),
+      description: t('profile_menu_account_description'),
+      onPress: () => setIsEditingProfile(true),
+    },
+    {
+      key: 'appearance',
+      icon: 'color-palette-outline' as const,
+      label: t('profile_theme_section'),
+      description: t('profile_menu_appearance_description'),
+      onPress: () => setThemePreview(selectedTheme),
+    },
+    {
+      key: 'help',
+      icon: 'help-circle-outline' as const,
+      label: t('support_title'),
+      description: t('profile_menu_help_description'),
+      onPress: () => navigation.navigate('MainTabs', { screen: 'Messages' }),
+    },
+    {
+      key: 'privacy',
+      icon: 'shield-checkmark-outline' as const,
+      label: t('privacy'),
+      description: t('profile_menu_privacy_description'),
+      onPress: () => setLegalModal('privacy'),
+    },
+  ];
+  const themeOptions: {
+    mode: ThemeMode;
+    title: string;
+    description: string;
+    colors: string[];
+  }[] = [
+    {
+      mode: 'dark',
+      title: t('theme_dark_elegant'),
+      description: t('theme_dark_elegant_description'),
+      colors: ['#0B1422', '#1B4F72', '#D4A853'],
+    },
+    {
+      mode: 'light',
+      title: t('theme_light_premium'),
+      description: t('theme_light_premium_description'),
+      colors: ['#FFFFFF', '#087F86', '#DDE8F3'],
+    },
+    {
+      mode: 'nature',
+      title: t('theme_nature'),
+      description: t('theme_nature_description'),
+      colors: ['#0E1914', '#58B887', '#D1B778'],
+    },
+    {
+      mode: 'rose',
+      title: t('theme_rose'),
+      description: t('theme_rose_description'),
+      colors: ['#171321', '#C08AF5', '#F09AC5'],
+    },
+  ];
 
   return (
     <>
       <ScrollView
-        style={[styles.container, theme === 'dark' && styles.containerDark]}
+        style={[
+          styles.container,
+          theme === 'dark' && styles.containerDark,
+          { backgroundColor: theme === 'light' ? '#F0F2F5' : themeColors.background },
+        ]}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="none"
       >
-        {/* Header */}
-        <View style={[styles.profileHeader, { backgroundColor: themeColors.surface }]}>
-          <TouchableOpacity style={styles.profileBrand} onPress={handleSecretTap} activeOpacity={1}>
-            <View style={styles.profileLogo}>
-              <Text style={styles.profileLogoText}>IMO</Text>
+        <Animated.View
+          style={[
+            styles.profilePremiumCard,
+            {
+              opacity: fadeAnim,
+              transform: [{
+                translateY: fadeAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [12, 0],
+                }),
+              }],
+            },
+          ]}
+        >
+          <ImageBackground
+            source={require('../../assets/branding/hero-case-chaume.jpg')}
+            style={styles.profileCover}
+            imageStyle={styles.profileCoverImage}
+          >
+            <View style={styles.profileCoverOverlay}>
+              <TouchableOpacity
+                style={styles.profileCoverBrand}
+                onPress={handleSecretTap}
+                activeOpacity={0.75}
+                hitSlop={10}
+              >
+                <View style={styles.profileCoverBrandMark}>
+                  <Ionicons name="home" size={16} color={themeColors.onGold} />
+                </View>
+                <Text style={styles.profileCoverBrandText}>ImoPrestige</Text>
+              </TouchableOpacity>
+              <Text style={styles.profileCoverSubtitle}>{t('profile_header_subtitle')}</Text>
             </View>
-            <View style={styles.profileBrandCopy}>
-              <Text style={styles.profileHeading}>{t('tab_profile')}</Text>
-              <Text style={styles.profileTagline}>
-                {t('profile_personal_space')}
-              </Text>
+          </ImageBackground>
+
+          <View style={styles.profileIdentity}>
+            <View style={styles.profileAvatarLarge}>
+              {currentUser.avatarUrl ? (
+                <Image source={{ uri: currentUser.avatarUrl }} style={styles.profileAvatarImage} />
+              ) : (
+                <Text style={styles.profileAvatarText}>{profileInitials}</Text>
+              )}
+              {accountVerified && (
+                <View style={styles.profileAvatarVerified}>
+                  <Ionicons name="checkmark" size={12} color={themeColors.white} />
+                </View>
+              )}
             </View>
+            <View style={styles.profileIdentityCopy}>
+              <View style={styles.profileNameLine}>
+                <Text style={styles.profileUserName} numberOfLines={1}>
+                  {currentUser.name || t('profile_personal_space')}
+                </Text>
+                {accountVerified && (
+                  <View style={styles.profileVerifiedBadge}>
+                    <Ionicons name="shield-checkmark" size={13} color={themeColors.success} />
+                    <Text style={styles.profileVerifiedText}>{t('profile_verified_badge')}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.profileUserEmail} numberOfLines={1}>{currentUser.email}</Text>
+              <View style={styles.profileRoleBadge}>
+                <Ionicons
+                  name={isAgent ? 'briefcase-outline' : 'person-outline'}
+                  size={13}
+                  color={themeColors.primary}
+                />
+                <Text style={styles.profileRoleText}>{t(profileRoleKey)}</Text>
+              </View>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.profileEditButton}
+            onPress={() => setIsEditingProfile(true)}
+            accessibilityRole="button"
+            activeOpacity={0.78}
+          >
+            <Ionicons name="create-outline" size={17} color={themeColors.onBrand} />
+            <Text style={styles.profileEditButtonText}>{t('profile_edit_action')}</Text>
           </TouchableOpacity>
+        </Animated.View>
+
+        <View style={styles.profileStatGrid}>
+          {profileStats.map(stat => (
+            <TouchableOpacity
+              key={stat.key}
+              style={styles.profileStatCard}
+              onPress={stat.onPress}
+              accessibilityRole="button"
+              accessibilityLabel={`${stat.label}: ${stat.value}`}
+              activeOpacity={0.78}
+            >
+              <View style={styles.profileStatTop}>
+                <View style={styles.profileStatIcon}>
+                  <Ionicons name={stat.icon} size={18} color={themeColors.primary} />
+                </View>
+                <Ionicons name="arrow-up-outline" size={15} color={themeColors.onSurfaceSoft} />
+              </View>
+              <Text style={styles.profileStatValue}>{stat.value}</Text>
+              <Text style={styles.profileStatLabel} numberOfLines={1}>{stat.label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        <View style={styles.profileHeroCard}>
-          <View style={styles.profileHeroMetric}>
-            <Ionicons name="home-outline" size={17} color={themeColors.primary} />
-            <Text style={styles.profileHeroValue}>{profileProperties.length}</Text>
-            <Text style={styles.profileHeroLabel}>{t('my_listings')}</Text>
+        <Animated.View style={[styles.section, styles.profileMenuSection, { opacity: fadeAnim }]}>
+          <Text style={styles.sectionTitle}>{t('profile_quick_access')}</Text>
+          <Text style={styles.profileMenuSubtitle}>{t('profile_quick_access_description')}</Text>
+          <View style={styles.profileMenuList}>
+            {profileMenuItems.map(item => (
+              <TouchableOpacity
+                key={item.key}
+                style={styles.profileMenuRow}
+                onPress={item.onPress}
+                accessibilityRole="button"
+                activeOpacity={0.72}
+              >
+                <View style={styles.profileMenuIcon}>
+                  <Ionicons name={item.icon} size={19} color={themeColors.primary} />
+                </View>
+                <View style={styles.profileMenuCopy}>
+                  <Text style={styles.profileMenuTitle}>{item.label}</Text>
+                  <Text style={styles.profileMenuDescription} numberOfLines={1}>
+                    {item.description}
+                  </Text>
+                </View>
+                {'count' in item && item.count !== undefined && (
+                  <Text style={styles.profileMenuCount}>{item.count}</Text>
+                )}
+                <Ionicons name="chevron-forward" size={18} color={themeColors.onSurfaceSoft} />
+              </TouchableOpacity>
+            ))}
           </View>
-          <View style={styles.profileHeroDivider} />
-          <View style={styles.profileHeroMetric}>
-            <Ionicons name="bookmark-outline" size={17} color={themeColors.info} />
-            <Text style={styles.profileHeroValue}>{savedSearches.length}</Text>
-            <Text style={styles.profileHeroLabel}>{t('saved_searches')}</Text>
-          </View>
-          <View style={styles.profileHeroDivider} />
-          <View style={styles.profileHeroMetric}>
-            <Ionicons name="chatbubble-ellipses-outline" size={17} color={themeColors.success} />
-            <Text style={styles.profileHeroValue}>{unreadMessageCount}</Text>
-            <Text style={styles.profileHeroLabel}>{t('profile_messages_shortcut')}</Text>
-          </View>
-        </View>
+        </Animated.View>
 
         {canRequestAgentAccess && (
           <View style={[styles.agentAccessCard, theme === 'dark' && styles.agentAccessCardDark]}>
@@ -763,7 +1009,7 @@ const ProfileScreen: React.FC = () => {
         )}
 
         {isAgent && currentUser && false && (
-          <View style={[styles.agentDashboard, theme === 'dark' && styles.agentDashboardDark]}>
+          <View style={[styles.agentDashboard, theme === 'dark' && styles.agentDashboardDark, { backgroundColor: themeColors.primaryContainer }]}>
             <View style={styles.agentDashboardHeader}>
               <View style={styles.agentDashboardHeading}>
                 <View style={styles.agentDashboardIcon}>
@@ -841,7 +1087,7 @@ const ProfileScreen: React.FC = () => {
               ))}
             </View>
 
-            <View style={styles.agentProgressCard}>
+            <Animated.View style={[styles.agentProgressCard, { backgroundColor: themeColors.primaryContainer }, { opacity: fadeAnim }]}>
               <View style={styles.agentListingsHeader}>
                 <Text style={[styles.agentTodayTitle, theme === 'dark' && styles.textLight]}>
                   {t('profile_agent_setup')}
@@ -882,7 +1128,7 @@ const ProfileScreen: React.FC = () => {
                   </Text>
                 </View>
               ))}
-            </View>
+            </Animated.View>
 
             <View style={styles.agentActions}>
               <TouchableOpacity
@@ -988,7 +1234,7 @@ const ProfileScreen: React.FC = () => {
                 )}
             </View>
 
-            <View style={styles.agentListingsSection}>
+            <Animated.View style={[styles.agentListingsSection, { backgroundColor: themeColors.primaryContainer }, { opacity: fadeAnim }]}>
               <View style={styles.agentListingsHeader}>
                 <Text style={[styles.agentTodayTitle, theme === 'dark' && styles.textLight]}>
                   {t('profile_agent_manage_listings')}
@@ -1081,7 +1327,7 @@ const ProfileScreen: React.FC = () => {
                   </View>
                 ))
               )}
-            </View>
+            </Animated.View>
           </View>
         )}
 
@@ -1172,168 +1418,232 @@ const ProfileScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Saved Searches */}
-        <View style={[styles.section, theme === 'dark' && styles.sectionDark]}>
-          <Text style={[styles.sectionTitle, theme === 'dark' && styles.sectionTitleDark]}>{t('saved_searches')}</Text>
-          {savedSearches.length === 0 ? (
-            <Text style={[styles.emptyText, theme === 'dark' && styles.textMutedDark]}>{t('no_saved_search')}</Text>
-          ) : (
-            savedSearches.map(saved => (
-              <View key={saved.id} style={[styles.savedSearchRow, theme === 'dark' && styles.savedSearchRowDark]}>
-                <View style={styles.savedSearchInfo}>
-                  <Text style={[styles.savedSearchLabel, theme === 'dark' && styles.textLight]}>{saved.label}</Text>
-                  <Text style={[styles.savedSearchMeta, theme === 'dark' && styles.textMutedDark]}>
-                    {t('type_label')}: {saved.type === 'ALL' ? t('all_types') : tType(saved.type)}
+        <View style={[styles.section, theme === 'dark' && styles.sectionDark, styles.activityAccordion]}>
+          <TouchableOpacity
+            style={styles.activityAccordionHeader}
+            onPress={() => setExpandedActivitySection(
+              expandedActivitySection === 'favorites' ? null : 'favorites'
+            )}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: expandedActivitySection === 'favorites' }}
+          >
+            <View style={styles.activityAccordionTitle}>
+              <View style={styles.activityAccordionIcon}>
+                <Ionicons name="heart-outline" size={18} color={themeColors.primary} />
+              </View>
+              <Text style={[styles.activityAccordionText, theme === 'dark' && styles.sectionTitleDark]}>
+                {t('favorites')}
+              </Text>
+            </View>
+            <View style={styles.activityAccordionTrailing}>
+              <Text style={styles.activityAccordionCount}>{favoriteProperties.length}</Text>
+              <Ionicons
+                name={expandedActivitySection === 'favorites' ? 'chevron-up' : 'chevron-down'}
+                size={19}
+                color={themeColors.onSurfaceMuted}
+              />
+            </View>
+          </TouchableOpacity>
+          {expandedActivitySection === 'favorites' && (
+            <View style={styles.activityAccordionContent}>
+              {favoriteProperties.length === 0 ? (
+                <View style={styles.profileFavoritesEmpty}>
+                  <View style={styles.profileFavoritesEmptyIcon}>
+                    <Ionicons name="heart-outline" size={22} color={themeColors.primary} />
+                  </View>
+                  <Text style={styles.profileFavoritesEmptyTitle}>{t('profile_favorites_empty_title')}</Text>
+                  <Text style={styles.profileFavoritesEmptyDescription}>
+                    {t('profile_favorites_empty_description')}
                   </Text>
                 </View>
-                <View style={styles.savedSearchActions}>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.cardRow}
+                >
+                  {favoriteProperties.map(property => (
+                    <PropertyCard
+                      key={property.id}
+                      property={property}
+                      onPress={() => InteractionManager.runAfterInteractions(
+                        () => navigation.navigate('PropertyDetail', { propertyId: property.id })
+                      )}
+                      compact
+                    />
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
+        </View>
+
+        <View style={[styles.section, theme === 'dark' && styles.sectionDark, styles.activityAccordion]}>
+          <TouchableOpacity
+            style={styles.activityAccordionHeader}
+            onPress={() => setExpandedActivitySection(
+              expandedActivitySection === 'savedSearches' ? null : 'savedSearches'
+            )}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: expandedActivitySection === 'savedSearches' }}
+          >
+            <View style={styles.activityAccordionTitle}>
+              <View style={styles.activityAccordionIcon}>
+                <Ionicons name="bookmark-outline" size={18} color={themeColors.primary} />
+              </View>
+              <Text style={[styles.activityAccordionText, theme === 'dark' && styles.sectionTitleDark]}>
+                {t('saved_searches')}
+              </Text>
+            </View>
+            <View style={styles.activityAccordionTrailing}>
+              <Text style={styles.activityAccordionCount}>{savedSearches.length}</Text>
+              <Ionicons
+                name={expandedActivitySection === 'savedSearches' ? 'chevron-up' : 'chevron-down'}
+                size={19}
+                color={themeColors.onSurfaceMuted}
+              />
+            </View>
+          </TouchableOpacity>
+          {expandedActivitySection === 'savedSearches' && (
+            <View style={styles.activityAccordionContent}>
+              {savedSearches.length === 0 ? (
+                <Text style={[styles.emptyText, theme === 'dark' && styles.textMutedDark]}>{t('no_saved_search')}</Text>
+              ) : (
+                savedSearches.map(saved => (
+                  <View key={saved.id} style={[styles.savedSearchRow, theme === 'dark' && styles.savedSearchRowDark]}>
+                    <View style={styles.savedSearchInfo}>
+                      <Text style={[styles.savedSearchLabel, theme === 'dark' && styles.textLight]}>{saved.label}</Text>
+                      <Text style={[styles.savedSearchMeta, theme === 'dark' && styles.textMutedDark]}>
+                        {t('type_label')}: {saved.type === 'ALL' ? t('all_types') : tType(saved.type)}
+                      </Text>
+                    </View>
+                    <View style={styles.savedSearchActions}>
+                      <TouchableOpacity
+                        style={styles.savedSearchApply}
+                        onPress={() => applySavedSearch(saved.id)}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${t('saved_search_apply')}: ${saved.label}`}
+                      >
+                        <Ionicons name="arrow-forward" size={16} color={themeColors.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.savedSearchDelete}
+                        onPress={() => removeSavedSearch(saved.id)}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${t('saved_search_delete')}: ${saved.label}`}
+                      >
+                        <Ionicons name="trash" size={16} color={themeColors.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
+        </View>
+
+        <View style={[styles.section, theme === 'dark' && styles.sectionDark, styles.activityAccordion]}>
+          <TouchableOpacity
+            style={styles.activityAccordionHeader}
+            onPress={() => setExpandedActivitySection(
+              expandedActivitySection === 'searchHistory' ? null : 'searchHistory'
+            )}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: expandedActivitySection === 'searchHistory' }}
+          >
+            <View style={styles.activityAccordionTitle}>
+              <View style={styles.activityAccordionIcon}>
+                <Ionicons name="time-outline" size={18} color={themeColors.primary} />
+              </View>
+              <Text style={[styles.activityAccordionText, theme === 'dark' && styles.sectionTitleDark]}>
+                {t('profile_search_history')}
+              </Text>
+            </View>
+            <View style={styles.activityAccordionTrailing}>
+              <Text style={styles.activityAccordionCount}>{searchHistory.length}</Text>
+              <Ionicons
+                name={expandedActivitySection === 'searchHistory' ? 'chevron-up' : 'chevron-down'}
+                size={19}
+                color={themeColors.onSurfaceMuted}
+              />
+            </View>
+          </TouchableOpacity>
+          {expandedActivitySection === 'searchHistory' && (
+            <View style={styles.activityAccordionContent}>
+              {searchHistory.length > 0 && (
+                <TouchableOpacity
+                  style={styles.clearHistoryButton}
+                  onPress={clearSearchHistory}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="trash-outline" size={15} color={themeColors.danger} />
+                  <Text style={styles.clearText}>{t('profile_clear_history')}</Text>
+                </TouchableOpacity>
+              )}
+              {searchHistory.length === 0 ? (
+                <Text style={[styles.emptyText, theme === 'dark' && styles.textMutedDark]}>{t('profile_no_history')}</Text>
+              ) : (
+                searchHistory.map((query, index) => (
                   <TouchableOpacity
-                    style={styles.savedSearchApply}
-                    onPress={() => applySavedSearch(saved.id)}
-                    hitSlop={6}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${t('saved_search_apply')}: ${saved.label}`}
+                    key={`${query}-${index}`}
+                    style={[styles.historyRow, theme === 'dark' && styles.historyRowDark]}
+                    onPress={() => applySearchHistory(query)}
                   >
+                    <Text style={[styles.historyText, theme === 'dark' && styles.textLight]}>{query}</Text>
                     <Ionicons name="arrow-forward" size={16} color={themeColors.primary} />
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.savedSearchDelete}
-                    onPress={() => removeSavedSearch(saved.id)}
-                    hitSlop={6}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${t('saved_search_delete')}: ${saved.label}`}
-                  >
-                    <Ionicons name="trash" size={16} color={themeColors.danger} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
+                ))
+              )}
+            </View>
           )}
         </View>
 
-        {/* Search History */}
-        <View style={[styles.section, theme === 'dark' && styles.sectionDark]}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, styles.sectionTitleCompact, theme === 'dark' && styles.sectionTitleDark]}>{t('profile_search_history')}</Text>
-            {searchHistory.length > 0 && (
-              <TouchableOpacity onPress={clearSearchHistory}>
-                <Text style={styles.clearText}>{t('profile_clear_history')}</Text>
-              </TouchableOpacity>
+        <View style={[styles.section, theme === 'dark' && styles.sectionDark, styles.activityAccordion]}>
+          <TouchableOpacity
+            style={styles.activityAccordionHeader}
+            onPress={() => setExpandedActivitySection(
+              expandedActivitySection === 'recentViews' ? null : 'recentViews'
             )}
-          </View>
-          {searchHistory.length === 0 ? (
-            <Text style={[styles.emptyText, theme === 'dark' && styles.textMutedDark]}>{t('profile_no_history')}</Text>
-          ) : (
-            searchHistory.map((query, index) => (
-              <TouchableOpacity
-                key={`${query}-${index}`}
-                style={[styles.historyRow, theme === 'dark' && styles.historyRowDark]}
-                onPress={() => applySearchHistory(query)}
-              >
-                <Text style={[styles.historyText, theme === 'dark' && styles.textLight]}>{query}</Text>
-                <Ionicons name="arrow-forward" size={16} color={themeColors.primary} />
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
-
-        {/* Recent Views */}
-        <View style={[styles.section, theme === 'dark' && styles.sectionDark]}>
-          <Text style={[styles.sectionTitle, theme === 'dark' && styles.sectionTitleDark]}>{t('profile_recent_views')}</Text>
-          {recentViewedProperties.length === 0 ? (
-            <Text style={[styles.emptyText, theme === 'dark' && styles.textMutedDark]}>{t('profile_no_recent')}</Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardRow}>
-              {recentViewedProperties.map(property => (
-                <PropertyCard
-                  key={property.id}
-                  property={property}
-                  onPress={() => InteractionManager.runAfterInteractions(() => navigation.navigate('PropertyDetail', { propertyId: property.id }))}
-                  compact
-                />
-              ))}
-            </ScrollView>
-          )}
-        </View>
-
-        {/* Invite Friend */}
-        <View style={[styles.section, theme === 'dark' && styles.sectionDark]}>
-          <Text style={[styles.sectionTitle, theme === 'dark' && styles.sectionTitleDark]}>{t('profile_invite_friend')}</Text>
-          <TouchableOpacity style={styles.inviteButton} onPress={handleInvite}>
-            <Ionicons name="share-social" size={18} color={themeColors.white} />
-            <Text style={styles.inviteText}>{t('profile_invite_friend')}</Text>
+            accessibilityRole="button"
+            accessibilityState={{ expanded: expandedActivitySection === 'recentViews' }}
+          >
+            <View style={styles.activityAccordionTitle}>
+              <View style={styles.activityAccordionIcon}>
+                <Ionicons name="eye-outline" size={18} color={themeColors.primary} />
+              </View>
+              <Text style={[styles.activityAccordionText, theme === 'dark' && styles.sectionTitleDark]}>
+                {t('profile_recent_views')}
+              </Text>
+            </View>
+            <View style={styles.activityAccordionTrailing}>
+              <Text style={styles.activityAccordionCount}>{recentViewedProperties.length}</Text>
+              <Ionicons
+                name={expandedActivitySection === 'recentViews' ? 'chevron-up' : 'chevron-down'}
+                size={19}
+                color={themeColors.onSurfaceMuted}
+              />
+            </View>
           </TouchableOpacity>
-        </View>
-        {/* Theme */}
-        <View style={[styles.section, theme === 'dark' && styles.sectionDark]}>
-          <Text style={[styles.sectionTitle, theme === 'dark' && styles.sectionTitleDark]}>
-            {t('language')}
-          </Text>
-          <View style={styles.languageRow}>
-            {(['fr', 'en'] as const).map(option => (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  styles.languageChip,
-                  language === option && styles.languageChipActive,
-                  theme === 'dark' && language !== option && styles.languageChipDark,
-                ]}
-                onPress={() => setLanguage(option)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: language === option }}
-              >
-                <Text
-                  style={[
-                    styles.languageText,
-                    language === option && styles.languageTextActive,
-                    theme === 'dark' && language !== option && styles.languageTextDark,
-                  ]}
-                >
-                  {option === 'fr' ? 'Français' : 'English'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-        {/* Theme */}
-        <View style={[styles.section, theme === 'dark' && styles.sectionDark]}>
-          <Text style={[styles.sectionTitle, theme === 'dark' && styles.sectionTitleDark]}>{t('theme')}</Text>
-          <View style={styles.languageRow}>
-            <TouchableOpacity
-              style={[
-                styles.languageChip,
-                theme === 'light' && styles.languageChipActive,
-                theme === 'dark' && styles.languageChipDark,
-              ]}
-              onPress={() => setTheme('light')}
-            >
-              <Text
-                style={[
-                  styles.languageText,
-                  theme === 'light' && styles.languageTextActive,
-                  theme === 'dark' && styles.languageTextDark,
-                ]}
-              >
-                {t('theme_light')}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.languageChip,
-                theme === 'dark' && styles.languageChipActive,
-              ]}
-              onPress={() => setTheme('dark')}
-            >
-              <Text
-                style={[
-                  styles.languageText,
-                  theme === 'dark' && styles.languageTextActive,
-                ]}
-              >
-                {t('theme_dark')}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {expandedActivitySection === 'recentViews' && (
+            <View style={styles.activityAccordionContent}>
+              {recentViewedProperties.length === 0 ? (
+                <Text style={[styles.emptyText, theme === 'dark' && styles.textMutedDark]}>{t('profile_no_recent')}</Text>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardRow}>
+                  {recentViewedProperties.map(property => (
+                    <PropertyCard
+                      key={property.id}
+                      property={property}
+                      onPress={() => InteractionManager.runAfterInteractions(() => navigation.navigate('PropertyDetail', { propertyId: property.id }))}
+                      compact
+                    />
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
         </View>
 
         {/* About Section */}
@@ -1365,22 +1675,6 @@ const ProfileScreen: React.FC = () => {
             <Text style={[styles.legalText, theme === 'dark' && styles.textLight]}>{t('terms')}</Text>
             <Ionicons name="chevron-forward" size={20} color={themeColors.onSurfaceMuted} />
           </TouchableOpacity>
-        </View>
-
-        {/* Social Links */}
-        <View style={[styles.section, theme === 'dark' && styles.sectionDark]}>
-          <Text style={[styles.sectionTitle, theme === 'dark' && styles.sectionTitleDark]}>{t('follow_us')}</Text>
-          <View style={styles.socialRow}>
-            <TouchableOpacity style={styles.socialButton}>
-              <Ionicons name="logo-facebook" size={24} color={themeColors.socialFacebook} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.socialButton}>
-              <Ionicons name="logo-instagram" size={24} color={themeColors.socialInstagram} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.socialButton}>
-              <Ionicons name="logo-twitter" size={24} color={themeColors.socialTwitter} />
-            </TouchableOpacity>
-          </View>
         </View>
 
         <TouchableOpacity
@@ -1427,6 +1721,170 @@ const ProfileScreen: React.FC = () => {
             onClose={() => setLegalModal(null)}
           />
         )}
+      </Modal>
+
+      <Modal
+        visible={isEditingProfile}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsEditingProfile(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.profileModalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={[styles.profileModalCard, { marginTop: insets.top + 16, marginBottom: insets.bottom + 16 }]}>
+            <View style={styles.profileModalHeader}>
+              <View style={styles.profileModalHeading}>
+                <Text style={styles.profileModalTitle}>{t('profile_edit_title')}</Text>
+                <Text style={styles.profileModalSubtitle}>{t('profile_menu_account_description')}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.profileModalClose}
+                onPress={() => setIsEditingProfile(false)}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile_cancel_action')}
+              >
+                <Ionicons name="close" size={21} color={themeColors.onSurface} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.profileEditLabel}>{t('profile_edit_name_label')}</Text>
+            <TextInput
+              style={styles.profileEditInput}
+              value={profileName}
+              onChangeText={setProfileName}
+              autoCapitalize="words"
+              accessibilityLabel={t('profile_edit_name_label')}
+            />
+            <Text style={styles.profileEditLabel}>{t('profile_edit_phone_label')}</Text>
+            <TextInput
+              style={styles.profileEditInput}
+              value={profilePhone}
+              onChangeText={setProfilePhone}
+              keyboardType="phone-pad"
+              accessibilityLabel={t('profile_edit_phone_label')}
+            />
+            <View style={styles.profileModalActions}>
+              <TouchableOpacity
+                style={styles.profileModalCancel}
+                onPress={() => setIsEditingProfile(false)}
+                disabled={profileSaving}
+                accessibilityRole="button"
+              >
+                <Text style={styles.profileModalCancelText}>{t('profile_cancel_action')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.profileModalSave}
+                onPress={() => void handleProfileSave()}
+                disabled={profileSaving}
+                accessibilityRole="button"
+              >
+                {profileSaving
+                  ? <ActivityIndicator size="small" color={themeColors.onBrand} />
+                  : <Ionicons name="checkmark" size={18} color={themeColors.onBrand} />}
+                <Text style={styles.profileModalSaveText}>
+                  {profileSaving ? t('profile_please_wait') : t('profile_save_action')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={themePreview !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setThemePreview(null)}
+      >
+        <View style={styles.profileModalBackdrop}>
+          <View style={[styles.profileModalCard, styles.profileThemeModal]}>
+            <View style={styles.profileModalHeader}>
+              <View style={styles.profileModalHeading}>
+                <Text style={styles.profileModalTitle}>{t('profile_theme_preview_title')}</Text>
+                <Text style={styles.profileModalSubtitle}>{t('profile_theme_preview_description')}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.profileModalClose}
+                onPress={() => setThemePreview(null)}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile_cancel_action')}
+              >
+                <Ionicons name="close" size={21} color={themeColors.onSurface} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.profileThemeOptions}>
+              {themeOptions.map(option => (
+                <TouchableOpacity
+                  key={option.mode}
+                  style={[
+                    styles.profileThemeOption,
+                    themePreview === option.mode && styles.profileThemeOptionSelected,
+                  ]}
+                  onPress={() => setThemePreview(option.mode)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: themePreview === option.mode }}
+                >
+                  <View style={styles.profileThemeSwatches}>
+                    {option.colors.map(color => (
+                      <View key={color} style={[styles.profileThemeSwatch, { backgroundColor: color }]} />
+                    ))}
+                  </View>
+                  <View style={styles.profileThemeOptionCopy}>
+                    <Text style={styles.profileThemeOptionTitle}>{option.title}</Text>
+                    <Text style={styles.profileThemeOptionDescription}>{option.description}</Text>
+                  </View>
+                  {themePreview === option.mode && (
+                    <Ionicons name="checkmark-circle" size={20} color={themeColors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+            {themePreview && (
+              <View
+                style={[
+                  styles.profileThemeSample,
+                  { backgroundColor: THEME_PALETTES[themePreview].background, borderColor: THEME_PALETTES[themePreview].border },
+                ]}
+              >
+                <View style={[styles.profileThemeSampleMark, { backgroundColor: THEME_PALETTES[themePreview].primaryContainer }]}>
+                  <Ionicons name="home" size={17} color={THEME_PALETTES[themePreview].primary} />
+                </View>
+                <View style={styles.profileThemeSampleCopy}>
+                  <Text style={[styles.profileThemeSampleTitle, { color: THEME_PALETTES[themePreview].onSurface }]}>
+                    ImoPrestige
+                  </Text>
+                  <Text style={[styles.profileThemeSampleSubtitle, { color: THEME_PALETTES[themePreview].onSurfaceMuted }]}>
+                    {t('profile_theme_selected')}
+                  </Text>
+                </View>
+                <View style={[styles.profileThemeSampleButton, { backgroundColor: THEME_PALETTES[themePreview].primary }]}>
+                  <Ionicons name="checkmark" size={15} color={THEME_PALETTES[themePreview].onBrand} />
+                </View>
+              </View>
+            )}
+            <View style={styles.profileModalActions}>
+              <TouchableOpacity
+                style={styles.profileModalCancel}
+                onPress={() => setThemePreview(null)}
+                accessibilityRole="button"
+              >
+                <Text style={styles.profileModalCancelText}>{t('profile_cancel_action')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.profileModalSave}
+                onPress={() => {
+                  if (themePreview) setTheme(themePreview);
+                  setThemePreview(null);
+                }}
+                accessibilityRole="button"
+              >
+                <Ionicons name="color-palette-outline" size={17} color={themeColors.onBrand} />
+                <Text style={styles.profileModalSaveText}>{t('profile_theme_apply')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </>
   );
@@ -1510,18 +1968,6 @@ const baseStyles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 4,
   },
-  guestLanguageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 18,
-  },
-  guestLanguageLabel: {
-    flex: 1,
-    color: COLORS.onSurfaceMuted,
-    fontSize: 12,
-    fontWeight: '700',
-  },
   authTitle: {
     fontSize: 18,
     fontWeight: '800',
@@ -1533,54 +1979,585 @@ const baseStyles = StyleSheet.create({
     marginTop: 3,
   },
   profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
     marginHorizontal: 16,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 14,
-    borderRadius: 22,
+    padding: 18,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  profilePremiumCard: {
+    overflow: 'hidden',
+    marginHorizontal: 16,
+    marginTop: 6,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    elevation: 4,
+  },
+  profileCover: {
+    height: 146,
+    justifyContent: 'flex-end',
+    backgroundColor: COLORS.premiumDarkBlue,
+  },
+  profileCoverImage: {
+    borderTopLeftRadius: 23,
+    borderTopRightRadius: 23,
+  },
+  profileCoverOverlay: {
+    minHeight: 146,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    backgroundColor: COLORS.overlayNavy70,
+  },
+  profileCoverBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  profileCoverBrandMark: {
+    width: 29,
+    height: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    backgroundColor: COLORS.gold,
+  },
+  profileCoverBrandText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.25,
+  },
+  profileCoverSubtitle: {
+    marginTop: 7,
+    color: COLORS.overlayWhite90,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  profileIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+    paddingHorizontal: 16,
+    paddingTop: 15,
+    paddingBottom: 10,
+  },
+  profileAvatarLarge: {
+    width: 66,
+    height: 66,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+    borderRadius: 33,
+    borderWidth: 3,
+    borderColor: COLORS.gold,
+    backgroundColor: COLORS.primaryContainer,
+  },
+  profileAvatarImage: {
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
+    borderRadius: 33,
+  },
+  profileIdentityCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  profileNameLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  profileVerifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: COLORS.successContainer,
+  },
+  profileVerifiedText: {
+    color: COLORS.onSuccessContainer,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  profileIdentityDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: COLORS.onSurfaceSoft,
+  },
+  profileRegionText: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  profileEditButton: {
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 15,
+    borderRadius: 13,
+    backgroundColor: COLORS.brand,
+  },
+  profileEditButtonText: {
+    color: COLORS.onBrand,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  profileStatGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginHorizontal: 16,
+    marginTop: 13,
+  },
+  profileStatCard: {
+    width: '48%',
+    minHeight: 104,
+    justifyContent: 'space-between',
+    padding: 13,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.045,
     shadowRadius: 8,
     elevation: 1,
+  },
+  profileStatTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  profileStatIcon: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 11,
+    backgroundColor: COLORS.primaryContainer,
+  },
+  profileStatValue: {
+    marginTop: 8,
+    color: COLORS.onSurface,
+    fontSize: 21,
+    fontWeight: '800',
+  },
+  profileStatLabel: {
+    marginTop: 2,
+    color: COLORS.onSurfaceMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  profileMenuSection: {
+    paddingTop: 16,
+    paddingBottom: 5,
+  },
+  profileMenuSubtitle: {
+    marginTop: -8,
+    marginBottom: 6,
+    color: COLORS.onSurfaceMuted,
+    fontSize: 12,
+  },
+  profileMenuList: {
+    marginTop: 3,
+  },
+  profileMenuRow: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+  },
+  profileMenuIcon: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 13,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  profileMenuCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  profileMenuTitle: {
+    color: COLORS.onSurface,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  profileMenuDescription: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 11,
+  },
+  profileMenuCount: {
+    minWidth: 24,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    overflow: 'hidden',
+    borderRadius: 999,
+    backgroundColor: COLORS.primaryContainer,
+    color: COLORS.onPrimaryContainer,
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  profileFavoritesEmpty: {
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+  },
+  profileFavoritesEmptyIcon: {
+    width: 46,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 23,
+    backgroundColor: COLORS.primaryContainer,
+  },
+  profileFavoritesEmptyTitle: {
+    marginTop: 9,
+    color: COLORS.onSurface,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  profileFavoritesEmptyDescription: {
+    marginTop: 4,
+    color: COLORS.onSurfaceMuted,
+    textAlign: 'center',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  profileModalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    backgroundColor: COLORS.scrimStrong,
+  },
+  profileModalCard: {
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
+    padding: 19,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  profileModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 18,
+  },
+  profileModalHeading: {
+    flex: 1,
+    gap: 4,
+  },
+  profileModalTitle: {
+    color: COLORS.onSurface,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  profileModalSubtitle: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  profileModalClose: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 19,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  profileEditLabel: {
+    marginBottom: 6,
+    color: COLORS.onSurfaceMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  profileEditInput: {
+    minHeight: 48,
+    marginBottom: 14,
+    paddingHorizontal: 13,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: 12,
+    backgroundColor: COLORS.surfaceAlt,
+    color: COLORS.onSurface,
+    fontSize: 14,
+  },
+  profileModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 6,
+  },
+  profileModalCancel: {
+    minHeight: 46,
+    minWidth: 92,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 13,
+    borderRadius: 12,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  profileModalCancelText: {
+    color: COLORS.onSurface,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  profileModalSave: {
+    minHeight: 46,
+    minWidth: 130,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: COLORS.brand,
+  },
+  profileModalSaveText: {
+    color: COLORS.onBrand,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  profileThemeModal: {
+    maxHeight: '90%',
+  },
+  profileThemeOptions: {
+    gap: 7,
+  },
+  profileThemeOption: {
+    minHeight: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 13,
+    backgroundColor: COLORS.surface,
+  },
+  profileThemeOptionSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primaryContainer,
+  },
+  profileThemeSwatches: {
+    flexDirection: 'row',
+    width: 52,
+  },
+  profileThemeSwatch: {
+    width: 22,
+    height: 22,
+    marginRight: -5,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: COLORS.surface,
+  },
+  profileThemeOptionCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  profileThemeOptionTitle: {
+    color: COLORS.onSurface,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  profileThemeOptionDescription: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 10,
+  },
+  profileThemeSample: {
+    minHeight: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 13,
+    padding: 11,
+    borderWidth: 1,
+    borderRadius: 14,
+  },
+  profileThemeSampleMark: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 13,
+  },
+  profileThemeSampleCopy: {
+    flex: 1,
+  },
+  profileThemeSampleTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  profileThemeSampleSubtitle: {
+    marginTop: 3,
+    fontSize: 10,
+  },
+  profileThemeSampleButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+  },
+  profileAvatar: {
+    width: 58,
+    height: 58,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+    backgroundColor: COLORS.primaryContainer,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+  },
+  profileAvatarText: {
+    color: COLORS.primary,
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  profileAvatarVerified: {
+    position: 'absolute',
+    right: -3,
+    bottom: -3,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.success,
+    borderWidth: 2,
+    borderColor: COLORS.surface,
+  },
+  profileUserDetails: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  profileUserName: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.onSurface,
+  },
+  profileUserEmail: {
+    fontSize: 12,
+    color: COLORS.onSurfaceMuted,
+  },
+  profileRoleBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primaryContainer,
+  },
+  profileRoleText: {
+    color: COLORS.primary,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  profileHeaderAction: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primaryContainer,
   },
   profileHeroCard: {
     flexDirection: 'row',
     alignItems: 'stretch',
     marginHorizontal: SPACING.lg,
-    marginTop: SPACING.md,
+    marginTop: SPACING.sm,
     marginBottom: SPACING.md,
-    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: SPACING.sm,
     backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS.xl,
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: COLORS.shadow,
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
     zIndex: 1,
   },
   profileHeroMetric: {
     flex: 1,
+    minHeight: 100,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.xs,
+    gap: 5,
+    paddingHorizontal: 4,
+    borderRadius: RADIUS.lg,
+  },
+  profileHeroIcon: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.md,
   },
   profileHeroValue: {
-    ...typography.subtitle,
+    fontSize: 19,
+    fontWeight: '900',
     color: COLORS.onSurface,
   },
   profileHeroLabel: {
-    ...typography.caption,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '700',
     color: COLORS.onSurfaceMuted,
     textAlign: 'center',
+    minHeight: 26,
   },
   profileHeroDivider: {
     width: 1,
     alignSelf: 'center',
-    height: '64%',
+    height: '58%',
     backgroundColor: COLORS.border,
   },
   profileBrand: {
@@ -2305,6 +3282,64 @@ const baseStyles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderColor: COLORS.border,
   },
+  activityAccordion: {
+    paddingVertical: 8,
+  },
+  activityAccordionHeader: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  activityAccordionTitle: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  activityAccordionIcon: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primaryContainer,
+  },
+  activityAccordionText: {
+    flex: 1,
+    color: COLORS.onSurface,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  activityAccordionTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  activityAccordionCount: {
+    minWidth: 26,
+    height: 26,
+    paddingHorizontal: 7,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    overflow: 'hidden',
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceAlt,
+    color: COLORS.onSurfaceMuted,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  activityAccordionContent: {
+    paddingTop: 12,
+  },
+  clearHistoryButton: {
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+  },
   cardRow: {
     paddingRight: 16,
     gap: 12,
@@ -2388,20 +3423,6 @@ const baseStyles = StyleSheet.create({
   },
   statusSubtitleDark: {
     color: COLORS.onSurfaceMuted,
-  },
-  inviteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  inviteText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.white,
   },
   propertyRow: {
     flexDirection: 'row',
@@ -2662,7 +3683,6 @@ const baseStyles = StyleSheet.create({
     color: COLORS.onSurfaceMuted,
     marginTop: 4,
   },
-
   authButtonDisabled: {
     opacity: 0.6,
   },

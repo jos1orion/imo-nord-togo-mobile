@@ -256,8 +256,6 @@ const ListingsScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         data={hydrated ? neighborhoods : []}
         keyExtractor={name => name}
-        numColumns={2}
-        columnWrapperStyle={styles.alertGrid}
         renderItem={({ item: name }) => {
           const enabled = neighborhoodAlerts.some(
             neighborhood => neighborhood.toLowerCase() === name.toLowerCase()
@@ -265,16 +263,27 @@ const ListingsScreen: React.FC = () => {
           return (
             <TouchableOpacity
               style={[styles.alertChip, enabled && styles.alertChipActive]}
-              accessibilityRole="button"
+              activeOpacity={0.78}
+              accessibilityRole="checkbox"
               accessibilityState={{ selected: enabled }}
               onPress={() => toggleNeighborhoodAlert(name)}
             >
-              <Ionicons
-                name={enabled ? 'notifications' : 'notifications-outline'}
-                size={14}
-                color={enabled ? themeColors.white : themeColors.onSurfaceMuted}
-              />
-              <Text style={[styles.alertText, enabled && styles.alertTextActive]}>{name}</Text>
+              <View style={[styles.alertLocationIcon, enabled && styles.alertLocationIconActive]}>
+                <Ionicons
+                  name="location"
+                  size={17}
+                  color={enabled ? themeColors.primary : themeColors.onSurfaceMuted}
+                />
+              </View>
+              <Text style={[styles.alertText, enabled && styles.alertTextActive]} numberOfLines={1}>
+                {name}
+              </Text>
+              <Text style={[styles.alertState, enabled && styles.alertStateActive]}>
+                {enabled ? t('profile_alert_enabled') : t('profile_alert_enable')}
+              </Text>
+              <View style={[styles.alertCheck, enabled && styles.alertCheckActive]}>
+                {enabled && <Ionicons name="checkmark" size={13} color={themeColors.white} />}
+              </View>
             </TouchableOpacity>
           );
         }}
@@ -498,7 +507,17 @@ const ListingsScreen: React.FC = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('profile_neighborhood_alerts')}</Text>
+          <View style={styles.alertSectionHeading}>
+            <View style={styles.alertSectionTitleRow}>
+              <View style={styles.alertSectionIcon}>
+                <Ionicons name="notifications-outline" size={18} color={themeColors.primary} />
+              </View>
+              <Text style={styles.sectionTitle}>{t('profile_neighborhood_alerts')}</Text>
+            </View>
+            <View style={styles.alertCount}>
+              <Text style={styles.alertCountText}>{neighborhoodAlerts.length}</Text>
+            </View>
+          </View>
           <Text style={styles.helperText}>{t('profile_alert_hint')}</Text>
         </View>
           </>
@@ -739,39 +758,113 @@ const baseStyles = StyleSheet.create({
     color: COLORS.onSurfaceMuted,
     marginBottom: 10,
   },
-  alertGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
   alertSkeletonGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 10,
   },
   alertSkeleton: {
-    width: '47%',
-    height: 34,
+    width: '100%',
+    height: 62,
   },
   alertChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.surfaceAlt,
-    borderRadius: 16,
+    gap: 10,
+    width: '100%',
+    minHeight: 60,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
   alertChipActive: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primaryContainer,
+    borderColor: COLORS.primary,
+  },
+  alertLocationIcon: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  alertLocationIconActive: {
+    backgroundColor: COLORS.surface,
   },
   alertText: {
-    fontSize: 12,
-    color: COLORS.onSurfaceMuted,
-    fontWeight: '600',
+    flexGrow: 1,
+    flexShrink: 1,
+    fontSize: 13,
+    lineHeight: 17,
+    color: COLORS.onSurface,
+    fontWeight: '700',
   },
   alertTextActive: {
-    color: COLORS.white,
+    color: COLORS.primary,
+  },
+  alertState: {
+    color: COLORS.onSurfaceMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  alertStateActive: {
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  alertCheck: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.full,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.surface,
+  },
+  alertCheckActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary,
+  },
+  alertSectionHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  alertSectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    flex: 1,
+  },
+  alertSectionIcon: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primaryContainer,
+  },
+  alertCount: {
+    minWidth: 30,
+    height: 30,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primaryContainer,
+  },
+  alertCountText: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: '800',
   },
 });
 

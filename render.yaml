@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: imo-prestige-admin
+    runtime: node
+    rootDir: admin
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm run start
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: PROPERTY_STORAGE_CLEANUP_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production

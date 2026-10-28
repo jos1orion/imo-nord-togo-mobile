@@ -23,6 +23,31 @@ const noopEmitter = {
   addListener: () => ({ remove: () => {} }),
 };
 
+type BrowserSpeechRecognitionResult = ArrayLike<{ transcript: string }> & {
+  isFinal?: boolean;
+};
+
+type BrowserSpeechRecognitionEvent = {
+  results: ArrayLike<BrowserSpeechRecognitionResult>;
+};
+
+type BrowserSpeechRecognition = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+
+type BrowserSpeechRecognitionWindow = Window & {
+  SpeechRecognition?: new () => BrowserSpeechRecognition;
+  webkitSpeechRecognition?: new () => BrowserSpeechRecognition;
+};
+
 const loadSpeechRecognitionModule = () => {
   try {
     // Can throw at runtime if the native module isn't present (e.g. Expo Go).
@@ -61,6 +86,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   const translateX = useRef(new Animated.Value(0)).current;
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
   const isListeningRef = useRef(false);
+  const browserSpeechRef = useRef<BrowserSpeechRecognition | null>(null);
 
   useEffect(() => {
     isListeningRef.current = isListening;
@@ -70,7 +96,12 @@ const SearchBar: React.FC<SearchBarProps> = ({
     let mounted = true;
     const checkAvailability = () => {
       if (Platform.OS === 'web') {
-        if (mounted) setVoiceAvailable(false);
+        const speechWindow = window as BrowserSpeechRecognitionWindow;
+        if (mounted) {
+          setVoiceAvailable(Boolean(
+            speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition
+          ));
+        }
         return;
       }
       if (!speechModule) {
@@ -99,6 +130,8 @@ const SearchBar: React.FC<SearchBarProps> = ({
           /* ignore */
         }
       }
+      browserSpeechRef.current?.abort();
+      browserSpeechRef.current = null;
     };
   }, [speechModule]);
 
@@ -177,7 +210,55 @@ const SearchBar: React.FC<SearchBarProps> = ({
   };
 
   const toggleVoiceSearch = async () => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web') {
+      const speechWindow = window as BrowserSpeechRecognitionWindow;
+      const Recognition =
+        speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+      if (!Recognition) {
+        Alert.alert(t('voice_search_title'), t('voice_search_unavailable'));
+        return;
+      }
+      if (browserSpeechRef.current && isListening) {
+        browserSpeechRef.current.stop();
+        return;
+      }
+
+      try {
+        const recognition = new Recognition();
+        recognition.lang = language === 'fr' ? 'fr-FR' : 'en-US';
+        recognition.interimResults = true;
+        recognition.continuous = false;
+        recognition.onresult = event => {
+          const result = event.results[event.results.length - 1];
+          const transcript = result?.[0]?.transcript?.trim() ?? '';
+          if (!transcript) return;
+          onChangeText(transcript);
+          if (result.isFinal) onSearch?.();
+        };
+        recognition.onerror = event => {
+          browserSpeechRef.current = null;
+          setIsListening(false);
+          Alert.alert(
+            t('voice_search_title'),
+            event.error === 'not-allowed'
+              ? t('voice_microphone_denied')
+              : t('voice_search_start_error')
+          );
+        };
+        recognition.onend = () => {
+          browserSpeechRef.current = null;
+          setIsListening(false);
+        };
+        browserSpeechRef.current = recognition;
+        recognition.start();
+        setIsListening(true);
+      } catch {
+        browserSpeechRef.current = null;
+        setIsListening(false);
+        Alert.alert(t('voice_search_title'), t('voice_search_start_error'));
+      }
+      return;
+    }
     if (!speechModule) {
       Alert.alert(
         t('voice_search_title'),
@@ -248,11 +329,11 @@ const SearchBar: React.FC<SearchBarProps> = ({
           </Animated.View>
         )}
       </View>
-      {Platform.OS !== 'web' && (
+      {(Platform.OS !== 'web' || voiceAvailable) && (
         <TouchableOpacity
           onPress={toggleVoiceSearch}
           style={[styles.voiceButton, voiceButtonDisabled && styles.voiceButtonDisabled]}
-          disabled={voiceButtonDisabled}
+          disabled={Platform.OS !== 'web' && voiceButtonDisabled}
         >
           <Ionicons
             name={isListening ? 'mic' : 'mic-outline'}
@@ -280,15 +361,19 @@ const baseStyles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    height: 48,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    height: 54,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   searchButton: {
-    paddingRight: 8,
+    width: 38,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
   },
   inputWrap: {
     flex: 1,
@@ -309,8 +394,11 @@ const baseStyles = StyleSheet.create({
     color: COLORS.onSurfaceSoft,
   },
   voiceButton: {
-    padding: 4,
-    marginRight: 6,
+    width: 38,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 2,
   },
   voiceButtonDisabled: {
     opacity: 0.5,

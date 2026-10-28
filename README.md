@@ -21,9 +21,11 @@ Application mobile pour la gestion immobilière à Kara, Togo.
 
 ## 🚀 Installation
 
+Pré-requis : Node.js `20.19.4` ou plus récent (une version LTS est recommandée).
+
 ```bash
 # Installer les dépendances
-npm install
+npm ci
 
 # Lancer en développement
 npm run mobile:start

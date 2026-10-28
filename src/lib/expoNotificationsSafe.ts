@@ -1,6 +1,6 @@
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { requireOptionalNativeModule } from 'expo-modules-core';
-import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
 
 /**
  * Vérifie si les modules natifs nécessaires aux notifications
@@ -18,6 +18,25 @@ function hasPushNativeStack(): boolean {
  */
 function hasNotificationScheduler(): boolean {
   return requireOptionalNativeModule('ExpoNotificationScheduler') != null;
+}
+
+/**
+ * Android's expo-notifications entry point loads its topic module eagerly.
+ * Older Expo Go and development builds do not include that native module.
+ */
+async function loadNotifications() {
+  if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+    return null;
+  }
+
+  if (
+    Platform.OS === 'android' &&
+    requireOptionalNativeModule('ExpoTopicSubscriptionModule') == null
+  ) {
+    return null;
+  }
+
+  return import('expo-notifications');
 }
 
 /**
@@ -47,7 +66,10 @@ export async function safeScheduleLocalNotification(
   }
 
   try {
-    await Notifications.scheduleNotificationAsync({
+    const notifications = await loadNotifications();
+    if (!notifications) return;
+
+    await notifications.scheduleNotificationAsync({
       content: {
         title,
         body,
@@ -74,12 +96,15 @@ export async function safeRegisterExpoPushToken(
 
   let token: string | undefined;
   try {
-    const existing = await Notifications.getPermissionsAsync();
+    const notifications = await loadNotifications();
+    if (!notifications) return;
+
+    const existing = await notifications.getPermissionsAsync();
 
     let status = existing.status;
 
     if (status !== 'granted') {
-      const request = await Notifications.requestPermissionsAsync();
+      const request = await notifications.requestPermissionsAsync();
       status = request.status;
     }
 
@@ -89,7 +114,7 @@ export async function safeRegisterExpoPushToken(
 
     const projectId = resolveProjectId();
 
-    const tokenResponse = await Notifications.getExpoPushTokenAsync(
+    const tokenResponse = await notifications.getExpoPushTokenAsync(
       projectId ? { projectId } : {}
     );
 

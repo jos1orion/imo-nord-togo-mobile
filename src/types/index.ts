@@ -88,6 +88,7 @@ export interface User {
   name: string;
   email: string;
   phone: string;
+  avatarUrl?: string;
   password?: string;
   verified: boolean;
   isAdmin?: boolean;

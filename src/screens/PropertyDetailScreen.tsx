@@ -10,7 +10,7 @@ import {
   Dimensions,
   Linking,
   StatusBar,
-  Share,
+  Platform,
   InteractionManager,
 } from 'react-native';
 import { AppAlert as Alert } from '../components/ui/appAlertService';
@@ -19,6 +19,8 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useApp } from '../context/AppContext';
+import { shareContent } from '../lib/shareContent';
+import { logger } from '../lib/logger';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { PROPERTY_TYPE_COLORS } from '../types';
 import { formatPrice } from '../utils/format';
@@ -193,14 +195,27 @@ const PropertyDetailScreen: React.FC = () => {
   };
 
   const handleShare = async () => {
-    const locationLabel = [property.neighborhood, property.location].filter(Boolean).join(', ');
-    const shareUrl = `https://imo-nord-togo-mobile.vercel.app/property/${encodeURIComponent(property.id)}`;
-    await Share.share({
-      title: property.title,
-      message: `${property.title} - ${formatPrice(property.price)} - ${locationLabel}\n${shareUrl}`,
-      url: shareUrl,
-    });
-    trackShare(property.id);
+    try {
+      const locationLabel = [property.neighborhood, property.location].filter(Boolean).join(', ');
+      const shareUrl = `${Platform.OS === 'web' && typeof window !== 'undefined'
+        ? window.location.origin
+        : 'https://imo-nord-togo-mobile.vercel.app'}/property/${encodeURIComponent(property.id)}`;
+      const result = await shareContent({
+        title: property.title,
+        message: `${property.title} - ${formatPrice(property.price)} - ${locationLabel}\n${shareUrl}`,
+        url: shareUrl,
+      });
+      if (result !== 'cancelled') {
+        if (result === 'copied') Alert.alert(t('success'), t('share_copied'));
+        trackShare(property.id);
+      }
+    } catch (error) {
+      logger.error('Unable to share property.', error);
+      Alert.alert(
+        t('error'),
+        error instanceof Error ? error.message : t('property_link_unavailable')
+      );
+    }
   };
 
   const handleGoBack = () => {
@@ -645,13 +660,13 @@ const baseStyles = StyleSheet.create({
     marginTop: 12,
   },
   imageContainer: {
-    height: 280,
+    height: 310,
     position: 'relative',
     backgroundColor: COLORS.onSurface,
   },
   image: {
     width,
-    height: 280,
+    height: 310,
     resizeMode: 'cover',
   },
   imageDots: {
@@ -787,24 +802,24 @@ const baseStyles = StyleSheet.create({
   content: {
     flex: 1,
     backgroundColor: COLORS.background,
-    marginTop: -24,
+    marginTop: -22,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 12,
   },
   detailCard: {
     marginHorizontal: 16,
-    marginTop: 4,
+    marginTop: 8,
     backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.xl,
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: COLORS.shadow,
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
   detailHeader: {
     flexDirection: 'row',
@@ -1140,12 +1155,18 @@ const baseStyles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 16,
-    paddingBottom: 32,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
     backgroundColor: COLORS.surface,
     borderTopWidth: 1,
-    borderTopColor: COLORS.surfaceAlt,
+    borderTopColor: COLORS.border,
     gap: 10,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 8,
   },
   shareButton: {
     flex: 1,

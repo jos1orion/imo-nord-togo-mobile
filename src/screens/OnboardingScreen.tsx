@@ -9,14 +9,15 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
-import { useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { safeImpactLight, safeNotificationSuccess, safeSelection } from '../lib/expoHapticsSafe';
 import type { TranslationKey } from '../i18n';
 import COLORS from '../theme/colors';
 import { typography } from '../theme/typography';
-import { RADIUS, SPACING } from '../theme/spacing';
+import { SPACING } from '../theme/spacing';
 import PrimaryButton from '../components/ui/PrimaryButton';
 
 const { width } = Dimensions.get('window');
@@ -26,14 +27,23 @@ type Props = {
 };
 
 const SLIDES: { title: TranslationKey; body: TranslationKey }[] = [
+  { title: 'onboarding_welcome_title', body: 'onboarding_welcome_body' },
   { title: 'onboarding_1_title', body: 'onboarding_1_body' },
   { title: 'onboarding_2_title', body: 'onboarding_2_body' },
   { title: 'onboarding_3_title', body: 'onboarding_3_body' },
 ];
 
+const SLIDE_ICONS: (keyof typeof Ionicons.glyphMap)[] = [
+  'home',
+  'search',
+  'camera',
+  'chatbubbles',
+];
+
 const OnboardingScreen: React.FC<Props> = ({ onComplete }) => {
   const styles = useThemedStyles(baseStyles);
   const { t, theme } = useApp();
+  const colors = useThemeColors();
   const isDark = theme === 'dark';
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
@@ -84,6 +94,9 @@ const OnboardingScreen: React.FC<Props> = ({ onComplete }) => {
       >
         {SLIDES.map((slide, index) => (
           <View key={slide.title} style={[styles.slide, { width }]}>
+            <View style={styles.heroIcon}>
+              <Ionicons name={SLIDE_ICONS[index]} size={38} color={theme === 'light' ? '#A04000' : colors.gold} />
+            </View>
             <Text style={[styles.step, isDark && styles.stepDark]}>{`${index + 1}/${SLIDES.length}`}</Text>
             <Text style={[styles.title, isDark && styles.titleDark]}>{t(slide.title)}</Text>
             <Text style={[styles.body, isDark && styles.bodyDark]}>{t(slide.body)}</Text>
@@ -127,6 +140,17 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 28,
     justifyContent: 'center',
     minHeight: 320,
+  },
+  heroIcon: {
+    width: 82,
+    height: 82,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#A0400014',
+    borderWidth: 1,
+    borderColor: '#A0400030',
+    marginBottom: 28,
   },
   step: {
     fontSize: 13,

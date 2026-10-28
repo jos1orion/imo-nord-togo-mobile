@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -32,9 +32,47 @@ const MessagesScreen = () => {
   const { chats, currentUser, users, t, language, hydrated } = useApp();
   const navigation = useNavigation<MessagesScreenNavigationProp>();
   const insets = useSafeAreaInsets();
+  const canContactSupport = currentUser?.role === 'AGENT';
+  const [expandedFaqIndex, setExpandedFaqIndex] = useState<number | null>(null);
 
   const userChats = chats.filter(chat =>
     currentUser && chat.participants.includes(currentUser.id)
+  );
+  const faqItems = [
+    { question: t('support_faq_publish_question'), answer: t('support_faq_publish_answer') },
+    { question: t('support_faq_review_question'), answer: t('support_faq_review_answer') },
+    { question: t('support_faq_contact_question'), answer: t('support_faq_contact_answer') },
+  ];
+  const faqSection = (
+    <View style={styles.faqSection}>
+      <View style={styles.sectionHeading}>
+        <View style={styles.sectionHeadingIcon}>
+          <Ionicons name="help-circle-outline" size={18} color={themeColors.primary} />
+        </View>
+        <Text style={styles.sectionTitle}>{t('support_faq_title')}</Text>
+      </View>
+      {faqItems.map((item, index) => {
+        const expanded = expandedFaqIndex === index;
+        return (
+          <View key={item.question} style={styles.faqItem}>
+            <TouchableOpacity
+              style={styles.faqQuestion}
+              onPress={() => setExpandedFaqIndex(expanded ? null : index)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+            >
+              <Text style={styles.faqQuestionText}>{item.question}</Text>
+              <Ionicons
+                name={expanded ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color={themeColors.onSurfaceMuted}
+              />
+            </TouchableOpacity>
+            {expanded && <Text style={styles.faqAnswer}>{item.answer}</Text>}
+          </View>
+        );
+      })}
+    </View>
   );
 
   const handleOpenChat = (chat: typeof userChats[0]) => {
@@ -104,6 +142,23 @@ const MessagesScreen = () => {
     );
   };
 
+  const inboxHeader = (
+    <View style={styles.content}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 12 }]}>
+        <Text style={styles.title}>{t('messages_inbox_title')}</Text>
+      </View>
+      <View style={[styles.conversationsHeading, styles.conversationsTitle]}>
+        <Text style={styles.sectionTitle}>{t('messages_conversations_title')}</Text>
+        {userChats.length > 0 && (
+          <View style={styles.conversationCount}>
+            <Text style={styles.conversationCountText}>{userChats.length}</Text>
+          </View>
+        )}
+      </View>
+      {faqSection}
+    </View>
+  );
+
   const supportHeader = (
     <View style={styles.content}>
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 12 }]}>
@@ -126,6 +181,22 @@ const MessagesScreen = () => {
         <Text style={styles.heroTitle}>{t('support_heading')}</Text>
         <Text style={styles.heroDescription}>{t('support_description')}</Text>
       </View>
+
+        <TouchableOpacity
+          style={styles.supportChatButton}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          onPress={() => navigation.navigate('AgentSupportChat')}
+        >
+          <View style={styles.supportChatIcon}>
+            <Ionicons name="chatbubble-ellipses" size={20} color={themeColors.white} />
+          </View>
+          <View style={styles.supportChatCopy}>
+            <Text style={styles.supportChatTitle}>{t('support_agent_start_chat')}</Text>
+            <Text style={styles.supportChatDescription}>{t('support_agent_chat_description')}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={19} color={themeColors.white} />
+        </TouchableOpacity>
 
       <View style={styles.sectionHeading}>
         <View style={styles.sectionHeadingIcon}>
@@ -178,6 +249,7 @@ const MessagesScreen = () => {
           </View>
         )}
       </View>
+      {faqSection}
     </View>
   );
 
@@ -189,7 +261,7 @@ const MessagesScreen = () => {
         )}
         renderItem={renderChatItem}
         keyExtractor={item => item.id}
-        ListHeaderComponent={supportHeader}
+        ListHeaderComponent={canContactSupport ? supportHeader : inboxHeader}
         ListEmptyComponent={
           !hydrated ? (
             <View style={styles.loadingList}>
@@ -206,8 +278,12 @@ const MessagesScreen = () => {
           ) : (
           <EmptyState
             icon="chatbubble-ellipses-outline"
-            title={t('support_empty_title')}
-            description={t('support_empty_description')}
+            title={canContactSupport ? t('support_empty_title') : t('messages_inbox_empty_title')}
+            description={
+              canContactSupport
+                ? t('support_empty_description')
+                : t('messages_inbox_empty_description')
+            }
             actionLabel={!currentUser ? t('home_connect_title') : undefined}
             onAction={
               !currentUser ? () => navigation.navigate('MainTabs', { screen: 'Profile' }) : undefined
@@ -339,6 +415,37 @@ const baseStyles = StyleSheet.create({
     lineHeight: 18,
     maxWidth: 300,
   },
+  supportChatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    marginBottom: SPACING.lg,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.primary,
+  },
+  supportChatIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.overlayWhite20,
+  },
+  supportChatCopy: {
+    flex: 1,
+  },
+  supportChatTitle: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  supportChatDescription: {
+    color: COLORS.overlayWhite90,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+  },
   sectionHeading: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -357,6 +464,40 @@ const baseStyles = StyleSheet.create({
     color: COLORS.onSurface,
     fontSize: 16,
     fontWeight: '800',
+  },
+  faqSection: {
+    marginTop: SPACING.md,
+  },
+  faqItem: {
+    marginBottom: SPACING.sm,
+    overflow: 'hidden',
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+  faqQuestion: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  faqQuestionText: {
+    flex: 1,
+    color: COLORS.onSurface,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  faqAnswer: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
+    color: COLORS.onSurfaceMuted,
+    fontSize: 12,
+    lineHeight: 18,
   },
   contactCard: {
     flexDirection: 'row',

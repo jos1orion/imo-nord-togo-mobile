@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Imo Nord Togo",
+    "name": "ImoPrestige",
     "slug": "imo-nord-togo",
     "scheme": "imonordtogo",
     "version": "1.0.1",
@@ -83,7 +83,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/imoprestige-icon.png"
     },
     "plugins": [
       [
@@ -97,8 +97,8 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
-          "color": "#C2410C"
+          "icon": "./assets/imoprestige-adaptive-icon.png",
+          "color": "#087F86"
         }
       ],
       [
@@ -115,12 +115,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/kara-immo-icon.png",
+          "image": "./assets/imoprestige-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#FAF7F2",
+          "backgroundColor": "#F5F8F8",
           "dark": {
-            "image": "./assets/kara-immo-icon.png",
-            "backgroundColor": "#0F172A"
+            "image": "./assets/imoprestige-icon.png",
+            "backgroundColor": "#101B1D"
           }
         }
       ],
@@ -138,7 +138,6 @@
       "contactEmail": "imonordtogo@gmail.com",
       "whatsappPhone": "22893576298",
       "adminApiUrl": "https://imo-nord-togo-mobile.vercel.app",
-      "enableAdminShortcut": false,
       "apkDownloadUrl": "",
       "eas": {
         "projectId": "7faf2828-55ef-491d-be14-b568686f71fc"
