@@ -51,8 +51,9 @@ export default function Topbar() {
           type="button"
           className="ghost-button topbar-logout"
           onClick={async () => {
+            document.cookie = 'render_admin_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
             await supabase.auth.signOut();
-            router.replace('/login');
+            window.location.href = '/login';
           }}
         >
           <span>Déconnexion</span>

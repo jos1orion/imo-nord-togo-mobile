@@ -182,10 +182,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // 5. Poser le cookie simple render_admin_session pour bypasser le middleware
+    // 5. Poser le cookie simple render_admin_session pour le middleware et le client React
     redirectResponse.cookies.set('render_admin_session', 'true', {
       path: '/',
-      httpOnly: true,
+      httpOnly: false, // Accessible par le serveur (middleware) et par le client (AuthGate / useSession)
       sameSite: 'lax',
       secure: true,
       maxAge: 60 * 60 * 24 * 7, // 7 jours

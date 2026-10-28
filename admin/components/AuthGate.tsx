@@ -8,10 +8,13 @@ import { supabase } from '../lib/supabaseClient';
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { user, profile, loading, error } = useSession();
+  const { user, profile, loading, error, isMasterAdmin } = useSession();
 
   useEffect(() => {
+    // Si l'utilisateur est connecté via le mot de passe maître Render, aucune redirection
+    if (isMasterAdmin) return;
     if (loading) return;
+
     if (!user) {
       router.replace('/login');
       return;
@@ -21,7 +24,12 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
         router.replace(profile.account_status === 'suspended' ? '/login?error=suspended' : '/login?error=staff')
       );
     }
-  }, [loading, user, profile, router]);
+  }, [loading, user, profile, router, isMasterAdmin]);
+
+  // Si c'est l'administrateur Render : accès immédiat garanti sans écran blanc
+  if (isMasterAdmin) {
+    return <>{children}</>;
+  }
 
   if (loading) {
     return (

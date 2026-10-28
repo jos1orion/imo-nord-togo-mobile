@@ -1,12 +1,11 @@
-'use client';
+type LoginPageProps = {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+};
 
-import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-
-function LoginForm() {
-  const searchParams = useSearchParams();
-  const errorMsg = searchParams.get('msg');
-  const errorCode = searchParams.get('error');
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const resolvedParams = searchParams ? await searchParams : {};
+  const errorMsg = typeof resolvedParams.msg === 'string' ? resolvedParams.msg : null;
+  const errorCode = typeof resolvedParams.error === 'string' ? resolvedParams.error : null;
 
   const displayError = errorMsg || (
     errorCode === 'password'
@@ -88,13 +87,5 @@ function LoginForm() {
         </form>
       </div>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<div className="login-shell">Chargement...</div>}>
-      <LoginForm />
-    </Suspense>
   );
 }
