@@ -126,17 +126,20 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Mettre à jour la table profiles avec le rôle ADMIN
-    await supabaseAdmin.from('profiles').upsert(
+    // 2. Mettre à jour la table profiles avec le rôle ADMIN (la table profiles n'a pas de colonne email)
+    const { error: profileError } = await supabaseAdmin.from('profiles').upsert(
       {
         id: targetUser.id,
-        email: adminEmail,
         full_name: 'Super Admin',
         role: 'ADMIN',
         account_status: 'active',
       },
       { onConflict: 'id' }
     );
+
+    if (profileError) {
+      console.error('Erreur upsert profile ADMIN:', profileError);
+    }
 
     // 3. Préparer la réponse de redirection
     const dashboardUrl = new URL('/', baseOrigin);

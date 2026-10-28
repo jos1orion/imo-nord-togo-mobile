@@ -43,9 +43,12 @@ export async function updateSession(request: NextRequest) {
   const isMasterAdmin = request.cookies.get('render_admin_session')?.value === 'true';
   if (isMasterAdmin) {
     if (path === '/login') {
-      const url = request.nextUrl.clone();
-      url.pathname = '/';
-      return NextResponse.redirect(url);
+      const hasError = request.nextUrl.searchParams.has('error');
+      if (!hasError) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/';
+        return NextResponse.redirect(url);
+      }
     }
     return NextResponse.next({ request });
   }
