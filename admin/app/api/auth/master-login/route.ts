@@ -4,6 +4,19 @@ import { getSupabaseAdmin } from '../../../../lib/supabaseAdmin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+function getExternalOrigin(request: Request): string {
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+  const host = forwardedHost || request.headers.get('host');
+
+  if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+    return `${forwardedProto}://${host}`;
+  }
+
+  // Origine par défaut sur Render
+  return 'https://imo-nord-togo-mobile.onrender.com';
+}
+
 export async function POST(request: Request) {
   let password = '';
   const contentType = request.headers.get('content-type') || '';
@@ -29,9 +42,11 @@ export async function POST(request: Request) {
   const rawMasterPassword = process.env.ADMIN_PASSWORD ?? '';
   const masterPassword = rawMasterPassword.trim().replace(/^["']|["']$/g, '');
 
+  const baseOrigin = getExternalOrigin(request);
+
   const redirectWithError = (errorCode: string, errorMessage: string) => {
     if (isFormPost) {
-      const loginUrl = new URL('/login', request.url);
+      const loginUrl = new URL('/login', baseOrigin);
       loginUrl.searchParams.set('error', errorCode);
       loginUrl.searchParams.set('msg', errorMessage);
       return NextResponse.redirect(loginUrl, 303);
@@ -138,12 +153,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // 4. Si soumission via formulaire HTML direct, rediriger avec cookie vers le dashboard
+    // 4. Si soumission via formulaire HTML direct, rediriger vers le domaine public Render
     if (isFormPost) {
-      const dashboardUrl = new URL('/', request.url);
+      const dashboardUrl = new URL('/', baseOrigin);
       const redirectResponse = NextResponse.redirect(dashboardUrl, 303);
 
-      // On dépose le cookie de session Supabase pour que le middleware le lise directement
+      // On dépose le cookie de session Supabase officiel
       const storageKey = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`;
       const sessionString = JSON.stringify([
         sessionData.session.access_token,
@@ -157,7 +172,7 @@ export async function POST(request: Request) {
         path: '/',
         httpOnly: false,
         sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
+        secure: true,
         maxAge: 60 * 60 * 24 * 7,
       });
 
