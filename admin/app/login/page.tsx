@@ -1,64 +1,22 @@
 'use client';
 
-import { Suspense, useState } from 'react';
-import { supabase } from '../../lib/supabaseClient';
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 function LoginForm() {
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const errorMsg = searchParams.get('msg');
+  const errorCode = searchParams.get('error');
 
-  const handleLogin = async () => {
-    const trimmed = password.trim();
-    if (!trimmed) {
-      setError('Veuillez entrer le mot de passe du back-office.');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-
-    try {
-      // 1. Validation du mot de passe et préparation du compte admin côté serveur
-      const res = await fetch('/api/auth/master-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: trimmed }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setLoading(false);
-        setError(data.error || `Erreur serveur (${res.status}).`);
-        return;
-      }
-
-      if (!data.accessToken || !data.refreshToken) {
-        setLoading(false);
-        setError('Session administrateur incomplète reçue du serveur.');
-        return;
-      }
-
-      // 2. Initialisation des cookies et de la session dans le navigateur
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token: data.accessToken,
-        refresh_token: data.refreshToken,
-      });
-
-      if (sessionError) {
-        setLoading(false);
-        setError(`Échec d'initialisation de session : ${sessionError.message}`);
-        return;
-      }
-
-      // 3. Redirection vers le dashboard
-      window.location.href = '/';
-    } catch (err: unknown) {
-      setLoading(false);
-      const msg = err instanceof Error ? err.message : 'Erreur réseau de connexion.';
-      setError(msg);
-    }
-  };
+  const displayError = errorMsg || (
+    errorCode === 'password'
+      ? 'Mot de passe administrateur incorrect. Vérifiez la variable ADMIN_PASSWORD sur Render.'
+      : errorCode === 'missing'
+      ? "La variable ADMIN_PASSWORD n'est pas encore configurée sur Render."
+      : errorCode === 'staff'
+      ? "Ce compte n'a pas accès au back-office."
+      : null
+  );
 
   return (
     <div className="login-shell">
@@ -87,33 +45,45 @@ function LoginForm() {
           <p>Entrez le mot de passe configuré sur le serveur Render.</p>
         </div>
 
-        <form onSubmit={e => { e.preventDefault(); handleLogin(); }}>
+        {/* Formulaire HTML standard direct : fonctionne sans aucune dépendance JS */}
+        <form action="/api/auth/master-login" method="POST">
           <div className="form-field">
             <label htmlFor="admin-password">Mot de passe Back-Office</label>
             <input
               id="admin-password"
+              name="password"
               type="password"
               placeholder="Entrez votre mot de passe secret"
-              value={password}
-              onChange={event => setPassword(event.target.value)}
               autoFocus
+              required
               autoComplete="current-password"
             />
           </div>
 
-          {error ? (
-            <div className="alert" style={{ marginTop: 12, display: 'block', visibility: 'visible' }}>
-              {error}
+          {displayError ? (
+            <div
+              className="alert"
+              style={{
+                marginTop: 14,
+                display: 'block',
+                background: '#fee2e2',
+                color: '#991b1b',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                border: '1px solid #f87171',
+              }}
+            >
+              {displayError}
             </div>
           ) : null}
 
           <button
             type="submit"
             className="primary-button"
-            style={{ width: '100%', marginTop: 16 }}
-            disabled={loading}
+            style={{ width: '100%', marginTop: 18 }}
           >
-            {loading ? 'Connexion en cours...' : 'Déverrouiller le Back-Office'}
+            Déverrouiller le Back-Office
           </button>
         </form>
       </div>
