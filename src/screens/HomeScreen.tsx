@@ -763,9 +763,11 @@ const HomeScreen: React.FC = () => {
                     </View>
                     <ScrollView
                       style={styles.neighborhoodModalList}
+                      contentContainerStyle={styles.neighborhoodModalListContent}
                       nestedScrollEnabled
                       keyboardShouldPersistTaps="handled"
                       keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                      showsVerticalScrollIndicator={true}
                     >
                       <TouchableOpacity
                         style={[styles.dropdownItem, styles.neighborhoodModalOption]}
@@ -1023,7 +1025,7 @@ const HomeScreen: React.FC = () => {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.neighborhoodsScroll}
           >
-            {availableNeighborhoods.slice(0, 12).map(name => (
+            {availableNeighborhoods.map(name => (
               <TouchableOpacity
                 key={name}
                 style={[
@@ -1724,7 +1726,10 @@ const baseStyles = StyleSheet.create({
   },
   neighborhoodModalList: {
     marginTop: 8,
-    maxHeight: 220,
+    maxHeight: 400,
+  },
+  neighborhoodModalListContent: {
+    paddingBottom: 40,
   },
   neighborhoodModalOption: {
     flexDirection: 'row',

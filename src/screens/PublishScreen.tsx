@@ -1011,6 +1011,8 @@ const PublishScreen: React.FC = () => {
               <ScrollView
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                contentContainerStyle={styles.neighborhoodModalContent}
+                showsVerticalScrollIndicator={true}
               >
                 {filteredNeighborhoods.map(name => (
                   <TouchableOpacity
@@ -1444,13 +1446,16 @@ const baseStyles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   neighborhoodModal: {
-    maxHeight: '82%',
+    maxHeight: '85%',
     backgroundColor: COLORS.surface,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     paddingHorizontal: 18,
     paddingTop: 20,
     paddingBottom: 28,
+  },
+  neighborhoodModalContent: {
+    paddingBottom: 60,
   },
   neighborhoodModalDark: {
     backgroundColor: COLORS.onSurface,

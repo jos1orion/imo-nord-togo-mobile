@@ -251,9 +251,9 @@ const ListingsScreen: React.FC = () => {
         style={styles.listScroll}
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: Math.max(insets.bottom, 20) + 20 },
+          { paddingBottom: Math.max(insets.bottom, 20) + 120 },
         ]}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         data={hydrated ? neighborhoods : []}
         keyExtractor={name => name}
         renderItem={({ item: name }) => {

@@ -2076,10 +2076,12 @@ const AdminScreen: React.FC = () => {
       return (
         <FlatList
           style={styles.tabContent}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 120, 160) }}
           data={sortedNeighborhoods}
           keyExtractor={name => name}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="none"
+          showsVerticalScrollIndicator={true}
           ListHeaderComponent={
             <>
               <View style={styles.sectionHeaderRow}>
