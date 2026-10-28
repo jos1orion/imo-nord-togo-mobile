@@ -1685,7 +1685,7 @@ const AdminScreen: React.FC = () => {
             <Ionicons name="home" size={16} color={PROPERTY_TYPE_COLORS[property.type]} />
           </View>
           <View style={styles.activityContent}>
-            <Text style={styles.activityTitle} numberOfLines={1}>{property.title}</Text>
+            <Text style={styles.activityTitle}>{property.title}</Text>
             <Text style={styles.activitySubtitle}>{formatPrice(property.price)}</Text>
           </View>
           <Text style={styles.activityDate}>{formatAdminDate(property.createdAt)}</Text>

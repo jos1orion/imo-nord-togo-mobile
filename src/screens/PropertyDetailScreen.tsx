@@ -574,7 +574,7 @@ const PropertyDetailScreen: React.FC = () => {
                         uri={cover}
                         style={styles.similarImage}
                       />
-                      <Text style={styles.similarTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.similarTitle}>{item.title}</Text>
                       <Text style={styles.similarPrice}>{formatPrice(item.price)}</Text>
                     </TouchableOpacity>
                   </View>

@@ -1203,7 +1203,7 @@ const ProfileScreen: React.FC = () => {
                   accessibilityRole="button"
                 >
                   <Ionicons name="alert-circle-outline" size={19} color={themeColors.danger} />
-                  <Text style={[styles.agentTodoText, theme === 'dark' && styles.textMutedDark]} numberOfLines={1}>
+                  <Text style={[styles.agentTodoText, theme === 'dark' && styles.textMutedDark]}>
                     {t('profile_agent_fix_rejected')}: {property.title}
                   </Text>
                   <Ionicons name="chevron-forward" size={17} color={themeColors.onSurfaceMuted} />
@@ -1219,7 +1219,7 @@ const ProfileScreen: React.FC = () => {
                     accessibilityRole="button"
                   >
                     <Ionicons name="time-outline" size={19} color={themeColors.warning} />
-                    <Text style={[styles.agentTodoText, theme === 'dark' && styles.textMutedDark]} numberOfLines={1}>
+                    <Text style={[styles.agentTodoText, theme === 'dark' && styles.textMutedDark]}>
                       {t('profile_agent_renew_listing')}: {property.title}
                     </Text>
                     <Ionicons name="chevron-forward" size={17} color={themeColors.onSurfaceMuted} />
@@ -1298,7 +1298,7 @@ const ProfileScreen: React.FC = () => {
                         </View>
                       )}
                       <View style={styles.agentListingCopy}>
-                        <Text style={[styles.agentListingTitle, theme === 'dark' && styles.textLight]} numberOfLines={1}>
+                        <Text style={[styles.agentListingTitle, theme === 'dark' && styles.textLight]}>
                           {property.title}
                         </Text>
                         <Text style={[styles.agentListingPrice, theme === 'dark' && styles.textLight]}>
