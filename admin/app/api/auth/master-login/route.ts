@@ -179,6 +179,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // 5. Poser le cookie simple render_admin_session pour bypasser le middleware
+    redirectResponse.cookies.set('render_admin_session', 'true', {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: true,
+      maxAge: 60 * 60 * 24 * 7, // 7 jours
+    });
+
     return redirectResponse;
   } catch (error) {
     console.error('Master login exception:', error);
