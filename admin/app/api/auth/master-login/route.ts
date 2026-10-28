@@ -41,9 +41,10 @@ export async function POST(request: Request) {
   let supabaseAdmin;
   try {
     supabaseAdmin = getSupabaseAdmin();
-  } catch (err) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Supabase admin non configuré.';
     return NextResponse.json(
-      { error: 'Supabase admin non configuré.' },
+      { error: `Configuration serveur : ${message}` },
       { status: 503 }
     );
   }
@@ -72,10 +73,13 @@ export async function POST(request: Request) {
       targetUser = newUser.user;
     } else {
       // Mettre à jour le mot de passe pour qu'il corresponde toujours à ADMIN_PASSWORD
-      await supabaseAdmin.auth.admin.updateUserById(targetUser.id, {
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(targetUser.id, {
         password: masterPassword,
         email_confirm: true,
       });
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 400 });
+      }
     }
 
     // 2. S'assurer que le rôle dans profiles est ADMIN et actif

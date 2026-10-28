@@ -46,10 +46,11 @@ function LoginForm() {
       }
 
       setLoading(false);
-      router.replace('/');
-    } catch {
+      window.location.href = '/';
+    } catch (err: unknown) {
       setLoading(false);
-      setError('Erreur réseau ou serveur inaccessible.');
+      const msg = err instanceof Error ? err.message : 'Erreur réseau ou serveur inaccessible.';
+      setError(msg);
     }
   };
 
