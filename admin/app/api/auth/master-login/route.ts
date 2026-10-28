@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 import { getSupabaseAdmin } from '../../../../lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
@@ -13,7 +14,6 @@ function getExternalOrigin(request: Request): string {
     return `${forwardedProto}://${host}`;
   }
 
-  // Origine par défaut sur Render
   return 'https://imo-nord-togo-mobile.onrender.com';
 }
 
@@ -100,7 +100,6 @@ export async function POST(request: Request) {
     let targetUser = usersData.users.find(u => u.email?.toLowerCase() === adminEmail);
 
     if (!targetUser) {
-      // Créer le compte admin avec le mot de passe
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: adminEmail,
         password: masterPassword,
@@ -115,7 +114,6 @@ export async function POST(request: Request) {
       }
       targetUser = newUser.user;
     } else {
-      // Mettre à jour le mot de passe pour qu'il corresponde toujours à masterPassword
       const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(targetUser.id, {
         password: masterPassword,
         email_confirm: true,
@@ -140,51 +138,48 @@ export async function POST(request: Request) {
       { onConflict: 'id' }
     );
 
-    // 3. Obtenir les tokens de session via Supabase Auth
-    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.signInWithPassword({
+    // 3. Préparer la réponse de redirection
+    const dashboardUrl = new URL('/', baseOrigin);
+    const redirectResponse = isFormPost
+      ? NextResponse.redirect(dashboardUrl, 303)
+      : NextResponse.json({ success: true, email: adminEmail });
+
+    // 4. Utiliser @supabase/ssr pour poser les cookies de session authentiques sur redirectResponse
+    const cookieHeader = request.headers.get('cookie') || '';
+    const serverSupabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return cookieHeader.split(';').map(c => {
+            const [name, ...v] = c.trim().split('=');
+            return { name, value: v.join('=') };
+          }).filter(c => c.name);
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            redirectResponse.cookies.set(name, value, {
+              ...options,
+              path: '/',
+              sameSite: 'lax',
+              secure: true,
+            });
+          });
+        },
+      },
+    });
+
+    const { error: sessionError } = await serverSupabase.auth.signInWithPassword({
       email: adminEmail,
       password: masterPassword,
     });
 
-    if (sessionError || !sessionData.session) {
+    if (sessionError) {
       return redirectWithError(
         'signin',
-        `Authentification Supabase échouée : ${sessionError?.message ?? 'Session introuvable'}`
+        `Authentification Supabase échouée : ${sessionError.message}`
       );
     }
 
-    // 4. Si soumission via formulaire HTML direct, rediriger vers le domaine public Render
-    if (isFormPost) {
-      const dashboardUrl = new URL('/', baseOrigin);
-      const redirectResponse = NextResponse.redirect(dashboardUrl, 303);
-
-      // On dépose le cookie de session Supabase officiel
-      const storageKey = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`;
-      const sessionString = JSON.stringify([
-        sessionData.session.access_token,
-        sessionData.session.refresh_token,
-        null,
-        null,
-        null,
-      ]);
-
-      redirectResponse.cookies.set(storageKey, sessionString, {
-        path: '/',
-        httpOnly: false,
-        sameSite: 'lax',
-        secure: true,
-        maxAge: 60 * 60 * 24 * 7,
-      });
-
-      return redirectResponse;
-    }
-
-    return NextResponse.json({
-      success: true,
-      email: adminEmail,
-      accessToken: sessionData.session.access_token,
-      refreshToken: sessionData.session.refresh_token,
-    });
+    return redirectResponse;
   } catch (error) {
     console.error('Master login exception:', error);
     const message = error instanceof Error ? error.message : 'Erreur inconnue';
