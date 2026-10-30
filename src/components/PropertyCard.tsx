@@ -10,6 +10,7 @@ import {
   FlatList,
   StatusBar,
   Dimensions,
+  TextStyle,
 } from 'react-native';
 import { AppAlert as Alert } from './ui/appAlertService';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,12 +37,23 @@ interface PropertyCardProps {
   property: Property;
   onPress: () => void;
   compact?: boolean;
+  isFeatured?: boolean;
+  isVerified?: boolean;
 }
 
-const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact = false }) => {
+const PropertyCard: React.FC<PropertyCardProps> = ({
+  property,
+  onPress,
+  compact = false,
+  isFeatured: isFeaturedProp,
+  isVerified: isVerifiedProp,
+}) => {
+  const isFeatured = isFeaturedProp ?? isFeaturedProperty(property);
+  const isVerified = isVerifiedProp ?? (property.listingStatus === 'approved');
   const styles = useThemedStyles(baseStyles);
   const themeColors = useThemeColors();
   const { width } = useWindowDimensions();
+
   const cardWidth = compact ? width * 0.8 : width - 32;
   const carouselWidth = cardWidth - 2;
   const { toggleFavorite, isFavorite, propertyStats, tType, t, language } = useApp();
@@ -67,7 +79,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
   const publishedLabel = formatShortDate(property.publishedAt ?? property.createdAt);
   const createdTime = new Date(property.publishedAt ?? property.createdAt).getTime();
   const isNew = Number.isFinite(createdTime) && Date.now() - createdTime < 7 * 24 * 60 * 60 * 1000;
-  const isVerified = (property.listingStatus ?? 'approved') === 'approved';
+
   const imageStatusLabel = property.status === 'occupied'
     ? t('status_occupied')
     : isFeaturedProperty(property)
@@ -81,6 +93,25 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
   const favoriteAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: favoriteScale.value }],
   }));
+
+  // Méthode pour rendre le badge
+  const renderBadge = () => {
+    if (isVerified) {
+      return (
+        <View style={styles.premiumBadgeContainer}>
+          <Text style={styles.premiumBadgeText}>{t('card_badge_verified')}</Text>
+        </View>
+      );
+    }
+    if (isFeatured) {
+      return (
+        <View style={[styles.premiumBadgeContainer, styles.premiumFeaturedBadge]}>
+          <Text style={styles.premiumBadgeText}>{t('featured_badge')}</Text>
+        </View>
+      );
+    }
+    return null;
+  };
 
   const locationLabel = [property.neighborhood, property.location].filter(Boolean).join(', ');
   const neighborhoodLabel = property.neighborhood?.trim();
@@ -104,6 +135,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
 
   return (
     <Animated.View style={[styles.card, { width: cardWidth }, compact && styles.compactCard, cardAnimatedStyle]}>
+      {renderBadge()}
       <View style={[styles.imageContainer, compact && styles.imageContainerCompact]}>
         <ScrollView
           horizontal
@@ -299,6 +331,33 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress, compact 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const baseStyles = StyleSheet.create({
+  premiumBadgeContainer: {
+    position: 'absolute',
+    top: 12,
+    right: 62,
+    zIndex: 10,
+    backgroundColor: COLORS.premiumGold,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: COLORS.premiumBorder,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  premiumFeaturedBadge: {
+    backgroundColor: COLORS.premiumGoldLight,
+  },
+  premiumBadgeText: {
+    color: COLORS.premiumDarkBlue,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
   card: {
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.xl,

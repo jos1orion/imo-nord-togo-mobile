@@ -88,7 +88,6 @@ export default function AdminsPage() {
               type="email"
               value={form.email}
               onChange={event => setForm({ ...form, email: event.target.value })}
-              placeholder="admin@imonord.tg"
             />
           </div>
           <div className="form-field">
@@ -97,7 +96,6 @@ export default function AdminsPage() {
               type="tel"
               value={form.phone}
               onChange={event => setForm({ ...form, phone: event.target.value })}
-              placeholder="+228 90 00 00 00"
             />
           </div>
           <div className="form-field">

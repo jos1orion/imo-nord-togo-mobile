@@ -1,209 +1,218 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
   FlatList,
-  TouchableOpacity,
-  Pressable,
-  Modal,
-  Keyboard,
-  KeyboardAvoidingView,
-  Dimensions,
-  StatusBar,
-  TextInput,
-  InteractionManager,
-  LayoutAnimation,
-  Platform,
   ImageBackground,
+  Keyboard,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
-import { AppAlert as Alert } from '../components/ui/appAlertService';
-import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import PropertyCard from '../components/PropertyCard';
-import CategoryPickerModal from '../components/home/CategoryPickerModal';
-import SearchBar from '../components/SearchBar';
-import OfflineBanner from '../components/ui/OfflineBanner';
+import { AppAlert as Alert } from '../components/ui/appAlertService';
 import EmptyState from '../components/ui/EmptyState';
+import OfflineBanner from '../components/ui/OfflineBanner';
+import PropertyCard from '../components/PropertyCard';
+import SearchBar from '../components/SearchBar';
 import Skeleton from '../components/ui/Skeleton';
 import { useApp } from '../context/AppContext';
-import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
-import { Property, PropertyType } from '../types';
-import { COLORS } from '../theme/colors';
 import { RootStackParamList } from '../../App';
-import { translate } from '../i18n';
-import { isFeaturedProperty, isPublicProperty } from '../utils/propertyVisibility';
+import { Property, PropertyType, SavedSearch, PROPERTY_TYPE_COLORS } from '../types';
 import { getRecentProperties } from '../utils/recentProperties';
+import { isFeaturedProperty, isPublicProperty } from '../utils/propertyVisibility';
+import { COLORS } from '../theme/colors';
+import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
-import heroBackground from '../../assets/branding/hero-case-chaume.jpg';
-
-const { width } = Dimensions.get('window');
+import heroImage from '../../assets/branding/maison-ocre.jpg';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
+type PlacePicker = 'city' | 'neighborhood' | null;
+type SortMode = 'recent' | 'priceAsc' | 'priceDesc';
+
+const CATEGORY_OPTIONS: {
+  type: PropertyType;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { type: 'house', icon: 'home-outline' },
+  { type: 'apartment', icon: 'business-outline' },
+  { type: 'land', icon: 'map-outline' },
+  { type: 'shop', icon: 'storefront-outline' },
+];
+
+const CITIES = ['KARA', 'SOKODE', 'BLITA', 'SOTOUBOUA', 'KANTE', 'MANGO', 'DAPAONG'];
+
+const HERO_SCRIM_STOPS = [
+  'rgba(5, 17, 34, 0.04)',
+  'rgba(5, 17, 34, 0.08)',
+  'rgba(5, 17, 34, 0.12)',
+  'rgba(5, 17, 34, 0.18)',
+  'rgba(5, 17, 34, 0.24)',
+  'rgba(5, 17, 34, 0.31)',
+  'rgba(5, 17, 34, 0.39)',
+  'rgba(5, 17, 34, 0.48)',
+  'rgba(5, 17, 34, 0.58)',
+  'rgba(5, 17, 34, 0.68)',
+  'rgba(5, 17, 34, 0.77)',
+  'rgba(5, 17, 34, 0.84)',
+];
+
+const matchesSavedSearch = (property: Property, search: SavedSearch) => {
+  const publishedAt = new Date(property.publishedAt ?? property.createdAt).getTime();
+  const savedAt = new Date(search.createdAt).getTime();
+  if (!Number.isFinite(publishedAt) || !Number.isFinite(savedAt) || publishedAt <= savedAt) return false;
+  if (search.type !== 'ALL' && property.type !== search.type) return false;
+  if (search.filters.minPrice !== null && property.price < search.filters.minPrice) return false;
+  if (search.filters.maxPrice !== null && property.price > search.filters.maxPrice) return false;
+  if (search.filters.minBedrooms !== null && (property.bedrooms ?? 0) < search.filters.minBedrooms) return false;
+  if (search.filters.minBathrooms !== null && (property.bathrooms ?? 0) < search.filters.minBathrooms) return false;
+  if (search.filters.minArea !== null && (property.area ?? 0) < search.filters.minArea) return false;
+  const query = search.query.trim().toLocaleLowerCase();
+  if (!query) return true;
+  return [
+    property.title,
+    property.location,
+    property.neighborhood ?? '',
+    property.city,
+    property.description,
+  ].some(value => value.toLocaleLowerCase().includes(query));
+};
 
 const HomeScreen: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
-  const themeColors = useThemeColors();
+  const colors = useThemeColors();
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const listRef = useRef<FlatList<Property>>(null);
+  const searchSectionOffset = useRef(0);
   const {
+    properties,
+    neighborhoods,
     filterType,
     setFilterType,
     searchQuery,
     setSearchQuery,
-    properties,
-    currentUser,
-    neighborhoods,
-    getFilteredProperties,
-    setSelectedProperty,
     filters,
     setFilters,
     resetFilters,
+    getFilteredProperties,
+    setSelectedProperty,
+    trackPropertyView,
+    favorites,
+    savedSearches,
+    searchHistory,
+    recentViewedIds,
+    addSearchHistory,
     addSavedSearch,
+    currentUser,
+    hydrated,
     syncError,
     retrySync,
     t,
     tType,
-    hydrated,
-    language,
-    setLanguage,
-    theme,
   } = useApp();
-  const propertiesByType = useMemo(() => {
-    const types: PropertyType[] = ['house', 'apartment', 'land', 'shop'];
-    return types.map(type => ({
-      type,
-      count: properties.filter(p => p.type === type && isPublicProperty(p)).length,
-    }));
-  }, [properties]);
-  const featuredProperties = useMemo(() => {
-    return properties
-      .filter(property => isFeaturedProperty(property) && isPublicProperty(property))
-      .slice(0, 10);
-  }, [properties]);
-  const [recentWindowNow, setRecentWindowNow] = useState(() => Date.now());
-  useEffect(() => {
-    const interval = setInterval(() => setRecentWindowNow(Date.now()), 60_000);
-    return () => clearInterval(interval);
-  }, []);
-  const recentProperties = useMemo(
-    () => getRecentProperties(properties, recentWindowNow),
-    [properties, recentWindowNow]
-  );
-  const filteredProperties = getFilteredProperties();
-  const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null);
+
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
-  const [sortMode, setSortMode] = useState<'recent' | 'priceAsc' | 'priceDesc'>('recent');
-  const [neighborhoodOpen, setNeighborhoodOpen] = useState(false);
-  const [neighborhoodQuery, setNeighborhoodQuery] = useState('');
-  const availableNeighborhoods = useMemo(() => {
-    const names = [
-      ...neighborhoods,
-      ...properties
-        .filter(isPublicProperty)
-        .map(property => property.neighborhood?.trim())
-        .filter((name): name is string => Boolean(name)),
-    ];
-    return [...new Map(names.map(name => [name.toLowerCase(), name])).values()]
-      .sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
-  }, [neighborhoods, properties]);
-  const filteredNeighborhoods = useMemo(() => {
-    const cityNeighborhoods = selectedCity
-      ? Array.from(new Set(
-          properties
-            .filter(isPublicProperty)
-            .filter(property => (property.city || property.location).toLowerCase() === selectedCity.toLowerCase())
-            .map(property => property.neighborhood?.trim())
-            .filter((name): name is string => Boolean(name))
-        ))
-      : availableNeighborhoods;
-    const base = neighborhoodQuery.trim()
-      ? cityNeighborhoods.filter(name => name.toLowerCase().includes(neighborhoodQuery.trim().toLowerCase()))
-      : cityNeighborhoods;
-    return [...base].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
-  }, [availableNeighborhoods, neighborhoodQuery, properties, selectedCity]);
-  const cities = useMemo(
-    () => Array.from(new Set(properties.filter(isPublicProperty).map(p => (p.city || p.location).trim()).filter(Boolean))).sort(),
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null);
+  const [placePicker, setPlacePicker] = useState<PlacePicker>(null);
+  const [placeQuery, setPlaceQuery] = useState('');
+  const [sortMode, setSortMode] = useState<SortMode>('recent');
+  const [visibleCount, setVisibleCount] = useState(8);
+
+  const publicProperties = useMemo(
+    () => properties.filter(isPublicProperty),
     [properties]
   );
-  const availableSelectedNeighborhood = selectedNeighborhood && availableNeighborhoods.some(
-    name => name.toLowerCase() === selectedNeighborhood.toLowerCase()
-  )
-    ? selectedNeighborhood
-    : null;
-  if (selectedNeighborhood && !availableSelectedNeighborhood) setSelectedNeighborhood(null);
+  const neighborhoodsForCity = useMemo(() => {
+    const names = selectedCity
+      ? publicProperties
+        .filter(property => (property.city || property.location).toLowerCase() === selectedCity.toLowerCase())
+        .map(property => property.neighborhood?.trim())
+      : [...neighborhoods, ...publicProperties.map(property => property.neighborhood?.trim())];
+    return [...new Set(names.filter((name): name is string => Boolean(name)))]
+      .sort((a, b) => a.localeCompare(b));
+  }, [neighborhoods, publicProperties, selectedCity]);
 
-  const filteredByNeighborhood = availableSelectedNeighborhood
-    ? filteredProperties.filter(
-        p => (p.neighborhood ?? '').toLowerCase() === availableSelectedNeighborhood.toLowerCase()
-      )
-    : filteredProperties;
-  const filteredByCity = selectedCity
-    ? filteredByNeighborhood.filter(p => (p.city || p.location).toLowerCase() === selectedCity.toLowerCase())
-    : filteredByNeighborhood;
-  const sortedProperties = useMemo(() => {
-    return [...filteredByCity].sort((a, b) => {
+  const filteredProperties = getFilteredProperties()
+    .filter(property => !selectedCity
+      || (property.city || property.location).toLowerCase() === selectedCity.toLowerCase())
+    .filter(property => !selectedNeighborhood
+      || (property.neighborhood ?? '').toLowerCase() === selectedNeighborhood.toLowerCase())
+    .sort((a, b) => {
       if (sortMode === 'priceAsc') return a.price - b.price;
       if (sortMode === 'priceDesc') return b.price - a.price;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return new Date(b.publishedAt ?? b.createdAt).getTime()
+        - new Date(a.publishedAt ?? a.createdAt).getTime();
     });
-  }, [filteredByCity, sortMode]);
 
-  const activeListings = properties.filter(isPublicProperty).length;
-  const listSectionYRef = useRef(0);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
-  const scrollRef = useRef<FlatList<Property>>(null);
-  const resultSetKey = JSON.stringify([
-    filterType,
-    searchQuery,
-    filters,
-    availableSelectedNeighborhood,
-  ]);
-  const [listState, setListState] = useState({ key: '', visibleCount: 12 });
-  if (listState.key !== resultSetKey) {
-    setListState({ key: resultSetKey, visibleCount: 12 });
-  }
-  const visibleCount = listState.visibleCount;
-  const suggestionBase = useMemo(() => {
-    const cityCandidates = Array.from(
-      new Set(
-        properties
-          .map(p => (p.city ?? p.location ?? '').trim())
-          .filter(Boolean)
-      )
-    ).slice(0, 4);
-    const neighborhoodCandidates = availableNeighborhoods.slice(0, 4);
-    const city = cityCandidates[0] || 'Kara';
-    const hood = neighborhoodCandidates[0] || city;
-    return [
-      {
-        label: translate(language, 'suggestion_house').replace('{{c}}', city),
-        query: city,
-        type: 'house' as PropertyType,
-      },
-      {
-        label: translate(language, 'suggestion_apartment').replace('{{c}}', city),
-        query: city,
-        type: 'apartment' as PropertyType,
-      },
-      {
-        label: translate(language, 'suggestion_land').replace('{{c}}', hood),
-        query: hood,
-        type: 'land' as PropertyType,
-      },
-    ];
-  }, [availableNeighborhoods, properties, language]);
+  const featuredProperties = useMemo(
+    () => publicProperties.filter(isFeaturedProperty).slice(0, 8),
+    [publicProperties]
+  );
+  const recentProperties = useMemo(
+    () => getRecentProperties(publicProperties).slice(0, 6),
+    [publicProperties]
+  );
+  const recentViewedProperties = useMemo(() => recentViewedIds
+    .map(id => publicProperties.find(property => property.id === id))
+    .filter((property): property is Property => Boolean(property))
+    .slice(0, 8), [publicProperties, recentViewedIds]);
+  const newMatches = useMemo(() => {
+    const matchedIds = new Set(
+      savedSearches.flatMap(search => publicProperties
+        .filter(property => matchesSavedSearch(property, search))
+        .map(property => property.id))
+    );
+    return publicProperties
+      .filter(property => matchedIds.has(property.id))
+      .sort((a, b) => new Date(b.publishedAt ?? b.createdAt).getTime()
+        - new Date(a.publishedAt ?? a.createdAt).getTime())
+      .slice(0, 8);
+  }, [publicProperties, savedSearches]);
+  const favoriteProperties = useMemo(() => publicProperties
+    .filter(property => favorites.includes(property.id))
+    .slice(0, 8), [favorites, publicProperties]);
+  const preferredTypes = useMemo(() => {
+    const preferenceSource = recentViewedProperties[0] ?? favoriteProperties[0];
+    return preferenceSource ? [preferenceSource.type] : [];
+  }, [favoriteProperties, recentViewedProperties]);
+  const recommendedProperties = useMemo(() => {
+    const excludedIds = new Set([
+      ...recentViewedProperties.map(property => property.id),
+      ...favoriteProperties.map(property => property.id),
+    ]);
+    const matching = publicProperties.filter(property =>
+      !excludedIds.has(property.id) && preferredTypes.includes(property.type)
+    );
+    const fallback = publicProperties.filter(property => !excludedIds.has(property.id));
+    return (matching.length ? matching : fallback).slice(0, 8);
+  }, [favoriteProperties, preferredTypes, publicProperties, recentViewedProperties]);
 
-  const applySuggestion = (query: string, type?: PropertyType) => {
-    if (type) setFilterType(type);
-    setSearchQuery(query);
-    handleSearchSubmit();
+  const categoryCounts = useMemo(() => CATEGORY_OPTIONS.map(option => ({
+    ...option,
+    count: publicProperties.filter(property => property.type === option.type).length,
+  })), [publicProperties]);
+
+  const openProperty = (property: Property) => {
+    setSelectedProperty(property);
+    trackPropertyView(property.id);
+    navigation.navigate('PropertyDetail', { propertyId: property.id });
+  };
+
+  const handleSearch = () => {
+    const query = searchQuery.trim();
+    if (query) addSearchHistory(query);
+    Keyboard.dismiss();
+    requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: searchSectionOffset.current, animated: true }));
   };
 
   const resetAllFilters = () => {
@@ -212,1891 +221,1002 @@ const HomeScreen: React.FC = () => {
     setSearchQuery('');
     setSelectedCity(null);
     setSelectedNeighborhood(null);
-    setNeighborhoodQuery('');
-    setNeighborhoodOpen(false);
     setSortMode('recent');
-  };
-  const showAllProperties = () => {
-    resetAllFilters();
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollToOffset({
-        offset: Math.max(listSectionYRef.current - 12, 0),
-        animated: true,
-      });
-    });
-  };
-  const activeFilterChips = useMemo(() => {
-    const chips: string[] = [];
-    if (searchQuery) chips.push(searchQuery);
-    if (selectedCity) chips.push(selectedCity);
-    if (selectedNeighborhood) chips.push(selectedNeighborhood);
-    if (filterType !== 'ALL') chips.push(tType(filterType));
-    if (filters.minPrice || filters.maxPrice) {
-      chips.push(`Prix ${filters.minPrice ?? 0} - ${filters.maxPrice ?? '+'}`);
-    }
-    if (filters.minBedrooms) chips.push(`${filters.minBedrooms}+ ch`);
-    if (filters.minBathrooms) chips.push(`${filters.minBathrooms}+ sdb`);
-    if (filters.minArea) chips.push(`${filters.minArea} m2+`);
-    return chips;
-  }, [filters, filterType, searchQuery, selectedCity, selectedNeighborhood, tType]);
-
-
-  const handlePropertyPress = (property: Property) => {
-    setSelectedProperty(property);
-    InteractionManager.runAfterInteractions(() => {
-      navigation.navigate('PropertyDetail', { propertyId: property.id });
-    });
+    setVisibleCount(8);
   };
 
-  const handleCategoryPress = (type: PropertyType) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setSearchQuery('');
-    resetFilters();
-    setSelectedNeighborhood(null);
-    setFiltersOpen(false);
-    setNeighborhoodOpen(false);
-    setNeighborhoodQuery('');
+  const applyCategory = (type: PropertyType | 'ALL') => {
     setFilterType(type);
-    setCategoryPickerOpen(false);
-    requestAnimationFrame(() => scrollRef.current?.scrollToOffset({ offset: 0, animated: true }));
+    setVisibleCount(8);
+    requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: searchSectionOffset.current, animated: true }));
   };
 
-  const handleCategoryBack = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setFilterType('ALL');
-    setSearchQuery('');
-    resetFilters();
-    setSelectedNeighborhood(null);
-    setFiltersOpen(false);
-    setNeighborhoodOpen(false);
-    setNeighborhoodQuery('');
-    requestAnimationFrame(() => scrollRef.current?.scrollToOffset({ offset: 0, animated: true }));
+  const updatePrice = (key: 'minPrice' | 'maxPrice', text: string) => {
+    if (!/^\d*$/.test(text)) return;
+    setFilters({ [key]: text ? Number(text) : null });
+    setVisibleCount(8);
   };
 
-  const handleSearchSubmit = () => {
-    if (listSectionYRef.current > 0) {
-      scrollRef.current?.scrollToOffset({ offset: listSectionYRef.current - 10, animated: true });
-      return;
-    }
-    setTimeout(() => {
-      if (listSectionYRef.current > 0) {
-        scrollRef.current?.scrollToOffset({ offset: listSectionYRef.current - 10, animated: true });
-      }
-    }, 300);
-  };
-
-  const handleFilterChange = (
-    key: 'minPrice' | 'maxPrice' | 'minBedrooms' | 'minBathrooms' | 'minArea',
-    value: string
+  const updateMinimumFilter = (
+    key: 'minBedrooms' | 'minBathrooms' | 'minArea',
+    text: string
   ) => {
-    const cleaned = value.replace(/[^0-9]/g, '');
-    setFilters({ [key]: cleaned ? parseInt(cleaned, 10) : null });
+    if (!/^\d*$/.test(text)) return;
+    setFilters({ [key]: text ? Number(text) : null });
+    setVisibleCount(8);
   };
 
-  const handleSaveSearch = () => {
-    const labelParts: string[] = [];
-    if (searchQuery.trim()) labelParts.push(searchQuery.trim());
-    if (filterType !== 'ALL') labelParts.push(tType(filterType));
-    if (filters.minPrice || filters.maxPrice) {
-      labelParts.push(
-        `${t('price_label')} ${filters.minPrice ? `${filters.minPrice}` : '0'}-${filters.maxPrice ?? '+'}`
-      );
-    }
-    if (filters.minBedrooms) labelParts.push(`${filters.minBedrooms}+ ${t('bedrooms_label')}`);
-    if (filters.minArea) labelParts.push(`${filters.minArea} ${t('area_label')}+`);
+  const renderMinimumFilter = (
+    key: 'minBedrooms' | 'minBathrooms' | 'minArea',
+    label: string,
+    unit?: string
+  ) => (
+    <View key={key} style={styles.minimumInputWrap}>
+      <Text style={styles.budgetHint}>{label}</Text>
+      <View style={styles.minimumInputRow}>
+        <TextInput
+          value={filters[key]?.toString() ?? ''}
+          onChangeText={text => updateMinimumFilter(key, text)}
+          placeholder="—"
+          placeholderTextColor={colors.onSurfaceSoft}
+          keyboardType="number-pad"
+          style={styles.minimumInput}
+          accessibilityLabel={label}
+        />
+        {unit ? <Text style={styles.minimumUnit}>{unit}</Text> : null}
+      </View>
+    </View>
+  );
 
-    const label = labelParts.join(' | ') || t('save_search_done_title');
-
+  const saveCurrentSearch = () => {
+    const query = searchQuery.trim();
+    const labelParts = [
+      query,
+      selectedNeighborhood,
+      selectedCity,
+      filterType === 'ALL' ? '' : tType(filterType),
+    ].filter(Boolean);
     addSavedSearch({
-      label,
-      query: searchQuery.trim(),
+      label: labelParts.join(' · ') || t('home_search_card_title'),
+      query,
       type: filterType,
       filters,
     });
     Alert.alert(t('save_search_done_title'), t('save_search_done_message'));
   };
 
-  const visibleProperties = sortedProperties.slice(0, visibleCount);
-  const hasMoreProperties = visibleProperties.length < sortedProperties.length;
-  const loadMoreProperties = () => {
-    if (hasMoreProperties) {
-      setListState(previous => ({
-        key: resultSetKey,
-        visibleCount: (previous.key === resultSetKey ? previous.visibleCount : 12) + 12,
-      }));
-    }
-  };
-  const isLoading = !hydrated;
-  const homeCategoryItems: {
-    type?: PropertyType;
-    action?: 'all' | 'picker';
-    label: string;
-    icon: keyof typeof Ionicons.glyphMap;
-    color: string;
-    container: string;
-    count?: number;
-    onPress?: () => void;
-  }[] = [
-    {
-      label: t('all_types'),
-      icon: 'apps-outline',
-      color: themeColors.onSurfaceMuted,
-      container: themeColors.surfaceAlt,
-      count: activeListings,
-      action: 'all',
-    },
-    {
-      type: 'house',
-      label: tType('house'),
-      icon: 'home-outline',
-      color: themeColors.primary,
-      container: themeColors.primaryContainer,
-      count: propertiesByType.find(item => item.type === 'house')?.count ?? 0,
-    },
-    {
-      type: 'apartment',
-      label: tType('apartment'),
-      icon: 'business-outline',
-      color: themeColors.primary,
-      container: themeColors.primaryContainer,
-      count: propertiesByType.find(item => item.type === 'apartment')?.count ?? 0,
-    },
-    {
-      type: 'land',
-      label: tType('land'),
-      icon: 'map-outline',
-      color: themeColors.primary,
-      container: themeColors.primaryContainer,
-      count: propertiesByType.find(item => item.type === 'land')?.count ?? 0,
-    },
-    {
-      type: 'shop',
-      label: tType('shop'),
-      icon: 'storefront-outline',
-      color: themeColors.primary,
-      container: themeColors.primaryContainer,
-      count: propertiesByType.find(item => item.type === 'shop')?.count ?? 0,
-    },
-    {
-      label: t('home_more_categories'),
-      icon: 'grid-outline',
-      color: themeColors.primary,
-      container: themeColors.primaryContainer,
-      action: 'picker',
-    },
-  ];
-  const handleCategoryTilePress = (item: (typeof homeCategoryItems)[number]) => {
-    if (item.type) {
-      handleCategoryPress(item.type);
-    } else if (item.action === 'all') {
-      showAllProperties();
-    } else if (item.action === 'picker') {
-      setCategoryPickerOpen(true);
-    }
+  const applySavedSearch = (saved: (typeof savedSearches)[number]) => {
+    setSearchQuery(saved.query);
+    setFilterType(saved.type);
+    setFilters(saved.filters);
+    setSelectedCity(null);
+    setSelectedNeighborhood(null);
+    setVisibleCount(8);
+    Keyboard.dismiss();
   };
 
-  const renderSkeletonCard = (key: string, compact = false) => (
-    <View key={key} style={[styles.skeletonCard, compact && styles.skeletonCardCompact]}>
-      <Skeleton style={[styles.skeletonImage, compact && styles.skeletonImageCompact]} />
-      <View style={styles.skeletonBody}>
-        <Skeleton style={styles.skeletonLine} />
-        <Skeleton style={[styles.skeletonLine, styles.skeletonLineShort]} />
-        {!compact && (
-          <View style={styles.skeletonMetaRow}>
-            <Skeleton style={styles.skeletonPill} />
-            <Skeleton style={styles.skeletonDot} />
+  const openPlacePicker = (picker: Exclude<PlacePicker, null>) => {
+    setPlacePicker(picker);
+    setPlaceQuery('');
+  };
+
+  const choosePlace = (place: string | null) => {
+    if (placePicker === 'city') {
+      setSelectedCity(place);
+      setSelectedNeighborhood(null);
+    } else {
+      setSelectedNeighborhood(place);
+    }
+    setVisibleCount(8);
+    setPlacePicker(null);
+  };
+
+  const placeOptions = placePicker === 'city' ? CITIES : neighborhoodsForCity;
+  const filteredPlaceOptions = placeOptions.filter(place =>
+    place.toLowerCase().includes(placeQuery.trim().toLowerCase())
+  );
+  const hasActiveFilters = Boolean(
+    searchQuery || selectedCity || selectedNeighborhood || filterType !== 'ALL'
+    || filters.minPrice !== null || filters.maxPrice !== null
+    || filters.minBedrooms !== null || filters.minBathrooms !== null || filters.minArea !== null
+  );
+  const resultsHeading = filterType === 'ALL' ? t('all_properties') : tType(filterType);
+  const sectionTitle = (title: string, action?: string, onAction?: () => void) => (
+    <View style={styles.sectionHeading}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {action && onAction ? (
+        <TouchableOpacity onPress={onAction} accessibilityRole="button">
+          <Text style={styles.sectionAction}>{action}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+  const renderCarousel = (title: string, items: Property[]) => {
+    if (!items.length) return null;
+    return (
+      <Animated.View entering={FadeInDown.duration(350)} style={styles.section}>
+        {sectionTitle(title)}
+        <FlatList
+          horizontal
+          data={items}
+          keyExtractor={item => `${title}-${item.id}`}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.carouselContent}
+          renderItem={({ item }) => (
+            <PropertyCard
+              property={item}
+              compact
+              isFeatured={isFeaturedProperty(item)}
+              onPress={() => openProperty(item)}
+            />
+          )}
+        />
+      </Animated.View>
+    );
+  };
+
+  const renderHeader = () => (
+    <View>
+      <Animated.View entering={FadeInDown.duration(500)} style={[styles.hero, width < 360 && styles.heroCompact]}>
+        <ImageBackground source={heroImage} style={styles.heroImage} imageStyle={styles.heroImageCorners}>
+          <View style={styles.heroScrim} />
+          <View pointerEvents="none" style={styles.heroGradient}>
+            {HERO_SCRIM_STOPS.map((backgroundColor, index) => (
+              <View
+                key={`hero-scrim-${index}`}
+                style={[styles.heroGradientStop, { backgroundColor }]}
+              />
+            ))}
           </View>
+          <View style={styles.heroContent}>
+            <View style={styles.heroTopline}>
+              <View style={styles.brandPill}>
+                <Ionicons name="diamond-outline" size={14} color={colors.premiumGold} />
+                <Text style={styles.brandText}>ImoPrestige</Text>
+              </View>
+            </View>
+            <View style={styles.heroBottom}>
+              <Text style={styles.heroEyebrow}>{t('app_tagline')}</Text>
+              <Text style={[styles.heroTitle, width < 360 && styles.heroTitleCompact]}>
+                {t('home_hero_line1')}{' '}
+                <Text style={styles.heroTitleAccent}>{t('home_hero_line2')}</Text>
+              </Text>
+              <Text style={styles.heroSubtitle}>{t('home_featured_subtitle')}</Text>
+              <TouchableOpacity
+                style={styles.heroCta}
+                onPress={() => listRef.current?.scrollToOffset({ offset: searchSectionOffset.current, animated: true })}
+                accessibilityRole="button"
+              >
+                <Text style={styles.heroCtaText}>{t('home_explore')}</Text>
+                <Ionicons name="arrow-forward" size={17} color={colors.premiumDarkBlue} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ImageBackground>
+      </Animated.View>
+
+      <Animated.View
+        entering={FadeInDown.delay(80).duration(450)}
+        style={styles.searchCard}
+        onLayout={event => {
+          searchSectionOffset.current = event.nativeEvent.layout.y;
+        }}
+      >
+        <View style={styles.searchTitleRow}>
+          <View style={styles.searchTitleIcon}>
+            <Ionicons name="search" size={18} color={colors.primary} />
+          </View>
+          <View style={styles.searchTitleCopy}>
+            <Text style={styles.searchTitle}>{t('home_search_card_title')}</Text>
+            <Text style={styles.searchSubtitle}>{t('home_search_guide')}</Text>
+          </View>
+        </View>
+        <SearchBar
+          value={searchQuery}
+          onChangeText={value => {
+            setSearchQuery(value);
+            setVisibleCount(8);
+          }}
+          placeholder={t('home_search_placeholder')}
+          onSearch={handleSearch}
+        />
+
+        <View style={styles.locationRow}>
+          <TouchableOpacity
+            style={styles.locationButton}
+            onPress={() => openPlacePicker('city')}
+            accessibilityRole="button"
+          >
+            <Ionicons name="location-outline" size={16} color={colors.primary} />
+            <Text style={styles.locationButtonText} numberOfLines={1}>
+              {selectedCity ?? t('home_select_city')}
+            </Text>
+            <Ionicons name="chevron-down" size={15} color={colors.onSurfaceMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.locationButton}
+            onPress={() => openPlacePicker('neighborhood')}
+            accessibilityRole="button"
+          >
+            <Ionicons name="navigate-outline" size={15} color={colors.primary} />
+            <Text style={styles.locationButtonText} numberOfLines={1}>
+              {selectedNeighborhood ?? t('home_select_neighborhood')}
+            </Text>
+            <Ionicons name="chevron-down" size={15} color={colors.onSurfaceMuted} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.filterDivider} />
+        <View style={styles.budgetHeader}>
+          <View style={styles.budgetLabelRow}>
+            <Ionicons name="wallet-outline" size={16} color={colors.primary} />
+            <Text style={styles.filterLabel}>{t('home_filter_price')}</Text>
+          </View>
+          {hasActiveFilters ? (
+            <TouchableOpacity onPress={resetAllFilters} accessibilityRole="button">
+              <Text style={styles.resetText}>{t('home_reset_short')}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <View style={styles.budgetRow}>
+          <View style={styles.budgetInputWrap}>
+            <Text style={styles.budgetHint}>{t('filter_price_min')}</Text>
+            <TextInput
+              value={filters.minPrice?.toString() ?? ''}
+              onChangeText={text => updatePrice('minPrice', text)}
+              placeholder="0"
+              placeholderTextColor={colors.onSurfaceSoft}
+              keyboardType="number-pad"
+              style={styles.budgetInput}
+              accessibilityLabel={t('filter_price_min')}
+            />
+            <Text style={styles.currencySuffix}>FCFA</Text>
+          </View>
+          <View style={styles.budgetRangeDash} />
+          <View style={styles.budgetInputWrap}>
+            <Text style={styles.budgetHint}>{t('filter_price_max')}</Text>
+            <TextInput
+              value={filters.maxPrice?.toString() ?? ''}
+              onChangeText={text => updatePrice('maxPrice', text)}
+              placeholder="—"
+              placeholderTextColor={colors.onSurfaceSoft}
+              keyboardType="number-pad"
+              style={styles.budgetInput}
+              accessibilityLabel={t('filter_price_max')}
+            />
+            <Text style={styles.currencySuffix}>FCFA</Text>
+          </View>
+        </View>
+        <View style={styles.minimumFiltersRow}>
+          {renderMinimumFilter('minBedrooms', t('filter_bedrooms_min'))}
+          {renderMinimumFilter('minBathrooms', t('filter_bathrooms_min'))}
+          {renderMinimumFilter('minArea', t('filter_area_min'), 'm²')}
+        </View>
+        <View style={styles.searchActions}>
+          <TouchableOpacity style={styles.saveSearchButton} onPress={saveCurrentSearch}>
+            <Ionicons name="bookmark-outline" size={16} color={colors.primary} />
+            <Text style={styles.saveSearchText}>{t('save_search')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.searchSubmit} onPress={handleSearch} accessibilityRole="button">
+            <Text style={styles.searchSubmitText}>{t('home_explore')}</Text>
+            <Ionicons name="arrow-forward" size={16} color={colors.onBrand} />
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+
+      {searchHistory.length ? (
+        <View style={styles.section}>
+          {sectionTitle(t('profile_search_history'))}
+          <FlatList
+            horizontal
+            data={searchHistory.slice(0, 8)}
+            keyExtractor={(item, index) => `${item}-${index}`}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipList}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.historyChip}
+                onPress={() => {
+                  setSearchQuery(item);
+                  setVisibleCount(8);
+                  requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: searchSectionOffset.current, animated: true }));
+                }}
+              >
+                <Ionicons name="time-outline" size={14} color={colors.onSurfaceMuted} />
+                <Text style={styles.historyChipText} numberOfLines={1}>{item}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      ) : null}
+
+      {savedSearches.length ? (
+        <View style={styles.section}>
+          {sectionTitle(t('home_saved_searches_title'))}
+          <FlatList
+            horizontal
+            data={savedSearches.slice(0, 6)}
+            keyExtractor={item => item.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipList}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.savedSearchChip} onPress={() => applySavedSearch(item)}>
+                <Ionicons name="bookmark" size={14} color={colors.primary} />
+                <Text style={styles.savedSearchText} numberOfLines={1}>{item.label}</Text>
+                <Ionicons name="arrow-up-outline" size={13} color={colors.onSurfaceMuted} />
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      ) : null}
+
+      <View style={styles.section}>
+        {sectionTitle(t('categories_title'), t('all_properties'), () => applyCategory('ALL'))}
+        <FlatList
+          horizontal
+          data={categoryCounts}
+          keyExtractor={item => item.type}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryList}
+          renderItem={({ item }) => {
+            const active = filterType === item.type;
+            return (
+              <TouchableOpacity
+                style={[styles.categoryCard, active && styles.categoryCardActive]}
+                onPress={() => applyCategory(active ? 'ALL' : item.type)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+              >
+                <View style={[styles.categoryIconWrap, active && styles.categoryIconWrapActive]}>
+                  <Ionicons
+                    name={item.icon}
+                    size={21}
+                    color={active ? colors.onBrand : PROPERTY_TYPE_COLORS[item.type]}
+                  />
+                </View>
+                <Text style={[styles.categoryName, active && styles.categoryNameActive]} numberOfLines={1}>
+                  {tType(item.type)}
+                </Text>
+                <Text style={[styles.categoryCount, active && styles.categoryCountActive]}>
+                  {item.count} {t('properties_count')}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+        />
+      </View>
+
+      <View style={styles.section}>
+        {sectionTitle(t('home_neighborhoods_popular'))}
+        {neighborhoodsForCity.length ? (
+          <FlatList
+            horizontal
+            data={neighborhoodsForCity.slice(0, 10)}
+            keyExtractor={item => item}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipList}
+            renderItem={({ item }) => {
+              const active = selectedNeighborhood === item;
+              return (
+                <TouchableOpacity
+                  style={[styles.neighborhoodChip, active && styles.neighborhoodChipActive]}
+                  onPress={() => {
+                    setSelectedNeighborhood(active ? null : item);
+                    setVisibleCount(8);
+                  }}
+                >
+                  <Ionicons
+                    name="location-outline"
+                    size={14}
+                    color={active ? colors.onBrand : colors.primary}
+                  />
+                  <Text style={[styles.neighborhoodChipText, active && styles.neighborhoodChipTextActive]}>
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        ) : (
+          <Text style={styles.mutedNote}>{t('home_no_neighborhoods')}</Text>
         )}
       </View>
+
+      {renderCarousel(t('featured_title'), featuredProperties)}
+      {renderCarousel(t('home_recommended_title'), recommendedProperties)}
+      {renderCarousel(t('home_new_matches_title'), newMatches)}
+      {renderCarousel(t('home_recent_title'), recentProperties)}
+      {renderCarousel(t('home_recent_views_title'), recentViewedProperties)}
+      {renderCarousel(t('home_favorites_title'), favoriteProperties)}
+
+      <View style={styles.resultHeading}>
+        <View style={styles.resultHeadingCopy}>
+          <Text style={styles.sectionTitle}>{resultsHeading}</Text>
+          <Text style={styles.resultCount}>
+            {filteredProperties.length} {t('properties_count')}
+          </Text>
+        </View>
+        {hasActiveFilters ? (
+          <TouchableOpacity onPress={resetAllFilters} style={styles.clearFiltersButton}>
+            <Ionicons name="close-circle-outline" size={16} color={colors.primary} />
+            <Text style={styles.clearFiltersText}>{t('home_reset_short')}</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      <View style={styles.sortRow}>
+        {([
+          ['recent', t('sort_recent')],
+          ['priceAsc', t('sort_price_asc')],
+          ['priceDesc', t('sort_price_desc')],
+        ] as const).map(([mode, label]) => (
+          <TouchableOpacity
+            key={mode}
+            style={[styles.sortChip, sortMode === mode && styles.sortChipActive]}
+            onPress={() => setSortMode(mode)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: sortMode === mode }}
+          >
+            <Text style={[styles.sortChipText, sortMode === mode && styles.sortChipTextActive]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {!currentUser ? (
+        <TouchableOpacity
+          style={styles.signInBanner}
+          onPress={() => navigation.navigate('MainTabs', { screen: 'Profile' })}
+        >
+          <View style={styles.signInIcon}>
+            <Ionicons name="person-outline" size={19} color={colors.primary} />
+          </View>
+          <View style={styles.signInCopy}>
+            <Text style={styles.signInTitle}>{t('home_connect_title')}</Text>
+            <Text style={styles.signInSubtitle}>{t('home_connect_sub')}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceMuted} />
+        </TouchableOpacity>
+      ) : null}
+
+      <TouchableOpacity
+        style={styles.publishBanner}
+        onPress={() => navigation.navigate('Publish')}
+      >
+        <View style={styles.publishIcon}>
+          <Ionicons name="add" size={21} color={colors.onGold} />
+        </View>
+        <View style={styles.publishCopy}>
+          <Text style={styles.publishTitle}>{t('home_publish_card_title')}</Text>
+          <Text style={styles.publishSubtitle}>{t('home_publish_card_sub')}</Text>
+        </View>
+        <Ionicons name="arrow-forward" size={18} color={colors.onBrand} />
+      </TouchableOpacity>
     </View>
   );
 
-  return (
-    <>
-      <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} />
-      <OfflineBanner />
-      {filterType !== 'ALL' && (
-        <View style={[styles.categoryNavigationBar, { paddingTop: insets.top + 12 }]}>
-          <TouchableOpacity
-            style={styles.categoryBackButton}
-            onPress={handleCategoryBack}
-            accessibilityRole="button"
-            accessibilityLabel={t('back')}
-            accessibilityHint={t('home_category_back_hint')}
-            hitSlop={8}
-          >
-            <Ionicons name="arrow-back" size={19} color={themeColors.primary} />
-            <Text style={styles.categoryBackText}>{t('back')}</Text>
-          </TouchableOpacity>
-          <View style={styles.categoryNavigationDetails}>
-            <Text style={styles.categoryResultsTitle}>{tType(filterType)}</Text>
-            <Text style={styles.categoryResultsSubtitle}>
-              {t('home_category_results_subtitle')}
-            </Text>
-          </View>
-          <View style={styles.categoryResultsCount}>
-            <Text style={styles.categoryResultsCountText}>{filteredByNeighborhood.length}</Text>
-          </View>
+  const renderEmpty = () => {
+    if (!hydrated) {
+      return (
+        <View style={styles.loadingWrap}>
+          <Skeleton style={styles.skeletonCard} borderRadius={RADIUS.lg} />
+          <Skeleton style={styles.skeletonCard} borderRadius={RADIUS.lg} />
         </View>
-      )}
+      );
+    }
+    return (
+      <EmptyState
+        icon="search-outline"
+        title={t('home_no_properties')}
+        description={t('home_no_properties_description')}
+        actionLabel={t('home_empty_reset')}
+        onAction={resetAllFilters}
+        style={styles.emptyState}
+      />
+    );
+  };
+
+  return (
+    <View style={styles.screen}>
+      <OfflineBanner />
+      {syncError ? (
+        <View style={styles.syncErrorBanner}>
+          <Text style={styles.syncErrorText}>{syncError}</Text>
+          <TouchableOpacity onPress={retrySync} accessibilityRole="button">
+            <Text style={styles.syncRetryText}>{t('sync_retry')}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <FlatList
-        ref={scrollRef}
-        style={styles.container}
-        contentContainerStyle={{
-          paddingTop: insets.top,
-          paddingBottom: Math.max(insets.bottom, 16),
-        }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        data={isLoading ? [] : visibleProperties}
+        ref={listRef}
+        data={hydrated ? filteredProperties.slice(0, visibleCount) : []}
         keyExtractor={property => property.id}
         renderItem={({ item }) => (
-          <View style={styles.propertyListItem}>
-            <PropertyCard property={item} onPress={() => handlePropertyPress(item)} />
-          </View>
+          <PropertyCard
+            property={item}
+            isFeatured={isFeaturedProperty(item)}
+            onPress={() => openProperty(item)}
+          />
         )}
-        onEndReached={loadMoreProperties}
-        onEndReachedThreshold={0.45}
-        ListHeaderComponent={<>
-
-      {filterType === 'ALL' && (
-      <>
-      <View>
-        {/* Header */}
-        <ImageBackground
-          source={heroBackground}
-          resizeMode="cover"
-          style={[styles.headerBlock, { paddingTop: insets.top + 18 }]}
-          imageStyle={styles.headerImage}
-        >
-          <View style={styles.headerContent}>
-            <View style={styles.headerTopRow}>
-              <Text style={styles.headerBrand}>ImoPrestige</Text>
-              <View
-                style={styles.homeLanguageSelector}
-                accessibilityRole="radiogroup"
-                accessibilityLabel={t('language')}
-              >
-                {(['fr', 'en'] as const).map(option => {
-                  const selected = language === option;
-                  return (
-                    <TouchableOpacity
-                      key={option}
-                      style={[
-                        styles.homeLanguageOption,
-                        selected && styles.homeLanguageOptionActive,
-                      ]}
-                      onPress={() => setLanguage(option)}
-                      accessibilityRole="radio"
-                      accessibilityLabel={option === 'fr' ? 'Français' : 'English'}
-                      accessibilityState={{ selected }}
-                      hitSlop={4}
-                    >
-                      <Text
-                        style={[
-                          styles.homeLanguageText,
-                          selected && styles.homeLanguageTextActive,
-                        ]}
-                      >
-                        {option.toUpperCase()}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-            <View style={styles.locationPill}>
-              <Ionicons name="location" size={13} color={themeColors.brandAccent} />
-              <Text style={styles.locationPillText}>{t('footer_location')}</Text>
-            </View>
-            <Text style={styles.headerTitle}>{t('home_hero_line1')}</Text>
-            <Text style={styles.headerTitleEm}>{t('home_hero_line2')}</Text>
-            <TouchableOpacity style={styles.heroCta} onPress={showAllProperties} accessibilityRole="button">
-              <Ionicons name="search" size={16} color={themeColors.brand} />
-              <Text style={styles.heroCtaText}>{t('home_search_card_title')}</Text>
-              <Ionicons name="arrow-forward" size={16} color={themeColors.brand} />
-            </TouchableOpacity>
-          </View>
-        </ImageBackground>
-
-        <View style={styles.searchCardOverlap}>
-          <View style={styles.searchCard}>
-            <View style={styles.searchHeader}>
-              <Text style={styles.searchTitle}>{t('home_search_card_title')}</Text>
-            </View>
-            <SearchBar
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder={t('home_search_placeholder')}
-              onSearch={handleSearchSubmit}
-            />
-            <View style={styles.suggestionRow}>
-              {suggestionBase.map(item => (
-                <TouchableOpacity
-                  key={item.label}
-                  style={styles.suggestionChip}
-                  onPress={() => applySuggestion(item.query, item.type)}
-                >
-                  <Ionicons name="sparkles" size={12} color={themeColors.primary} />
-                  <Text style={styles.suggestionText}>{item.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {activeFilterChips.length > 0 && (
-              <View style={styles.activeFiltersRow}>
-                <View style={styles.activeFiltersWrap}>
-                  {activeFilterChips.map(label => (
-                    <View key={label} style={styles.activeFilterChip}>
-                      <Text style={styles.activeFilterText}>{label}</Text>
-                    </View>
-                  ))}
-                </View>
-                <TouchableOpacity style={styles.activeFiltersReset} onPress={resetAllFilters}>
-                  <Ionicons name="refresh" size={14} color={themeColors.primary} />
-                  <Text style={styles.activeFiltersResetText}>{t('home_reset_short')}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterChipScroll}
-          contentContainerStyle={styles.filterChipRow}
-        >
-            {[
-              {
-                key: 'beds',
-                label: t('home_filter_beds_baths'),
-                active: Boolean(filters.minBedrooms || filters.minBathrooms),
-              },
-              {
-                key: 'price',
-                label: t('home_filter_price'),
-                active: Boolean(filters.minPrice || filters.maxPrice),
-              },
-              {
-                key: 'hood',
-                label: t('home_filter_neighborhood'),
-                active: Boolean(selectedNeighborhood),
-              },
-              { key: 'area', label: t('home_filter_area'), active: Boolean(filters.minArea) },
-              { key: 'more', label: t('home_filter_more'), active: Boolean(filtersOpen) },
-            ].map(item => (
-              <TouchableOpacity
-                key={item.key}
-                style={[styles.filterChip, item.active && styles.filterChipActive]}
-                onPress={() => {
-                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                  setFiltersOpen(true);
-                  if (item.key === 'hood') setNeighborhoodOpen(true);
-                }}
-              >
-                <Text style={[styles.filterChipText, item.active && styles.filterChipTextActive]}>
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-        </ScrollView>
-
-        {syncError && (
-          <View style={styles.syncErrorCard}>
-            <View style={styles.syncErrorRow}>
-              <Ionicons name="alert-circle" size={18} color={themeColors.danger} />
-              <Text style={styles.syncErrorText}>{syncError}</Text>
-            </View>
-            <TouchableOpacity style={styles.syncRetryButton} onPress={retrySync}>
-              <Text style={styles.syncRetryText}>{t('sync_retry')}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-      {/* Filter */}
-      <View style={styles.filterSticky}>
-        {selectedNeighborhood && (
-          <View style={styles.neighborhoodBadgeRow}>
-            <View style={styles.neighborhoodBadge}>
-              <Ionicons name="location" size={14} color={themeColors.primary} />
-              <Text style={styles.neighborhoodBadgeText} numberOfLines={1}>
-                {selectedNeighborhood}
-              </Text>
-              <TouchableOpacity onPress={() => setSelectedNeighborhood(null)}>
-                <Ionicons name="close" size={16} color={themeColors.primary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-        <View style={styles.filterHeader}>
-          <Text style={styles.filterTitle}>{t('filters_title')}</Text>
-          <View style={styles.filterActions}>
-            <TouchableOpacity onPress={() => {
-              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-              setFiltersOpen(prev => !prev);
-            }}>
-              <Text style={styles.filterToggle}>
-                {filtersOpen ? t('filters_hide') : t('filters_show')}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={resetAllFilters}>
-              <Text style={styles.clearFilter}>{t('filters_reset')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-      {filtersOpen && (
-        <View style={styles.filtersPanel}>
-          <View style={styles.filterRow}>
-            <View style={styles.filterField}>
-              <Text style={styles.filterLabel}>{t('filter_city')}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChoiceRow}>
-                <TouchableOpacity
-                  style={[styles.filterChoice, !selectedCity && styles.filterChoiceActive]}
-                  onPress={() => setSelectedCity(null)}
-                >
-                  <Text style={[styles.filterChoiceText, !selectedCity && styles.filterChoiceTextActive]}>{t('all_cities')}</Text>
-                </TouchableOpacity>
-                {cities.map(city => (
-                  <TouchableOpacity
-                    key={city}
-                    style={[styles.filterChoice, selectedCity === city && styles.filterChoiceActive]}
-                    onPress={() => setSelectedCity(city)}
-                  >
-                    <Text style={[styles.filterChoiceText, selectedCity === city && styles.filterChoiceTextActive]}>{city}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-          <View style={styles.filterRow}>
-            <View style={styles.filterField}>
-              <Text style={styles.filterLabel}>{t('sort_recent')}</Text>
-              <View style={styles.sortRow}>
-                {([
-                  ['recent', t('sort_recent')],
-                  ['priceAsc', t('sort_price_asc')],
-                  ['priceDesc', t('sort_price_desc')],
-                ] as const).map(([mode, label]) => (
-                  <TouchableOpacity
-                    key={mode}
-                    style={[styles.filterChoice, sortMode === mode && styles.filterChoiceActive]}
-                    onPress={() => setSortMode(mode)}
-                  >
-                    <Text style={[styles.filterChoiceText, sortMode === mode && styles.filterChoiceTextActive]}>{label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </View>
-          <View style={styles.filterRow}>
-            <View style={styles.filterField}>
-              <Text style={styles.filterLabel}>{t('filter_label_neighborhood')}</Text>
-              <TouchableOpacity
-                style={styles.dropdownButton}
-                onPress={() => {
-                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                  setNeighborhoodOpen(prev => !prev);
-                }}
-              >
-                <Text style={styles.dropdownButtonText} numberOfLines={1}>
-                  {selectedNeighborhood || t('filter_all_neighborhoods')}
-                </Text>
-                <Ionicons
-                  name={neighborhoodOpen ? 'chevron-up' : 'chevron-down'}
-                  size={16}
-                  color={themeColors.onSurfaceMuted}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-          {neighborhoodOpen && (
-            <Modal
-              visible
-              transparent
-              animationType="slide"
-              statusBarTranslucent
-              onRequestClose={() => setNeighborhoodOpen(false)}
-            >
-              <Pressable
-                style={styles.neighborhoodModalBackdrop}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  setNeighborhoodOpen(false);
-                }}
-              >
-                <KeyboardAvoidingView
-                  style={styles.neighborhoodKeyboardAvoiding}
-                  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                >
-                  <Pressable
-                    style={[styles.neighborhoodModal, { backgroundColor: themeColors.surface }]}
-                    onPress={event => event.stopPropagation()}
-                  >
-                    <View style={styles.neighborhoodModalHeader}>
-                      <Text style={[styles.neighborhoodModalTitle, { color: themeColors.onSurface }]}>
-                        {t('filter_label_neighborhood')}
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => {
-                          Keyboard.dismiss();
-                          setNeighborhoodOpen(false);
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('close')}
-                      >
-                        <Ionicons name="close" size={24} color={themeColors.onSurface} />
-                      </TouchableOpacity>
-                    </View>
-                    <View style={[styles.dropdownSearchRow, { backgroundColor: themeColors.background }]}>
-                      <Ionicons name="search" size={14} color={themeColors.onSurfaceMuted} />
-                      <TextInput
-                        style={[styles.dropdownSearchInput, { color: themeColors.onSurface }]}
-                        value={neighborhoodQuery}
-                        onChangeText={setNeighborhoodQuery}
-                        placeholder={t('filter_search_neighborhood_ph')}
-                        placeholderTextColor={themeColors.onSurfaceMuted}
-                        autoCorrect={false}
-                        returnKeyType="search"
-                      />
-                    </View>
-                    <ScrollView
-                      style={styles.neighborhoodModalList}
-                      contentContainerStyle={styles.neighborhoodModalListContent}
-                      nestedScrollEnabled
-                      keyboardShouldPersistTaps="handled"
-                      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-                      showsVerticalScrollIndicator={true}
-                    >
-                      <TouchableOpacity
-                        style={[styles.dropdownItem, styles.neighborhoodModalOption]}
-                        onPress={() => {
-                          Keyboard.dismiss();
-                          setSelectedNeighborhood(null);
-                          setNeighborhoodOpen(false);
-                        }}
-                      >
-                        <Text style={[
-                          styles.dropdownItemText,
-                          { color: themeColors.onSurfaceMuted },
-                          !selectedNeighborhood && { color: themeColors.primary },
-                        ]}>
-                          {t('home_all_neighborhoods')}
-                        </Text>
-                      </TouchableOpacity>
-                      {filteredNeighborhoods.map(name => (
-                        <TouchableOpacity
-                          key={name}
-                          style={[
-                            styles.dropdownItem,
-                            styles.neighborhoodModalOption,
-                            selectedNeighborhood === name && { backgroundColor: themeColors.infoContainer },
-                          ]}
-                          onPress={() => {
-                            Keyboard.dismiss();
-                            setSelectedNeighborhood(name);
-                            setNeighborhoodOpen(false);
-                          }}
-                        >
-                          <Text
-                            style={[
-                              styles.dropdownItemText,
-                              { color: themeColors.onSurfaceMuted },
-                              selectedNeighborhood === name && { color: themeColors.primary },
-                            ]}
-                          >
-                            {name}
-                          </Text>
-                          {selectedNeighborhood === name && (
-                            <Ionicons name="checkmark" size={18} color={themeColors.primary} />
-                          )}
-                        </TouchableOpacity>
-                      ))}
-                      {filteredNeighborhoods.length === 0 && (
-                        <Text style={[styles.dropdownEmpty, { color: themeColors.onSurfaceMuted }]}>
-                          {t('home_no_neighborhoods')}
-                        </Text>
-                      )}
-                    </ScrollView>
-                  </Pressable>
-                </KeyboardAvoidingView>
-              </Pressable>
-            </Modal>
-          )}
-          <View style={styles.filterRow}>
-            <View style={styles.filterField}>
-              <Text style={styles.filterLabel}>{t('filter_price_min')}</Text>
-              <TextInput
-                style={styles.filterInput}
-                value={filters.minPrice ? String(filters.minPrice) : ''}
-                onChangeText={value => handleFilterChange('minPrice', value)}
-                placeholder="0"
-                keyboardType="numeric"
-              />
-            </View>
-            <View style={styles.filterField}>
-              <Text style={styles.filterLabel}>{t('filter_price_max')}</Text>
-              <TextInput
-                style={styles.filterInput}
-                value={filters.maxPrice ? String(filters.maxPrice) : ''}
-                onChangeText={value => handleFilterChange('maxPrice', value)}
-                placeholder="50000000"
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-          <View style={styles.filterRow}>
-            <View style={styles.filterField}>
-              <Text style={styles.filterLabel}>{t('filter_bedrooms_min')}</Text>
-              <TextInput
-                style={styles.filterInput}
-                value={filters.minBedrooms ? String(filters.minBedrooms) : ''}
-                onChangeText={value => handleFilterChange('minBedrooms', value)}
-                placeholder="0"
-                keyboardType="numeric"
-              />
-            </View>
-            <View style={styles.filterField}>
-              <Text style={styles.filterLabel}>{t('filter_bathrooms_min')}</Text>
-              <TextInput
-                style={styles.filterInput}
-                value={filters.minBathrooms ? String(filters.minBathrooms) : ''}
-                onChangeText={value => handleFilterChange('minBathrooms', value)}
-                placeholder="0"
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-          <View style={styles.filterRow}>
-            <View style={styles.filterField}>
-              <Text style={styles.filterLabel}>{t('filter_area_min')}</Text>
-              <TextInput
-                style={styles.filterInput}
-                value={filters.minArea ? String(filters.minArea) : ''}
-                onChangeText={value => handleFilterChange('minArea', value)}
-                placeholder="50"
-                keyboardType="numeric"
-              />
-            </View>
-            <View style={styles.filterField}>
-              <Text style={styles.filterLabel}>{t('filter_date_label')}</Text>
-              <View style={styles.filterStatic}>
-                <Ionicons name="calendar" size={14} color={themeColors.onSurfaceMuted} />
-                <Text style={styles.filterStaticText}>{t('filter_last_30_days')}</Text>
-              </View>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.saveSearchButton} onPress={handleSaveSearch}>
-            <Ionicons name="bookmark" size={16} color={themeColors.primary} />
-            <Text style={styles.saveSearchText}>{t('save_search')}</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Quick Categories */}
-      <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('categories_title')}</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryGrid}
-        >
-          {homeCategoryItems.map(item => (
-            <TouchableOpacity
-              key={item.type ?? item.label}
-              style={[
-                styles.categoryTile,
-                item.action === 'all' && styles.categoryTileActive,
-              ]}
-              onPress={() => handleCategoryTilePress(item)}
-              accessibilityRole="button"
-              accessibilityLabel={item.label}
-              accessibilityState={{
-                selected: item.action === 'all',
-              }}
-            >
-              <View style={[styles.categoryTileIcon, { backgroundColor: item.container }]}>
-                <Ionicons name={item.icon} size={21} color={item.color} />
-              </View>
-              <Text style={styles.categoryTileLabel} numberOfLines={1}>{item.label}</Text>
-              {item.count !== undefined && (
-                <Text style={styles.categoryTileCount}>{item.count} {t('properties_count')}</Text>
-              )}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </Animated.View>
-
-      <Animated.View entering={FadeInDown.duration(400).delay(40)} style={styles.trustStatsCard}>
-        <View style={styles.trustStat}>
-          <View style={[styles.trustStatIcon, { backgroundColor: themeColors.primaryContainer }]}>
-            <Ionicons name="home-outline" size={16} color={themeColors.primary} />
-          </View>
-          <Text style={styles.trustStatValue}>{activeListings}</Text>
-          <Text style={styles.trustStatLabel}>{t('home_visible_properties')}</Text>
-        </View>
-        <View style={styles.trustStatDivider} />
-        <View style={styles.trustStat}>
-          <View style={[styles.trustStatIcon, { backgroundColor: themeColors.successContainer }]}>
-            <Ionicons name="shield-checkmark-outline" size={16} color={themeColors.success} />
-          </View>
-          <Text style={styles.trustStatValue}>—</Text>
-          <Text style={styles.trustStatLabel}>{t('home_verified_owners')}</Text>
-        </View>
-        <View style={styles.trustStatDivider} />
-        <View style={styles.trustStat}>
-          <View style={[styles.trustStatIcon, { backgroundColor: themeColors.infoContainer }]}>
-            <Ionicons name="chatbubble-ellipses-outline" size={16} color={themeColors.info} />
-          </View>
-          <Text style={styles.trustStatValue}>{t('home_direct_contact_value')}</Text>
-          <Text style={styles.trustStatLabel}>{t('home_direct_contact')}</Text>
-        </View>
-      </Animated.View>
-
-      {(isLoading || featuredProperties.length > 0) && (
-        <Animated.View entering={FadeInDown.duration(400).delay(80)} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('featured_title')}</Text>
-            <TouchableOpacity onPress={showAllProperties}>
-              <Text style={styles.seeAll}>{t('see_all')}</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.featuredRow}
-          >
-            {isLoading
-              ? Array.from({ length: 4 }).map((_, idx) =>
-                  renderSkeletonCard(`featured-skel-${idx}`, true)
-                )
-              : featuredProperties.map(property => (
-                  <PropertyCard
-                    key={property.id}
-                    property={property}
-                    onPress={() => handlePropertyPress(property)}
-                    compact
-                  />
-                ))}
-          </ScrollView>
-        </Animated.View>
-      )}
-
-      {recentProperties.length > 0 && (
-        <Animated.View entering={FadeInDown.duration(400).delay(140)} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('home_recent_title')}</Text>
-            <TouchableOpacity onPress={showAllProperties}>
-              <Text style={styles.seeAll}>{t('see_all')}</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.featuredRow}
-          >
-            {recentProperties.map(property => (
-              <PropertyCard
-                key={property.id}
-                property={property}
-                onPress={() => handlePropertyPress(property)}
-                compact
-              />
-            ))}
-          </ScrollView>
-        </Animated.View>
-      )}
-
-      {availableNeighborhoods.length > 0 && (
-        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('home_neighborhoods_popular')}</Text>
-            <TouchableOpacity onPress={() => {
-              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-              setFiltersOpen(true);
-              setNeighborhoodOpen(true);
-            }}>
-              <Text style={styles.seeAll}>{t('home_explore')}</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.neighborhoodsScroll}
-          >
-            {availableNeighborhoods.map(name => (
-              <TouchableOpacity
-                key={name}
-                style={[
-                  styles.neighborhoodChip,
-                  selectedNeighborhood === name && styles.neighborhoodChipActive,
-                ]}
-                onPress={() => {
-                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                  setSelectedCity(null);
-                  setSelectedNeighborhood(name);
-                  if (listSectionYRef.current > 0) {
-                    scrollRef.current?.scrollToOffset({ offset: listSectionYRef.current - 10, animated: true });
-                  }
-                }}
-              >
-                <Text
-                  style={[
-                    styles.neighborhoodChipText,
-                    selectedNeighborhood === name && styles.neighborhoodChipTextActive,
-                  ]}
-                >
-                  {name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </Animated.View>
-      )}
-
-      </>
-      )}
-
-      {filterType === 'ALL' && (
-        <View
-          style={styles.section}
-          onLayout={event => {
-            listSectionYRef.current = event.nativeEvent.layout.y;
-          }}
-        >
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('all_properties')}</Text>
-            <Text style={styles.count}>{filteredByNeighborhood.length} {t('properties_count')}</Text>
-          </View>
-        </View>
-      )}
-        </>}
-        ListEmptyComponent={
-          isLoading ? (
-            <View style={styles.propertiesGrid}>
-              {Array.from({ length: 6 }).map((_, idx) => renderSkeletonCard(`grid-skel-${idx}`))}
-            </View>
-          ) : (
-            <EmptyState
-              icon="search-outline"
-              title={t('empty_category')}
-              actionLabel={filterType === 'ALL' ? t('home_empty_reset') : t('back')}
-              onAction={filterType === 'ALL' ? resetAllFilters : handleCategoryBack}
-              style={styles.emptyStateWrap}
-            />
-          )
-        }
-        ListFooterComponent={filterType === 'ALL' ? <>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('reviews_title')}</Text>
-        <View style={styles.reviewCard}>
-          <View style={styles.reviewHeader}>
-            <Ionicons name="star" size={16} color={themeColors.gold} />
-            <Text style={styles.reviewTitle}>5.0</Text>
-          </View>
-          <Text style={styles.reviewText}>{t('review_1')}</Text>
-        </View>
-        <View style={styles.reviewCard}>
-          <View style={styles.reviewHeader}>
-            <Ionicons name="star" size={16} color={themeColors.gold} />
-            <Text style={styles.reviewTitle}>4.8</Text>
-          </View>
-          <Text style={styles.reviewText}>{t('review_2')}</Text>
-        </View>
-      </View>
-
-      {!currentUser && (
-        <View style={styles.bottomCta}>
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmpty}
+        ListFooterComponent={hydrated && filteredProperties.length > visibleCount ? (
           <TouchableOpacity
-            style={[styles.quickActionCard, styles.quickActionPrimary]}
-            onPress={() => navigation.navigate('MainTabs', { screen: 'Profile' })}
+            style={styles.loadMoreButton}
+            onPress={() => setVisibleCount(current => current + 8)}
           >
-            <View style={styles.quickActionIcon}>
-              <Ionicons name="log-in" size={18} color={themeColors.white} />
-            </View>
-            <View style={styles.quickActionText}>
-              <Text style={[styles.quickActionTitle, styles.quickActionTitleOnPrimary]}>
-                {t('home_connect_title')}
-              </Text>
-              <Text style={[styles.quickActionSub, styles.quickActionSubOnPrimary]}>
-                {t('home_connect_sub')}
-              </Text>
-            </View>
+            <Text style={styles.loadMoreText}>{t('home_load_more')}</Text>
+            <Ionicons name="chevron-down" size={17} color={colors.primary} />
           </TouchableOpacity>
-        </View>
-      )}
+        ) : null}
+        contentContainerStyle={[styles.listContent, { paddingBottom: 20 + insets.bottom }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={Keyboard.dismiss}
+      />
 
-      {/* Footer */}
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>{t('footer_rights')}</Text>
-        <Text style={styles.footerSubtext}>{t('footer_location')}</Text>
-      </View>
-      {hasMoreProperties && !isLoading && (
-        <TouchableOpacity style={styles.loadMoreButton} onPress={loadMoreProperties}>
-          <Text style={styles.loadMoreText}>{t('home_load_more')}</Text>
-        </TouchableOpacity>
-      )}
-      </> : null}
-      />
-      <CategoryPickerModal
-        visible={categoryPickerOpen}
-        categories={propertiesByType}
-        onClose={() => setCategoryPickerOpen(false)}
-        onSelect={handleCategoryPress}
-      />
-    </>
+      <Modal
+        visible={placePicker !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPlacePicker(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setPlacePicker(null)}>
+          <Pressable style={styles.placeDialog} onPress={event => event.stopPropagation()}>
+            <View style={styles.placeDialogHeader}>
+              <View style={styles.placeDialogCopy}>
+                <Text style={styles.placeDialogTitle}>
+                  {placePicker === 'city' ? t('home_select_city') : t('home_select_neighborhood')}
+                </Text>
+                <Text style={styles.placeDialogSubtitle}>{t('home_place_picker_subtitle')}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.placeDialogClose}
+                onPress={() => setPlacePicker(null)}
+                accessibilityRole="button"
+                accessibilityLabel={t('close')}
+              >
+                <Ionicons name="close" size={20} color={colors.onSurfaceMuted} />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              value={placeQuery}
+              onChangeText={setPlaceQuery}
+              placeholder={t('filter_search_neighborhood_ph')}
+              placeholderTextColor={colors.onSurfaceSoft}
+              style={styles.placeSearchInput}
+            />
+            <FlatList
+              data={filteredPlaceOptions}
+              keyExtractor={item => item}
+              style={styles.placeOptions}
+              keyboardShouldPersistTaps="handled"
+              ListHeaderComponent={
+                <TouchableOpacity style={styles.placeOption} onPress={() => choosePlace(null)}>
+                  <Ionicons name="globe-outline" size={17} color={colors.primary} />
+                  <Text style={styles.placeOptionText}>
+                    {placePicker === 'city' ? t('home_all_cities') : t('filter_all_neighborhoods')}
+                  </Text>
+                  <Ionicons name="checkmark" size={17} color={colors.primary} />
+                </TouchableOpacity>
+              }
+              ListEmptyComponent={
+                <Text style={styles.placeEmptyText}>{t('home_no_places')}</Text>
+              }
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.placeOption} onPress={() => choosePlace(item)}>
+                  <Ionicons
+                    name={placePicker === 'city' ? 'business-outline' : 'location-outline'}
+                    size={17}
+                    color={colors.onSurfaceMuted}
+                  />
+                  <Text style={styles.placeOptionText}>{item}</Text>
+                  <Ionicons name="chevron-forward" size={15} color={colors.onSurfaceSoft} />
+                </TouchableOpacity>
+              )}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
   );
 };
 
 const baseStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
+  screen: { flex: 1, backgroundColor: COLORS.background },
+  syncErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.dangerContainer,
   },
-  headerBlock: {
-    paddingTop: 18,
-    paddingHorizontal: 20,
-    paddingBottom: 34,
-    minHeight: 252,
-    justifyContent: 'flex-end',
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+  syncErrorText: { flex: 1, color: COLORS.onDangerContainer, fontSize: 12 },
+  syncRetryText: { color: COLORS.onDangerContainer, fontSize: 12, fontWeight: '700' },
+  listContent: { paddingBottom: SPACING.xl },
+  hero: {
+    height: 360,
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.sm,
+    borderRadius: RADIUS.xl,
     overflow: 'hidden',
+    backgroundColor: COLORS.premiumDarkBlue,
   },
-  headerImage: {
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  headerContent: {
-    position: 'relative',
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 13,
-  },
-  headerBrand: {
+  heroCompact: { height: 330 },
+  heroImage: { flex: 1 },
+  heroImageCorners: { borderRadius: RADIUS.xl },
+  heroScrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(8, 24, 42, 0.18)' },
+  heroGradient: { ...StyleSheet.absoluteFill, flexDirection: 'column' },
+  heroGradientStop: { flex: 1 },
+  heroContent: {
     flex: 1,
-    color: COLORS.brandAccent,
-    fontSize: 19,
-    fontWeight: '800',
-    letterSpacing: 0.7,
-    textShadowColor: '#00000099',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    padding: SPACING.lg,
+    justifyContent: 'space-between',
   },
-  homeLanguageSelector: {
-    flexDirection: 'row',
-    padding: 3,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.scrimStrong,
-    borderWidth: 1,
-    borderColor: COLORS.overlayWhite35,
-  },
-  homeLanguageOption: {
-    minWidth: 42,
-    minHeight: 34,
-    paddingHorizontal: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: RADIUS.full,
-  },
-  homeLanguageOptionActive: {
-    backgroundColor: COLORS.brandAccent,
-  },
-  homeLanguageText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  homeLanguageTextActive: {
-    color: COLORS.brand,
-  },
-  heroCta: {
-    alignSelf: 'flex-start',
-    marginTop: 18,
-    minHeight: 44,
-    paddingHorizontal: 14,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.brandAccent,
+  heroTopline: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  brandPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(8, 20, 33, 0.55)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.28)',
   },
-  heroCtaText: {
-    color: COLORS.brand,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  locationPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: COLORS.overlayWhite20,
-    borderWidth: 1,
-    borderColor: COLORS.overlayWhite35,
+  brandText: { color: COLORS.white, fontSize: 13, fontWeight: '700', letterSpacing: 0.4 },
+  heroBottom: { paddingBottom: SPACING.xs },
+  heroEyebrow: {
+    color: COLORS.premiumGoldLight,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
     marginBottom: SPACING.sm,
   },
-  locationPillText: {
-    fontSize: 12,
-    fontWeight: '700',
+  heroTitle: {
     color: COLORS.white,
-    letterSpacing: 0.3,
-  },
-  trustStatsCard: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    marginHorizontal: SPACING.lg,
-    marginTop: 18,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.sm,
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: COLORS.shadow,
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-    zIndex: 1,
-  },
-  trustStat: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-  },
-  trustStatIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: RADIUS.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-  },
-  trustStatValue: {
-    ...typography.subtitle,
-    color: COLORS.onSurface,
-  },
-  trustStatLabel: {
-    ...typography.caption,
-    color: COLORS.onSurfaceMuted,
-    textAlign: 'center',
-  },
-  trustStatDivider: {
-    width: 1,
-    alignSelf: 'center',
-    height: '64%',
-    backgroundColor: COLORS.border,
-  },
-  searchCardOverlap: {
-    marginTop: SPACING.md,
-    paddingHorizontal: 20,
-    zIndex: 2,
-    elevation: 2,
-  },
-  headerTitle: {
-    ...typography.heroTitle,
-    fontSize: 24,
-    lineHeight: 31,
-    fontWeight: '700',
-    color: COLORS.white,
-    textAlign: 'left',
-    textShadowColor: '#00000099',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  headerTitleEm: {
-    fontSize: 24,
-    lineHeight: 31,
+    fontSize: 34,
+    lineHeight: 40,
     fontWeight: '800',
-    color: COLORS.brandAccent,
-    textAlign: 'left',
-    marginTop: 0,
-    textShadowColor: '#00000099',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    letterSpacing: -0.8,
+    maxWidth: 350,
   },
-  headerSubtitle: {
-    marginTop: 9,
+  heroTitleCompact: { fontSize: 30, lineHeight: 36 },
+  heroTitleAccent: { color: COLORS.premiumGoldLight },
+  heroSubtitle: {
+    color: 'rgba(255,255,255,0.82)',
     fontSize: 13,
     lineHeight: 19,
-    color: COLORS.onSurfaceMuted,
-    textAlign: 'left',
+    marginTop: SPACING.sm,
+    maxWidth: 310,
   },
-  section: {
-    marginTop: 20,
+  heroCta: {
+    marginTop: SPACING.lg,
+    alignSelf: 'flex-start',
+    minHeight: 42,
     paddingHorizontal: SPACING.lg,
-  },
-  bottomCta: {
-    marginTop: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  quickActionCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  quickActionPrimary: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primaryDark,
-  },
-  quickActionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.overlayWhite20,
-  },
-  quickActionIconLight: {
-    backgroundColor: COLORS.infoContainer,
-  },
-  quickActionText: {
-    flex: 1,
-  },
-  quickActionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.onSurface,
-  },
-  quickActionTitleOnPrimary: {
-    color: COLORS.white,
-  },
-  quickActionSub: {
-    fontSize: 12,
-    color: COLORS.onSurfaceMuted,
-    marginTop: 2,
-  },
-  quickActionSubOnPrimary: {
-    color: COLORS.infoContainer,
-  },
-  searchCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.xl,
-    padding: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: COLORS.shadow,
-    shadowOpacity: 0.1,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
-  },
-  searchHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  searchTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.onSurface,
-  },
-  suggestionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
-  },
-  suggestionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: COLORS.primaryContainer,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.borderStrong,
-  },
-  suggestionText: {
-    fontSize: 11,
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  filterChipScroll: {
-    marginTop: 14,
-  },
-  filterChipRow: {
-    paddingHorizontal: 20,
-    gap: 10,
-    paddingBottom: 6,
-  },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.borderStrong,
-    backgroundColor: COLORS.surface,
-  },
-  filterChipActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  filterChipText: {
-    fontSize: 12,
-    color: COLORS.onSurface,
-    fontWeight: '600',
-  },
-  filterChipTextActive: {
-    color: COLORS.white,
-  },
-  activeFiltersRow: {
-    marginTop: 12,
-    gap: 10,
-  },
-  activeFiltersWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  activeFilterChip: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  activeFilterText: {
-    fontSize: 11,
-    color: COLORS.surface,
-    fontWeight: '700',
-  },
-  activeFiltersReset: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: COLORS.primaryContainer,
-    borderWidth: 1,
-    borderColor: COLORS.borderStrong,
-  },
-  activeFiltersResetText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  syncErrorCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    backgroundColor: COLORS.dangerContainer,
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.dangerContainer,
-  },
-  syncErrorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  syncErrorText: {
-    flex: 1,
-    fontSize: 12,
-    color: COLORS.onDangerContainer,
-    fontWeight: '600',
-  },
-  syncRetryButton: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
-    backgroundColor: COLORS.danger,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  syncRetryText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.white,
-  },
-  filterSticky: {
-    backgroundColor: COLORS.surfaceAlt,
-    paddingTop: 6,
-    paddingBottom: 6,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  filterHeader: {
-    marginTop: 8,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  filterTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.onSurface,
-  },
-  filterActions: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  filterToggle: {
-    fontSize: 12,
-    color: COLORS.onSurface,
-    fontWeight: '600',
-  },
-  clearFilter: {
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  filtersPanel: {
-    backgroundColor: COLORS.surface,
-    marginHorizontal: 16,
-    marginTop: 10,
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  trustRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    marginTop: 6,
-    gap: 10,
-    flexWrap: 'wrap',
-  },
-  trustItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: COLORS.background,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    maxWidth: '100%',
-  },
-  trustText: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-    color: COLORS.onSurface,
-    flexShrink: 1,
-  },
-  trustSub: {
-    marginHorizontal: 16,
-    marginTop: 6,
-    fontSize: 12,
-    color: COLORS.onSurfaceMuted,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 10,
-  },
-  filterField: {
-    flex: 1,
-  },
-  filterChoiceRow: {
-    gap: 8,
-    paddingBottom: 2,
-  },
-  sortRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  filterChoice: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: COLORS.background,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  filterChoiceActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  filterChoiceText: {
-    fontSize: 12,
-    color: COLORS.onSurfaceMuted,
-  },
-  filterChoiceTextActive: {
-    color: COLORS.white,
-    fontWeight: '700',
-  },
-  filterLabel: {
-    fontSize: 11,
-    color: COLORS.onSurfaceMuted,
-    marginBottom: 6,
-    fontWeight: '600',
-  },
-  filterInput: {
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    fontSize: 13,
-    color: COLORS.onSurface,
-  },
-  filterStatic: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  filterStaticText: {
-    fontSize: 12,
-    color: COLORS.onSurfaceMuted,
-    fontWeight: '600',
-  },
-  dropdownButton: {
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  dropdownButtonText: {
-    flex: 1,
-    fontSize: 13,
-    color: COLORS.onSurface,
-    fontWeight: '600',
-  },
-  neighborhoodModalBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: COLORS.overlayNavy55,
-  },
-  neighborhoodKeyboardAvoiding: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  neighborhoodModal: {
-    maxHeight: '82%',
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    paddingHorizontal: 18,
-    paddingTop: 20,
-    paddingBottom: 28,
-  },
-  neighborhoodModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  neighborhoodModalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  neighborhoodModalList: {
-    marginTop: 8,
-    maxHeight: 400,
-  },
-  neighborhoodModalListContent: {
-    paddingBottom: 40,
-  },
-  neighborhoodModalOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  dropdownSearchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  dropdownSearchInput: {
-    flex: 1,
-    fontSize: 12,
-    color: COLORS.onSurface,
-  },
-  dropdownItem: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-  },
-  dropdownItemText: {
-    fontSize: 12,
-    color: COLORS.onSurfaceMuted,
-    fontWeight: '600',
-  },
-  dropdownEmpty: {
-    fontSize: 11,
-    color: COLORS.onSurfaceMuted,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-  },
-  saveSearchButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: COLORS.infoContainer,
-  },
-  saveSearchText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.onSurface,
-    paddingLeft: 0,
-  },
-  neighborhoods: {
-    marginTop: 8,
-    paddingHorizontal: 16,
-  },
-  neighborhoodBadgeRow: {
-    paddingHorizontal: 16,
-    marginBottom: 6,
-  },
-  neighborhoodBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.background,
-    borderRadius: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  neighborhoodBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.primary,
-    maxWidth: 220,
-  },
-  neighborhoodsScroll: {
-    marginTop: 8,
-    marginHorizontal: -16,
-    paddingHorizontal: 16,
-  },
-  neighborhoodChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: COLORS.background,
-    borderRadius: 20,
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  neighborhoodChipActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  neighborhoodChipText: {
-    fontSize: 12,
-    color: COLORS.onSurfaceMuted,
-    fontWeight: '600',
-  },
-  neighborhoodChipTextActive: {
-    color: COLORS.white,
-  },
-  seeAll: {
-    fontSize: 14,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  count: {
-    fontSize: 14,
-    color: COLORS.onSurfaceMuted,
-  },
-  categoryGrid: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    paddingRight: SPACING.lg,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.xs,
-  },
-  categoryTile: {
-    width: 104,
-    minHeight: 118,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.md,
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.xl,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.045,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  categoryTileActive: {
-    backgroundColor: COLORS.primaryContainer,
-    borderColor: COLORS.primary,
-  },
-  categoryTileIcon: {
-    width: 46,
-    height: 46,
     borderRadius: RADIUS.full,
+    backgroundColor: COLORS.premiumGoldLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  heroCtaText: { color: COLORS.premiumDarkBlue, fontSize: 13, fontWeight: '800' },
+  searchCard: {
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.md,
+    padding: SPACING.lg,
+    borderRadius: RADIUS.xl,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.premiumShadow,
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 3,
+  },
+  searchTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.md, gap: SPACING.md },
+  searchTitleIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primaryContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchTitleCopy: { flex: 1 },
+  searchTitle: { ...typography.subtitle, color: COLORS.onSurface },
+  searchSubtitle: { ...typography.caption, color: COLORS.onSurfaceMuted, marginTop: 2 },
+  locationRow: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.md },
+  locationButton: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 44,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surfaceMuted,
+    paddingHorizontal: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  locationButtonText: { flex: 1, color: COLORS.onSurface, fontSize: 12, fontWeight: '600' },
+  filterDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: SPACING.md },
+  budgetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  budgetLabelRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  filterLabel: { color: COLORS.onSurface, fontSize: 13, fontWeight: '700' },
+  resetText: { color: COLORS.primary, fontSize: 12, fontWeight: '700' },
+  budgetRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.sm },
+  budgetInputWrap: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 60,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surfaceMuted,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+  },
+  budgetHint: { color: COLORS.onSurfaceMuted, fontSize: 10, fontWeight: '600' },
+  budgetInput: { flex: 1, padding: 0, marginTop: 2, color: COLORS.onSurface, fontSize: 13, fontWeight: '700' },
+  currencySuffix: { position: 'absolute', right: 8, bottom: 8, color: COLORS.onSurfaceSoft, fontSize: 9 },
+  budgetRangeDash: { width: 16, height: 1, backgroundColor: COLORS.borderStrong, marginHorizontal: SPACING.xs },
+  minimumFiltersRow: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.sm },
+  minimumInputWrap: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 55,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surfaceMuted,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+  },
+  minimumInputRow: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 3 },
+  minimumInput: { flex: 1, padding: 0, color: COLORS.onSurface, fontSize: 13, fontWeight: '700' },
+  minimumUnit: { color: COLORS.onSurfaceSoft, fontSize: 9 },
+  searchActions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.md },
+  saveSearchButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+  },
+  saveSearchText: { color: COLORS.primary, fontSize: 11, fontWeight: '700' },
+  searchSubmit: {
+    minWidth: 114,
+    minHeight: 44,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  searchSubmitText: { color: COLORS.onBrand, fontSize: 12, fontWeight: '700' },
+  section: { marginTop: SPACING.xl },
+  sectionHeading: {
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: { ...typography.subtitle, color: COLORS.onSurface, fontSize: 17 },
+  sectionAction: { color: COLORS.primary, fontSize: 12, fontWeight: '700' },
+  chipList: { paddingHorizontal: SPACING.lg, gap: SPACING.sm },
+  historyChip: {
+    maxWidth: 190,
+    minHeight: 34,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceAlt,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  historyChipText: { color: COLORS.onSurfaceMuted, fontSize: 12, fontWeight: '600', flexShrink: 1 },
+  savedSearchChip: {
+    maxWidth: 230,
+    minHeight: 38,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primaryContainer,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  savedSearchText: { color: COLORS.onPrimaryContainer, fontSize: 12, fontWeight: '700', flexShrink: 1 },
+  categoryList: { paddingHorizontal: SPACING.lg, gap: SPACING.sm },
+  categoryCard: {
+    width: 142,
+    minHeight: 125,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+  categoryCardActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  categoryIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING.sm,
   },
-  categoryTileLabel: {
-    ...typography.button,
-    color: COLORS.onSurface,
-    textAlign: 'center',
-    fontSize: 12,
-  },
-  categoryTileCount: {
-    ...typography.caption,
-    color: COLORS.onSurfaceMuted,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  categoryNavigationBar: {
+  categoryIconWrapActive: { backgroundColor: COLORS.overlayWhite20 },
+  categoryName: { color: COLORS.onSurface, fontSize: 13, fontWeight: '700' },
+  categoryNameActive: { color: COLORS.onBrand },
+  categoryCount: { color: COLORS.onSurfaceMuted, fontSize: 10, marginTop: SPACING.xs },
+  categoryCountActive: { color: COLORS.onBrandMuted },
+  neighborhoodChip: {
+    minHeight: 36,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  neighborhoodChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  neighborhoodChipText: { color: COLORS.onSurface, fontSize: 12, fontWeight: '600' },
+  neighborhoodChipTextActive: { color: COLORS.onBrand },
+  mutedNote: { paddingHorizontal: SPACING.lg, color: COLORS.onSurfaceMuted, fontSize: 12 },
+  carouselContent: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.xs },
+  resultHeading: {
+    paddingHorizontal: SPACING.lg,
+    marginTop: SPACING.xxl,
+    marginBottom: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  resultHeadingCopy: { flex: 1 },
+  resultCount: { color: COLORS.onSurfaceMuted, fontSize: 11, marginTop: 3 },
+  clearFiltersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
+  clearFiltersText: { color: COLORS.primary, fontSize: 11, fontWeight: '700' },
+  sortRow: { flexDirection: 'row', gap: SPACING.sm, paddingHorizontal: SPACING.lg, marginBottom: SPACING.md },
+  sortChip: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  sortChipActive: { backgroundColor: COLORS.primaryContainer },
+  sortChipText: { color: COLORS.onSurfaceMuted, fontSize: 11, fontWeight: '600' },
+  sortChipTextActive: { color: COLORS.onPrimaryContainer },
+  signInBanner: {
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.lg,
+    minHeight: 68,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  categoryBackButton: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.infoContainer,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 11,
+    gap: SPACING.md,
   },
-  categoryBackText: {
-    color: COLORS.primary,
-    fontSize: 14,
-    fontWeight: '700',
+  signInIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primaryContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  categoryNavigationDetails: {
+  signInCopy: { flex: 1 },
+  signInTitle: { color: COLORS.onSurface, fontSize: 13, fontWeight: '700' },
+  signInSubtitle: { color: COLORS.onSurfaceMuted, fontSize: 11, marginTop: 3 },
+  publishBanner: {
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.md,
+    minHeight: 74,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.brand,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  publishIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.premiumGold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  publishCopy: { flex: 1 },
+  publishTitle: { color: COLORS.onBrand, fontSize: 13, fontWeight: '700' },
+  publishSubtitle: { color: COLORS.onBrandMuted, fontSize: 11, marginTop: 3 },
+  loadingWrap: { padding: SPACING.lg, gap: SPACING.md },
+  skeletonCard: { height: 280, width: '100%' },
+  emptyState: { marginHorizontal: SPACING.lg, borderRadius: RADIUS.lg, backgroundColor: COLORS.surface },
+  loadMoreButton: {
+    alignSelf: 'center',
+    marginVertical: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  loadMoreText: { color: COLORS.primary, fontSize: 12, fontWeight: '700' },
+  modalBackdrop: {
     flex: 1,
-    minWidth: 0,
-    marginLeft: 12,
+    justifyContent: 'center',
+    padding: SPACING.lg,
+    backgroundColor: COLORS.scrimStrong,
   },
-  categoryResultsTitle: {
-    color: COLORS.onSurface,
-    fontSize: 17,
-    fontWeight: '800',
+  placeDialog: {
+    maxHeight: '80%',
+    borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
+    backgroundColor: COLORS.surface,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 8,
   },
-  categoryResultsSubtitle: {
-    color: COLORS.onSurfaceMuted,
-    fontSize: 11,
-    marginTop: 3,
-  },
-  categoryResultsCount: {
-    minWidth: 34,
+  placeDialogHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: SPACING.md },
+  placeDialogCopy: { flex: 1, paddingRight: SPACING.md },
+  placeDialogTitle: { color: COLORS.onSurface, fontSize: 19, fontWeight: '800' },
+  placeDialogSubtitle: { color: COLORS.onSurfaceMuted, fontSize: 12, marginTop: SPACING.xs },
+  placeDialogClose: {
+    width: 34,
     height: 34,
-    paddingHorizontal: 8,
-    borderRadius: 17,
+    borderRadius: RADIUS.full,
     backgroundColor: COLORS.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  categoryResultsCountText: {
-    color: COLORS.onSurfaceMuted,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  propertiesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -8,
-  },
-  propertyListItem: {
-    paddingHorizontal: 16,
-  },
-  loadMoreButton: {
-    alignSelf: 'center',
-    marginTop: 8,
-    marginBottom: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 11,
-    borderRadius: 12,
-    backgroundColor: COLORS.infoContainer,
-  },
-  loadMoreText: {
-    color: COLORS.primary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  skeletonCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    marginHorizontal: 8,
-    marginVertical: 8,
-    width: width - 32,
+  placeSearchInput: {
+    height: 44,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.border,
-    overflow: 'hidden',
-  },
-  skeletonCardCompact: {
-    width: width * 0.8,
-    marginVertical: 6,
-  },
-  skeletonImage: {
-    width: '100%',
-    height: 150,
-    backgroundColor: COLORS.borderStrong,
-  },
-  skeletonImageCompact: {
-    height: 150,
-  },
-  skeletonBody: {
-    padding: 14,
-  },
-  skeletonLine: {
-    height: 12,
-    backgroundColor: COLORS.borderStrong,
-    borderRadius: 6,
-    marginBottom: 10,
-    width: '80%',
-  },
-  skeletonLineShort: {
-    width: '50%',
-  },
-  skeletonMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
-  },
-  skeletonPill: {
-    width: 80,
-    height: 16,
-    borderRadius: 999,
-    backgroundColor: COLORS.infoContainer,
-  },
-  skeletonDot: {
-    width: 48,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: COLORS.borderStrong,
-  },
-  reviewCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  featuredRow: {
-    paddingRight: 16,
-    gap: 16,
-  },
-  reviewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  reviewTitle: {
-    fontSize: 13,
-    fontWeight: '700',
+    paddingHorizontal: SPACING.md,
     color: COLORS.onSurface,
+    marginBottom: SPACING.sm,
   },
-  reviewText: {
-    fontSize: 13,
-    color: COLORS.onSurfaceMuted,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: COLORS.onSurfaceMuted,
-    marginTop: 6,
-  },
-  emptyStateWrap: {
-    width: '100%',
-    marginTop: 6,
-  },
-  emptyState: {
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 6,
-  },
-  emptyReset: {
+  placeOptions: { flexGrow: 0 },
+  placeOption: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.infoContainer,
-    backgroundColor: COLORS.infoContainer,
+    gap: SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
   },
-  emptyResetText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  footer: {
-    alignItems: 'center',
-    padding: 24,
-    paddingBottom: 40,
-  },
-  footerText: {
-    fontSize: 14,
-    color: COLORS.onSurfaceMuted,
-    fontWeight: '500',
-  },
-  footerSubtext: {
-    fontSize: 12,
-    color: COLORS.onSurfaceMuted,
-    marginTop: 4,
-  },
+  placeOptionText: { flex: 1, color: COLORS.onSurface, fontSize: 13, fontWeight: '600' },
+  placeEmptyText: { color: COLORS.onSurfaceMuted, textAlign: 'center', padding: SPACING.xl },
 });
 
 export default HomeScreen;

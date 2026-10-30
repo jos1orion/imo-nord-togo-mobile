@@ -1,4 +1,4 @@
-# 🏠 Imo Nord Togo - Application mobile immobilière
+# 🏠 ImoPrestige - Application mobile immobilière
 
 Application mobile pour la gestion immobilière à Kara, Togo.
 
@@ -119,4 +119,4 @@ imo-nord-togo-mobile/
 
 ## 📄 Licence
 
-© 2026 Imo Nord Togo - Tous droits réservés
+© 2026 ImoPrestige - Tous droits réservés

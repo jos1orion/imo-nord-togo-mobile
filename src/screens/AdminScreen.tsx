@@ -46,6 +46,7 @@ import AdminNavigation, { type AdminTab } from './AdminNavigation';
 import { useAdminSupportInbox } from './admin/useAdminSupportInbox';
 import AdminAccountsTab from './admin/tabs/AdminAccountsTab';
 import AdminSupportInbox from './admin/tabs/AdminSupportInbox';
+import AdminReviewsTab from './admin/tabs/AdminReviewsTab';
 import AdminGate from './admin/AdminGate';
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -246,6 +247,7 @@ const AdminScreen: React.FC = () => {
   });
   const {
     conversations: supportConversations,
+    agents: supportAgents,
     selectedConversationId: selectedSupportId,
     setSelectedConversationId: setSelectedSupportId,
     messages: supportMessages,
@@ -256,6 +258,7 @@ const AdminScreen: React.FC = () => {
     sending: supportSending,
     loadConversations: loadSupportConversations,
     sendReply: sendSupportReply,
+    sendBulkMessage: sendBulkSupportMessage,
     toggleConversationStatus: toggleSupportConversationStatus,
   } = supportInbox;
 
@@ -541,7 +544,7 @@ const AdminScreen: React.FC = () => {
           </head>
           <body>
             <h1>${tAdmin("Reçu de paiement")}</h1>
-            <div class="muted">Imo Nord Togo - ${formatAdminDate(new Date())}</div>
+            <div class="muted">ImoPrestige - ${formatAdminDate(new Date())}</div>
             <div class="card">
               <div class="row"><div class="label">${tAdmin("Locataire")}</div><div class="value">${escapeHtml(tenant?.name || tAdmin("Locataire"))}</div></div>
               <div class="row"><div class="label">${tAdmin("Bien")}</div><div class="value">${escapeHtml(property?.title || tAdmin("Bien"))}</div></div>
@@ -1510,8 +1513,12 @@ const AdminScreen: React.FC = () => {
     return (
       <ScrollView
         style={styles.tabContent}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 32, 48) }}
+        contentContainerStyle={[
+          styles.tabContentContainer,
+          { paddingBottom: Math.max(insets.bottom + 32, 48) },
+        ]}
         nestedScrollEnabled
+        showsVerticalScrollIndicator={true}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.overviewCard}>
@@ -1548,7 +1555,7 @@ const AdminScreen: React.FC = () => {
         </View>
         <View style={styles.backupActions}>
           <TouchableOpacity style={styles.backupButton} onPress={handleExportBackup}>
-            <Ionicons name="download" size={18} color={theme.onBrand} />
+            <Ionicons name="download" size={18} color={theme.accentText} />
             <Text style={styles.backupButtonText}>{tAdmin("Exporter")}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.backupButtonSecondary} onPress={handleImportBackup}>
@@ -1808,9 +1815,11 @@ const AdminScreen: React.FC = () => {
     return (
       <FlatList
         style={styles.propertyListViewport}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={[
           styles.propertyListContent,
-          { paddingBottom: Math.max(insets.bottom + 32, 48) },
+          { flexGrow: 1, paddingBottom: Math.max(insets.bottom + 32, 48) },
         ]}
         data={visibleProperties}
         keyExtractor={item => item.id}
@@ -1987,6 +1996,12 @@ const AdminScreen: React.FC = () => {
     return (
       <FlatList
         style={styles.tabContent}
+        contentContainerStyle={[
+          styles.tabContentContainer,
+          { paddingBottom: Math.max(insets.bottom + 32, 48) },
+        ]}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={true}
         data={visibleClients}
         keyExtractor={item => item.id}
         ListHeaderComponent={listHeader}
@@ -2076,7 +2091,11 @@ const AdminScreen: React.FC = () => {
       return (
         <FlatList
           style={styles.tabContent}
-          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 120, 160) }}
+          contentContainerStyle={[
+            styles.tabContentContainer,
+            { paddingBottom: Math.max(insets.bottom + 32, 48) },
+          ]}
+          nestedScrollEnabled
           data={sortedNeighborhoods}
           keyExtractor={name => name}
           keyboardShouldPersistTaps="handled"
@@ -2102,7 +2121,7 @@ const AdminScreen: React.FC = () => {
                   placeholderTextColor={theme.textSoft}
                 />
                 <TouchableOpacity style={styles.neighborhoodAddButton} onPress={handleAddNeighborhood}>
-                  <Ionicons name="add" size={18} color={theme.onBrand} />
+                  <Ionicons name="add" size={18} color={theme.accentText} />
                 </TouchableOpacity>
               </View>
             </>
@@ -2158,6 +2177,10 @@ const AdminScreen: React.FC = () => {
     return (
       <FlatList
         style={styles.tabContent}
+        contentContainerStyle={[
+          styles.tabContentContainer,
+          { paddingBottom: Math.max(insets.bottom + 32, 48) },
+        ]}
         data={visibleReports}
         keyExtractor={report => report.id}
         ListHeaderComponent={
@@ -2229,6 +2252,7 @@ const AdminScreen: React.FC = () => {
     const supportInbox = (
       <AdminSupportInbox
         conversations={supportConversations}
+        agents={supportAgents}
         selectedConversationId={selectedSupportId}
         messages={supportMessages}
         currentUserId={currentUser?.id ?? ''}
@@ -2241,6 +2265,7 @@ const AdminScreen: React.FC = () => {
         onToggleStatus={conversation => void toggleSupportConversationStatus(conversation)}
         onReplyChange={setSupportReply}
         onSend={() => void sendSupportReply()}
+        onSendBulk={sendBulkSupportMessage}
         formatDateTime={formatAdminDateTime}
         translate={tAdmin}
         theme={theme}
@@ -2251,6 +2276,10 @@ const AdminScreen: React.FC = () => {
     return (
       <FlatList
         style={styles.tabContent}
+        contentContainerStyle={[
+          styles.tabContentContainer,
+          { paddingBottom: Math.max(insets.bottom + 32, 48) },
+        ]}
         data={visibleMessages}
         keyExtractor={message => message.id}
         ListHeaderComponent={
@@ -2303,61 +2332,18 @@ const AdminScreen: React.FC = () => {
     );
   };
   const renderReviews = () => {
-    const filteredReviews = shouldFilter
-      ? reviews.filter(review =>
-          includesQuery(review.comment) ||
-          includesQuery(review.propertyId) ||
-          includesQuery(review.reviewerName)
-        )
-      : reviews;
-    const visibleReviews = filteredReviews.slice(0, listLimits.reviews);
-    const hasMoreReviews = filteredReviews.length > listLimits.reviews;
-
     return (
-      <FlatList
-        style={styles.tabContent}
-        data={visibleReviews}
-        keyExtractor={review => review.id}
-        ListHeaderComponent={
-          <View style={styles.sectionHeaderRow}>
-            <View>
-              <Text style={styles.sectionTitle}>{tAdmin("Avis")}</Text>
-              <Text style={styles.sectionSubtitle}>{tAdmin("Qualite, confiance et moderation.")}</Text>
-            </View>
-            <View style={styles.sectionCount}>
-              <Text style={styles.sectionCountText}>{filteredReviews.length}</Text>
-            </View>
-          </View>
-        }
-        ListEmptyComponent={<Text style={styles.emptyText}>{tAdmin("Aucun avis pour le moment.")}</Text>}
-        ListFooterComponent={hasMoreReviews ? (
-          <TouchableOpacity style={styles.loadMoreButton} onPress={() => increaseLimit('reviews')}>
-            <Text style={styles.loadMoreText}>{tAdmin("Charger plus")}</Text>
-          </TouchableOpacity>
-        ) : null}
-        renderItem={({ item: review }) => (
-          <View style={styles.infoCard}>
-            <View style={styles.infoHeader}>
-              <Text style={styles.infoTitle}>{tAdmin("Note:")} {review.rating}/5</Text>
-              <View style={[styles.badge, review.verified ? styles.badgeSuccess : styles.badgeWarning]}>
-                <Text style={[styles.badgeText, review.verified ? styles.badgeTextSuccess : styles.badgeTextWarning]}>
-                  {review.verified ? tAdmin("Vérifié") : tAdmin("À vérifier")}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.infoMeta}>{tAdmin("Bien:")} {review.propertyId}</Text>
-            {review.comment ? <Text style={styles.reportMessage}>{review.comment}</Text> : null}
-            <Text style={styles.infoMeta}>{formatAdminDateTime(review.createdAt)}</Text>
-            <View style={styles.quickActionsRow}>
-              <QuickAction
-                label={review.verified ? tAdmin("Retirer") : tAdmin("Verifier")}
-                icon="shield-checkmark-outline"
-                tone="primary"
-                onPress={() => void handleVerifyReview(review.id, !review.verified)}
-              />
-            </View>
-          </View>
-        )}
+      <AdminReviewsTab
+        reviews={reviews}
+        shouldFilter={shouldFilter}
+        includesQuery={includesQuery}
+        limit={listLimits.reviews}
+        onLoadMore={() => increaseLimit('reviews')}
+        onVerify={(reviewId, verified) => void handleVerifyReview(reviewId, verified)}
+        formatDateTime={formatAdminDateTime}
+        translate={tAdmin}
+        theme={theme}
+        styles={styles}
       />
     );
   };
@@ -2378,6 +2364,10 @@ const AdminScreen: React.FC = () => {
     return (
       <FlatList
         style={styles.tabContent}
+        contentContainerStyle={[
+          styles.tabContentContainer,
+          { paddingBottom: Math.max(insets.bottom + 32, 48) },
+        ]}
         data={visibleAgents}
         keyExtractor={user => user.id}
         refreshControl={<RefreshControl refreshing={refreshing || accountsLoading} onRefresh={onRefresh} />}
@@ -2453,6 +2443,10 @@ const AdminScreen: React.FC = () => {
     return (
       <FlatList
         style={styles.tabContent}
+        contentContainerStyle={[
+          styles.tabContentContainer,
+          { paddingBottom: Math.max(insets.bottom + 32, 48) },
+        ]}
         data={visiblePremium}
         keyExtractor={premium => premium.propertyId}
         ListHeaderComponent={
@@ -2518,6 +2512,10 @@ const AdminScreen: React.FC = () => {
     return (
       <FlatList
         style={styles.tabContent}
+        contentContainerStyle={[
+          styles.tabContentContainer,
+          { paddingBottom: Math.max(insets.bottom + 32, 48) },
+        ]}
         data={visibleCommissions}
         keyExtractor={rule => rule.id}
         ListHeaderComponent={
@@ -2596,6 +2594,10 @@ const AdminScreen: React.FC = () => {
     return (
       <FlatList
         style={styles.tabContent}
+        contentContainerStyle={[
+          styles.tabContentContainer,
+          { paddingBottom: Math.max(insets.bottom + 32, 48) },
+        ]}
         data={visiblePayments}
         keyExtractor={payment => payment.id}
         ListHeaderComponent={
@@ -2608,7 +2610,7 @@ const AdminScreen: React.FC = () => {
               <Text style={styles.sectionCountText}>{filteredPayments.length}</Text>
             </View>
             <TouchableOpacity style={styles.sectionActionButton} onPress={openPaymentModal} hitSlop={6} accessibilityRole="button" accessibilityLabel={tAdmin("Ajouter un paiement")}>
-              <Ionicons name="add" size={18} color={theme.onBrand} />
+              <Ionicons name="add" size={18} color={theme.accentText} />
             </TouchableOpacity>
           </View>
         }
@@ -2670,6 +2672,10 @@ const AdminScreen: React.FC = () => {
     return (
       <FlatList
         style={styles.tabContent}
+        contentContainerStyle={[
+          styles.tabContentContainer,
+          { paddingBottom: Math.max(insets.bottom + 32, 48) },
+        ]}
         data={visibleContracts}
         keyExtractor={contract => contract.id}
         ListHeaderComponent={
@@ -2682,7 +2688,7 @@ const AdminScreen: React.FC = () => {
               <Text style={styles.sectionCountText}>{filteredContracts.length}</Text>
             </View>
             <TouchableOpacity style={styles.sectionActionButton} onPress={openContractModal} hitSlop={6} accessibilityRole="button" accessibilityLabel={tAdmin("Ajouter un contrat")}>
-              <Ionicons name="add" size={18} color={theme.onBrand} />
+              <Ionicons name="add" size={18} color={theme.accentText} />
             </TouchableOpacity>
           </View>
         }
@@ -2749,6 +2755,10 @@ const AdminScreen: React.FC = () => {
     return (
       <FlatList
         style={styles.tabContent}
+        contentContainerStyle={[
+          styles.tabContentContainer,
+          { paddingBottom: Math.max(insets.bottom + 32, 48) },
+        ]}
         data={visibleDocuments}
         keyExtractor={document => document.id}
         ListHeaderComponent={
@@ -2834,7 +2844,7 @@ const AdminScreen: React.FC = () => {
             <Ionicons name="lock-closed" size={18} color={theme.accent} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.addButton} onPress={openNewPropertyModal} hitSlop={4} accessibilityRole="button" accessibilityLabel={tAdmin("Ajouter un bien")}>
-            <Ionicons name="add" size={22} color={theme.onBrand} />
+            <Ionicons name="add" size={22} color={theme.accentText} />
           </TouchableOpacity>
         </View>
       </View>
@@ -3096,7 +3106,7 @@ const AdminScreen: React.FC = () => {
               style={styles.input}
               value={formData.clientPhone}
               onChangeText={text => setFormData({ ...formData, clientPhone: text })}
-              placeholder={tAdmin("Ex: +228 90 12 34 56")}
+              placeholder={tAdmin("Tlphone")}
               keyboardType="phone-pad"
             />
 
@@ -3113,7 +3123,7 @@ const AdminScreen: React.FC = () => {
               style={styles.input}
               value={formData.clientEmail}
               onChangeText={text => setFormData({ ...formData, clientEmail: text })}
-              placeholder={tAdmin("Ex: contact@example.com")}
+              placeholder={tAdmin("Email")}
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -3218,7 +3228,7 @@ const AdminScreen: React.FC = () => {
               style={styles.input}
               value={clientForm.phone}
               onChangeText={text => setClientForm({ ...clientForm, phone: text })}
-              placeholder="+228 90 12 34 56"
+              placeholder={tAdmin("Tlphone")}
               keyboardType="phone-pad"
             />
 
@@ -3227,7 +3237,7 @@ const AdminScreen: React.FC = () => {
               style={styles.input}
               value={clientForm.email}
               onChangeText={text => setClientForm({ ...clientForm, email: text })}
-              placeholder="email@example.com"
+              placeholder={tAdmin("Email")}
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -3605,7 +3615,7 @@ const AdminScreen: React.FC = () => {
               style={styles.input}
               value={userForm.phone}
               onChangeText={text => setUserForm({ ...userForm, phone: text })}
-              placeholder="+228 90 12 34 56"
+              placeholder={tAdmin("Tlphone")}
               keyboardType="phone-pad"
             />
 
@@ -3613,7 +3623,7 @@ const AdminScreen: React.FC = () => {
             <TextInput
               style={styles.input}
               value={userForm.email}
-              placeholder="email@example.com"
+              placeholder={tAdmin("Email")}
               keyboardType="email-address"
               autoCapitalize="none"
               editable={false}

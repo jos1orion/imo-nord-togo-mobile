@@ -1,4 +1,4 @@
-# Imo Nord Togo — Back-office web
+# ImoPrestige — Back-office web
 
 Application Next.js pour la gestion (biens, locataires, contrats, etc.), connectée au même projet **Supabase** que l’app mobile.
 

@@ -78,7 +78,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const rawAdminEmail = process.env.ADMIN_EMAIL?.trim().replace(/^["']|["']$/g, '') || 'admin@imoprestige.tg';
+  const rawAdminEmail = process.env.ADMIN_EMAIL?.trim().replace(/^["']|["']$/g, '');
+  if (!rawAdminEmail) {
+    return redirectWithError('config', 'La variable ADMIN_EMAIL est requise sur Render.');
+  }
   const adminEmail = rawAdminEmail.toLowerCase();
 
   let supabaseAdmin;

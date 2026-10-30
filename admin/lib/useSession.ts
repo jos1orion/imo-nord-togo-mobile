@@ -43,7 +43,7 @@ const MASTER_ADMIN_USER: User = {
   new_email: '',
   invited_at: '',
   action_link: '',
-  email: 'admin@imoprestige.tg',
+  email: '',
   phone: '',
   created_at: new Date().toISOString(),
   confirmed_at: new Date().toISOString(),
@@ -62,15 +62,10 @@ function checkHasMasterCookie(): boolean {
 }
 
 export const useSession = (): SessionState => {
-  const [hasMasterCookie, setHasMasterCookie] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setHasMasterCookie(checkHasMasterCookie());
-  }, []);
 
   const fetchProfile = useCallback(async (userId: string) => {
     const { data, error: profileError } = await supabase
@@ -122,7 +117,7 @@ export const useSession = (): SessionState => {
   }, [fetchProfile]);
 
   return useMemo(() => {
-    const isMaster = hasMasterCookie || checkHasMasterCookie();
+    const isMaster = checkHasMasterCookie();
     const effectiveUser = user || (isMaster ? MASTER_ADMIN_USER : null);
     const effectiveProfile = profile || (isMaster ? MASTER_ADMIN_PROFILE : null);
     const effectiveLoading = isMaster ? false : loading;
@@ -134,5 +129,5 @@ export const useSession = (): SessionState => {
       error,
       isMasterAdmin: isMaster,
     };
-  }, [user, profile, loading, error, hasMasterCookie]);
+  }, [user, profile, loading, error]);
 };

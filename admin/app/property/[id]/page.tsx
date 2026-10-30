@@ -62,12 +62,12 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const property = await getPublicProperty(id);
-  if (!property) return { title: 'Annonce indisponible | Imo Nord Togo' };
+  if (!property) return { title: 'Annonce indisponible | ImoPrestige' };
 
   const images = property.property_images?.flatMap(image => image.url ? [image.url] : []) ?? [];
   const description = property.description?.slice(0, 160) ?? `${property.type} à ${property.location}`;
   return {
-    title: `${property.title} | Imo Nord Togo`,
+    title: `${property.title} | ImoPrestige`,
     description,
     openGraph: {
       title: property.title,
@@ -94,7 +94,7 @@ export default async function PublicPropertyPage({
   return (
     <main className="public-property">
       <header className="public-property-header">
-        <Link href="/privacy" className="public-property-brand">Imo Nord Togo</Link>
+        <Link href="/privacy" className="public-property-brand">ImoPrestige</Link>
         <a className="public-property-open-app" href={appLink}>Ouvrir dans l’application</a>
       </header>
       <article className="public-property-card">
@@ -109,7 +109,7 @@ export default async function PublicPropertyPage({
             unoptimized
           />
         ) : (
-          <div className="public-property-cover-placeholder">Imo Nord Togo</div>
+          <div className="public-property-cover-placeholder">ImoPrestige</div>
         )}
         <div className="public-property-content">
           <p className="public-property-eyebrow">{publicPropertyTypes[property.type]} · {location}</p>

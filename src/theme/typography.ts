@@ -43,4 +43,10 @@ export const typography = {
     fontWeight: '600' as TextStyle['fontWeight'],
     lineHeight: 14,
   },
+  badge: {
+    fontFamily: 'Poppins',
+    fontSize: 10,
+    fontWeight: '700' as TextStyle['fontWeight'],
+    lineHeight: 12,
+  },
 } as const;

@@ -2069,6 +2069,108 @@ button {
   min-height: 540px;
 }
 
+.support-bulk-toolbar,
+.support-bulk-composer {
+  grid-column: 1 / -1;
+}
+
+.support-bulk-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.support-bulk-toolbar h2 {
+  font-size: 15px;
+}
+
+.support-bulk-toolbar p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.support-bulk-composer {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.support-bulk-heading,
+.support-bulk-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.support-bulk-recipients {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.support-bulk-agent {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.support-bulk-agent:hover {
+  background: var(--surface);
+}
+
+.support-bulk-agent span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.support-bulk-agent small {
+  color: var(--muted);
+}
+
+.support-bulk-message {
+  width: 100%;
+  min-height: 90px;
+  resize: vertical;
+  padding: 12px 14px;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.5;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.support-bulk-message:focus {
+  outline: 2px solid rgba(230, 187, 112, 0.35);
+  border-color: var(--accent);
+}
+
+.support-bulk-result {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .support-thread-list,
 .support-conversation {
   min-width: 0;
@@ -2199,6 +2301,12 @@ button {
   border-top: 1px solid var(--border);
 }
 
+.support-reply-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .support-reply textarea {
   flex: 1;
   min-width: 0;
@@ -2260,6 +2368,11 @@ button {
 }
 
 @media (max-width: 520px) {
+  .support-bulk-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .support-thread-list,
   .support-conversation {
     padding: 14px;
@@ -2270,8 +2383,8 @@ button {
     flex-direction: column;
   }
 
-  .support-reply .primary-button {
-    align-self: flex-end;
+  .support-reply-actions {
+    justify-content: flex-end;
   }
 
   .support-message {

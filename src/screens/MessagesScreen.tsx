@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  Modal,
   View,
   Text,
   FlatList,
@@ -23,17 +24,31 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getContactEmail, getWhatsAppUrl } from '../constants/appConfig';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { getChatKey } from '../lib/chatRouting';
+import { isPublicProperty } from '../utils/propertyVisibility';
 
 type MessagesScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Messages'>;
 
 const MessagesScreen = () => {
   const styles = useThemedStyles(baseStyles);
   const themeColors = useThemeColors();
-  const { chats, currentUser, users, t, language, hydrated } = useApp();
+  const { chats, currentUser, users, properties, t, language, hydrated } = useApp();
   const navigation = useNavigation<MessagesScreenNavigationProp>();
   const insets = useSafeAreaInsets();
   const canContactSupport = currentUser?.role === 'AGENT';
+  const contactEmail = getContactEmail();
+  const whatsappUrl = getWhatsAppUrl();
   const [expandedFaqIndex, setExpandedFaqIndex] = useState<number | null>(null);
+  const [composeVisible, setComposeVisible] = useState(false);
+
+  const contactableProperties = useMemo(() => {
+    if (!currentUser) return [];
+    return properties.filter(property =>
+      isPublicProperty(property) &&
+      Boolean(property.ownerId) &&
+      property.ownerId !== currentUser.id
+    );
+  }, [currentUser, properties]);
 
   const userChats = chats.filter(chat =>
     currentUser && chat.participants.includes(currentUser.id)
@@ -88,6 +103,36 @@ const MessagesScreen = () => {
         propertyId: chat.propertyId,
       });
     });
+  };
+
+  const handleStartConversation = (property: typeof properties[number]) => {
+    if (!currentUser) {
+      setComposeVisible(false);
+      navigation.navigate('MainTabs', { screen: 'Profile', params: { authMode: 'login' } });
+      return;
+    }
+    const otherUserId = property.ownerId;
+    if (!otherUserId || otherUserId === currentUser.id) return;
+    const recipientName = property.contactName?.trim()
+      || users.find(user => user.id === otherUserId)?.name
+      || t('messages_agent_fallback');
+    setComposeVisible(false);
+    InteractionManager.runAfterInteractions(() => {
+      navigation.navigate('Chat', {
+        chatId: getChatKey([currentUser.id, otherUserId], property.id),
+        otherUserId,
+        otherUserName: recipientName,
+        propertyId: property.id,
+      });
+    });
+  };
+
+  const openComposer = () => {
+    if (!currentUser) {
+      navigation.navigate('MainTabs', { screen: 'Profile', params: { authMode: 'login' } });
+      return;
+    }
+    setComposeVisible(true);
   };
 
   const openSupportLink = async (url: string) => {
@@ -149,11 +194,21 @@ const MessagesScreen = () => {
       </View>
       <View style={[styles.conversationsHeading, styles.conversationsTitle]}>
         <Text style={styles.sectionTitle}>{t('messages_conversations_title')}</Text>
-        {userChats.length > 0 && (
-          <View style={styles.conversationCount}>
-            <Text style={styles.conversationCountText}>{userChats.length}</Text>
-          </View>
-        )}
+        <View style={styles.conversationsActions}>
+          {userChats.length > 0 && (
+            <View style={styles.conversationCount}>
+              <Text style={styles.conversationCountText}>{userChats.length}</Text>
+            </View>
+          )}
+          <TouchableOpacity
+            style={styles.composeButton}
+            accessibilityRole="button"
+            onPress={openComposer}
+          >
+            <Ionicons name="create-outline" size={17} color={themeColors.white} />
+            <Text style={styles.composeButtonText}>{t('messages_compose')}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       {faqSection}
     </View>
@@ -198,48 +253,56 @@ const MessagesScreen = () => {
           <Ionicons name="chevron-forward" size={19} color={themeColors.white} />
         </TouchableOpacity>
 
-      <View style={styles.sectionHeading}>
-        <View style={styles.sectionHeadingIcon}>
-          <Ionicons name="chatbubbles-outline" size={17} color={themeColors.primary} />
+      {(contactEmail || whatsappUrl) && (
+        <>
+        <View style={styles.sectionHeading}>
+          <View style={styles.sectionHeadingIcon}>
+            <Ionicons name="chatbubbles-outline" size={17} color={themeColors.primary} />
+          </View>
+          <Text style={styles.sectionTitle}>{t('support_choose_contact')}</Text>
         </View>
-        <Text style={styles.sectionTitle}>{t('support_choose_contact')}</Text>
-      </View>
-      <TouchableOpacity
-        style={styles.contactCard}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        onPress={() => void openSupportLink(`mailto:${getContactEmail()}`)}
-      >
-        <View style={[styles.contactIcon, styles.emailIcon]}>
-          <Ionicons name="mail-outline" size={22} color={themeColors.primary} />
-        </View>
-        <View style={styles.contactInfo}>
-          <Text style={styles.contactTitle}>{t('contact_email')}</Text>
-          <Text style={styles.contactDescription}>{t('support_email_description')}</Text>
-          <Text style={styles.contactDetail}>{getContactEmail()}</Text>
-        </View>
-        <View style={styles.contactAction}>
-          <Ionicons name="arrow-forward" size={17} color={themeColors.primary} />
-        </View>
-      </TouchableOpacity>
+        {contactEmail && (
+          <TouchableOpacity
+            style={styles.contactCard}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            onPress={() => void openSupportLink(`mailto:${contactEmail}`)}
+          >
+            <View style={[styles.contactIcon, styles.emailIcon]}>
+              <Ionicons name="mail-outline" size={22} color={themeColors.primary} />
+            </View>
+            <View style={styles.contactInfo}>
+              <Text style={styles.contactTitle}>{t('contact_email')}</Text>
+              <Text style={styles.contactDescription}>{t('support_email_description')}</Text>
+              <Text style={styles.contactDetail}>{contactEmail}</Text>
+            </View>
+            <View style={styles.contactAction}>
+              <Ionicons name="arrow-forward" size={17} color={themeColors.primary} />
+            </View>
+          </TouchableOpacity>
+        )}
 
-      <TouchableOpacity
-        style={styles.contactCard}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        onPress={() => void openSupportLink(getWhatsAppUrl())}
-      >
-        <View style={[styles.contactIcon, styles.whatsappIcon]}>
-          <Ionicons name="logo-whatsapp" size={22} color={themeColors.success} />
-        </View>
-        <View style={styles.contactInfo}>
-          <Text style={styles.contactTitle}>{t('contact_whatsapp')}</Text>
-          <Text style={styles.contactDescription}>{t('support_whatsapp_description')}</Text>
-        </View>
-        <View style={[styles.contactAction, styles.whatsappAction]}>
-          <Ionicons name="arrow-forward" size={17} color={themeColors.success} />
-        </View>
-      </TouchableOpacity>
+        {whatsappUrl && (
+          <TouchableOpacity
+            style={styles.contactCard}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            onPress={() => void openSupportLink(whatsappUrl)}
+          >
+            <View style={[styles.contactIcon, styles.whatsappIcon]}>
+              <Ionicons name="logo-whatsapp" size={22} color={themeColors.success} />
+            </View>
+            <View style={styles.contactInfo}>
+              <Text style={styles.contactTitle}>{t('contact_whatsapp')}</Text>
+              <Text style={styles.contactDescription}>{t('support_whatsapp_description')}</Text>
+            </View>
+            <View style={[styles.contactAction, styles.whatsappAction]}>
+              <Ionicons name="arrow-forward" size={17} color={themeColors.success} />
+            </View>
+          </TouchableOpacity>
+        )}
+        </>
+      )}
 
       <View style={[styles.conversationsHeading, styles.conversationsTitle]}>
         <Text style={styles.sectionTitle}>{t('support_conversations')}</Text>
@@ -297,6 +360,66 @@ const MessagesScreen = () => {
           { paddingBottom: Math.max(insets.bottom, 16) + 16 },
         ]}
       />
+      <Modal
+        visible={composeVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setComposeVisible(false)}
+      >
+        <View style={[styles.composeModal, { paddingTop: Math.max(insets.top, 16) }]}>
+          <View style={styles.composeHeader}>
+            <View style={styles.composeHeadingCopy}>
+              <Text style={styles.composeTitle}>{t('messages_compose_title')}</Text>
+              <Text style={styles.composeDescription}>{t('messages_compose_description')}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.composeClose}
+              onPress={() => setComposeVisible(false)}
+              accessibilityRole="button"
+              accessibilityLabel={t('close')}
+            >
+              <Ionicons name="close" size={22} color={themeColors.onSurface} />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={contactableProperties}
+            keyExtractor={property => property.id}
+            contentContainerStyle={styles.composeList}
+            renderItem={({ item }) => {
+              const ownerName = item.contactName?.trim()
+                || users.find(user => user.id === item.ownerId)?.name
+                || t('messages_agent_fallback');
+              return (
+                <TouchableOpacity
+                  style={styles.composeProperty}
+                  activeOpacity={0.8}
+                  onPress={() => handleStartConversation(item)}
+                  accessibilityRole="button"
+                >
+                  <View style={styles.chatAvatar}>
+                    <Ionicons name="person" size={19} color={themeColors.primary} />
+                  </View>
+                  <View style={styles.composePropertyCopy}>
+                    <Text style={styles.composePropertyTitle} numberOfLines={1}>{item.title}</Text>
+                    <Text style={styles.composePropertySubtitle} numberOfLines={1}>
+                      {ownerName} · {item.neighborhood ? `${item.neighborhood}, ` : ''}{item.city}
+                    </Text>
+                  </View>
+                  <Ionicons name="chatbubble-ellipses-outline" size={20} color={themeColors.primary} />
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={
+              <EmptyState
+                icon="home-outline"
+                title={t('messages_compose_empty_title')}
+                description={t('messages_compose_empty_description')}
+                style={styles.composeEmpty}
+              />
+            }
+          />
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -569,6 +692,93 @@ const baseStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  conversationsActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  composeButton: {
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primary,
+  },
+  composeButtonText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  composeModal: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  composeHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  composeHeadingCopy: {
+    flex: 1,
+  },
+  composeTitle: {
+    ...typography.title,
+    color: COLORS.onSurface,
+  },
+  composeDescription: {
+    marginTop: 4,
+    color: COLORS.onSurfaceMuted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  composeClose: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  composeList: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    flexGrow: 1,
+  },
+  composeProperty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+  composePropertyCopy: {
+    flex: 1,
+  },
+  composePropertyTitle: {
+    color: COLORS.onSurface,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  composePropertySubtitle: {
+    marginTop: 4,
+    color: COLORS.onSurfaceMuted,
+    fontSize: 12,
+  },
+  composeEmpty: {
+    marginTop: 24,
   },
   conversationCount: {
     minWidth: 30,

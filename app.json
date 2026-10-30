@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "ImoPrestige",
+    "name": "IMO PRESTIGE",
     "slug": "imo-nord-togo",
     "scheme": "imonordtogo",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/kara-immo-icon.png",
+    "icon": "./assets/imoprestige-logo.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
@@ -25,10 +25,10 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/kara-immo-icon.png",
-        "backgroundColor": "#C2410C"
+        "foregroundImage": "./assets/imoprestige-logo.png",
+        "backgroundColor": "#062C65"
       },
-      "package": "com.imonordtogo.app",
+      "package": "com.imoprestige.app",
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
@@ -83,7 +83,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/imoprestige-icon.png"
+      "favicon": "./assets/imoprestige-logo.png"
     },
     "plugins": [
       [
@@ -98,7 +98,7 @@
         "expo-notifications",
         {
           "icon": "./assets/imoprestige-adaptive-icon.png",
-          "color": "#087F86"
+          "color": "#062C65"
         }
       ],
       [
@@ -115,12 +115,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/imoprestige-icon.png",
+          "image": "./assets/imoprestige-logo.png",
           "resizeMode": "contain",
-          "backgroundColor": "#F5F8F8",
+          "backgroundColor": "#FFFFFF",
           "dark": {
-            "image": "./assets/imoprestige-icon.png",
-            "backgroundColor": "#101B1D"
+            "image": "./assets/imoprestige-logo.png",
+            "backgroundColor": "#FFFFFF"
           }
         }
       ],
@@ -131,7 +131,8 @@
           "style": "dark"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "@sentry/react-native"
     ],
     "extra": {
       "contactPhone": "22893576298",
@@ -139,6 +140,17 @@
       "whatsappPhone": "22893576298",
       "adminApiUrl": "https://imo-nord-togo-mobile.vercel.app",
       "apkDownloadUrl": "",
+      "fonts": [
+        {
+          "Poppins": {
+            "fontFamily": "Poppins",
+            "srcs": [
+              "./assets/fonts/Poppins-Regular.ttf",
+              "./assets/fonts/Poppins-SemiBold.ttf"
+            ]
+          }
+        }
+      ],
       "eas": {
         "projectId": "7faf2828-55ef-491d-be14-b568686f71fc"
       }

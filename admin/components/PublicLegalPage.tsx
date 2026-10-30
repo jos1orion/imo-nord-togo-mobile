@@ -7,18 +7,19 @@ type LegalSection = {
   body: string;
 };
 
-const contactEmail = 'imonordtogo@gmail.com';
-const contactPhone = '+228 99 21 08 81';
+const contactEmail = process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim() || null;
+const contactPhone = process.env.NEXT_PUBLIC_CONTACT_PHONE?.trim() || null;
+const contactDetails = [contactEmail, contactPhone].filter(Boolean).join(' / ');
 
 const documents: Record<LegalDocument, { title: string; intro: string; sections: LegalSection[] }> = {
   privacy: {
     title: 'Politique de confidentialité | Privacy policy',
     intro:
-      'Cette politique décrit les informations traitées par Imo Nord Togo lorsque vous utilisez l’application mobile et les services associés. / This policy explains how Imo Nord Togo handles information when you use the mobile app and related services.',
+      'Cette politique décrit les informations traitées par ImoPrestige lorsque vous utilisez l’application mobile et les services associés. / This policy explains how ImoPrestige handles information when you use the mobile app and related services.',
     sections: [
       {
         title: 'Responsable et contact | Controller and contact',
-        body: `Imo Nord Togo, Kara, Togo. Pour toute question concernant vos données : ${contactEmail} ou ${contactPhone}. / Imo Nord Togo, Kara, Togo. For questions about your data: ${contactEmail} or ${contactPhone}.`,
+        body: `ImoPrestige, Kara, Togo. Pour toute question concernant vos données, contactez l’équipe via les coordonnées configurées dans l’application${contactDetails ? ` : ${contactDetails}` : ''}. / ImoPrestige, Kara, Togo. For questions about your data, contact the team using the details configured in the app${contactDetails ? `: ${contactDetails}` : ''}.`,
       },
       {
         title: 'Informations traitées | Information we handle',
@@ -33,7 +34,7 @@ const documents: Record<LegalDocument, { title: string; intro: string; sections:
       {
         title: 'Recherche vocale | Voice search',
         body:
-          'La recherche vocale est facultative et n’active le microphone qu’après votre action et votre autorisation. La reconnaissance est effectuée par le service vocal configuré sur votre appareil, qui peut traiter l’audio selon ses propres conditions et sa politique de confidentialité. Imo Nord Togo utilise le texte reconnu pour renseigner la recherche. / Voice search is optional and accesses the microphone only after you choose the feature and grant permission. Speech recognition is provided by the service configured on your device, which may process audio under its own terms and privacy policy. Imo Nord Togo uses the recognized text to fill in your search.',
+          'La recherche vocale est facultative et n’active le microphone qu’après votre action et votre autorisation. La reconnaissance est effectuée par le service vocal configuré sur votre appareil, qui peut traiter l’audio selon ses propres conditions et sa politique de confidentialité. ImoPrestige utilise le texte reconnu pour renseigner la recherche. / Voice search is optional and accesses the microphone only after you choose the feature and grant permission. Speech recognition is provided by the service configured on your device, which may process audio under its own terms and privacy policy. ImoPrestige uses the recognized text to fill in your search.',
       },
       {
         title: 'Utilisation | How we use information',
@@ -53,7 +54,7 @@ const documents: Record<LegalDocument, { title: string; intro: string; sections:
       {
         title: 'Vos choix et suppression du compte | Your choices and account deletion',
         body:
-          `Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte via le formulaire en ligne. Un administrateur vérifiera la demande et traitera manuellement la suppression; l’envoi du formulaire ne supprime pas immédiatement le compte. L’adresse e-mail est effacée du dossier lorsque la demande est terminée ou refusée, tandis que le statut et les dates de traitement sont conservés. Vous pouvez aussi écrire à ${contactEmail}. La suppression du compte entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité. / You may request access, correction or deletion of your data and account using the online form. An administrator will verify the request and handle account deletion manually; submitting the form does not delete the account immediately. The email address is cleared from the request when it is completed or rejected, while its status and processing dates are retained. You may also email ${contactEmail}. Account deletion removes or de-links personal data, except information that must be retained for legal or security reasons.`,
+          `Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte via le formulaire en ligne. Un administrateur vérifiera la demande et traitera manuellement la suppression; l’envoi du formulaire ne supprime pas immédiatement le compte. L’adresse e-mail est effacée du dossier lorsque la demande est terminée ou refusée, tandis que le statut et les dates de traitement sont conservés. ${contactEmail ? `Vous pouvez aussi écrire à ${contactEmail}.` : ''} La suppression du compte entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité. / You may request access, correction or deletion of your data and account using the online form. An administrator will verify the request and handle account deletion manually; submitting the form does not delete the account immediately. The email address is cleared from the request when it is completed or rejected, while its status and processing dates are retained. ${contactEmail ? `You may also email ${contactEmail}.` : ''} Account deletion removes or de-links personal data, except information that must be retained for legal or security reasons.`,
       },
       {
         title: 'Mineurs et modifications | Children and changes',
@@ -65,12 +66,12 @@ const documents: Record<LegalDocument, { title: string; intro: string; sections:
   terms: {
     title: 'Conditions d’utilisation | Terms of use',
     intro:
-      'En créant un compte ou en utilisant Imo Nord Togo, vous acceptez les présentes conditions. / By creating an account or using Imo Nord Togo, you agree to these terms.',
+      'En créant un compte ou en utilisant ImoPrestige, vous acceptez les présentes conditions. / By creating an account or using ImoPrestige, you agree to these terms.',
     sections: [
       {
         title: 'Service | Service',
         body:
-          'Imo Nord Togo met en relation des personnes intéressées par des biens immobiliers et permet la consultation, la publication et la gestion d’annonces de vente ou de location. / Imo Nord Togo connects people interested in real estate and enables users to browse, publish and manage sale or rental listings.',
+          'ImoPrestige met en relation des personnes intéressées par des biens immobiliers et permet la consultation, la publication et la gestion d’annonces de vente ou de location. / ImoPrestige connects people interested in real estate and enables users to browse, publish and manage sale or rental listings.',
       },
       {
         title: 'Compte | Account',
@@ -85,12 +86,12 @@ const documents: Record<LegalDocument, { title: string; intro: string; sections:
       {
         title: 'Transactions | Transactions',
         body:
-          'Imo Nord Togo fournit un service de mise en relation et n’est pas partie aux transactions conclues entre utilisateurs. Vérifiez les informations, l’identité de votre interlocuteur et le bien avant tout paiement ou engagement. / Imo Nord Togo provides a connection service and is not a party to transactions between users. Verify information, the other party’s identity and the property before making a payment or commitment.',
+          'ImoPrestige fournit un service de mise en relation et n’est pas partie aux transactions conclues entre utilisateurs. Vérifiez les informations, l’identité de votre interlocuteur et le bien avant tout paiement ou engagement. / ImoPrestige provides a connection service and is not a party to transactions between users. Verify information, the other party’s identity and the property before making a payment or commitment.',
       },
       {
         title: 'Disponibilité et responsabilité | Availability and liability',
         body:
-          'Nous nous efforçons de maintenir le service disponible et de modérer les annonces, mais ne garantissons ni l’absence d’interruption ni l’exactitude de tous les contenus publiés par les utilisateurs. Dans la mesure permise par la loi, Imo Nord Togo n’est pas responsable des accords ou pertes résultant directement des transactions entre utilisateurs. / We work to keep the service available and moderate listings, but do not guarantee uninterrupted service or the accuracy of all user-posted content. To the extent permitted by law, Imo Nord Togo is not responsible for agreements or losses arising directly from transactions between users.',
+          'Nous nous efforçons de maintenir le service disponible et de modérer les annonces, mais ne garantissons ni l’absence d’interruption ni l’exactitude de tous les contenus publiés par les utilisateurs. Dans la mesure permise par la loi, ImoPrestige n’est pas responsable des accords ou pertes résultant directement des transactions entre utilisateurs. / We work to keep the service available and moderate listings, but do not guarantee uninterrupted service or the accuracy of all user-posted content. To the extent permitted by law, ImoPrestige is not responsible for agreements or losses arising directly from transactions between users.',
       },
       {
         title: 'Suspension, modifications et droit applicable | Suspension, changes and governing law',
@@ -99,7 +100,7 @@ const documents: Record<LegalDocument, { title: string; intro: string; sections:
       },
       {
         title: 'Contact | Contact',
-        body: `Pour toute question, contactez ${contactEmail} ou ${contactPhone}. / For questions, contact ${contactEmail} or ${contactPhone}.`,
+        body: `Pour toute question, contactez l’équipe via les coordonnées configurées dans l’application${contactDetails ? ` : ${contactDetails}` : ''}. / For questions, contact the team using the details configured in the app${contactDetails ? `: ${contactDetails}` : ''}.`,
       },
     ],
   },
@@ -110,17 +111,17 @@ export default function PublicLegalPage({ document }: { document: LegalDocument 
   return (
     <main className="public-legal">
       <article className="public-legal-card">
-        <Link className="public-legal-brand" href="/" aria-label="Imo Nord Togo">
+        <Link className="public-legal-brand" href="/" aria-label="ImoPrestige">
           IMO <span>NORD TOGO</span>
         </Link>
-        <p className="public-legal-eyebrow">Imo Nord Togo</p>
+        <p className="public-legal-eyebrow">ImoPrestige</p>
         <h1>{content.title}</h1>
         <p className="public-legal-intro">{content.intro}</p>
         <p className="public-legal-date">Dernière mise à jour / Last updated: 20 octobre 2026 / October 20, 2026</p>
         <nav className="public-legal-nav" aria-label="Documents légaux / Legal documents">
           <Link href="/privacy">Confidentialité / Privacy</Link>
           <Link href="/terms">Conditions / Terms</Link>
-          <a href={`mailto:${contactEmail}`}>Contact</a>
+          {contactEmail ? <a href={`mailto:${contactEmail}`}>Contact</a> : null}
         </nav>
         <div className="public-legal-sections">
           {content.sections.map(section => (
@@ -132,7 +133,7 @@ export default function PublicLegalPage({ document }: { document: LegalDocument 
         </div>
         <footer className="public-legal-footer">
           <span>Kara, Togo</span>
-          <a href={`mailto:${contactEmail}`}>{contactEmail}</a>
+          {contactEmail ? <a href={`mailto:${contactEmail}`}>{contactEmail}</a> : null}
         </footer>
       </article>
     </main>

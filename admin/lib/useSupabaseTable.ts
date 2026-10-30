@@ -15,24 +15,48 @@ export const useSupabaseTable = <T,>(table: string, options: TableOptions = {}) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchData = useCallback(async () => {
     const query = supabase.from(table).select(options.select ?? '*');
-    const { data, error } = options.orderBy
+    return options.orderBy
       ? await query.order(options.orderBy, { ascending: options.ascending ?? false })
       : await query;
-    if (error) {
-      setError(error.message);
+  }, [table, options.orderBy, options.select, options.ascending]);
+
+  const applyResult = useCallback(({
+    data,
+    error: queryError,
+  }: {
+    data: unknown[] | null;
+    error: { message: string } | null;
+  }) => {
+    setError(null);
+    if (queryError) {
+      setError(queryError.message);
     } else {
       setData((data as T[]) ?? []);
     }
+  }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const result = await fetchData();
+    applyResult(result);
     setLoading(false);
-  }, [table, options.orderBy, options.select, options.ascending]);
+  }, [applyResult, fetchData]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let active = true;
+    const loadInitialData = async () => {
+      const result = await fetchData();
+      if (!active) return;
+      applyResult(result);
+      setLoading(false);
+    };
+    void loadInitialData();
+    return () => {
+      active = false;
+    };
+  }, [applyResult, fetchData]);
 
   useEffect(() => {
     if (options.realtime === false) return;

@@ -247,7 +247,6 @@ export default function UsersPage() {
             type="tel"
             value={draft?.phone ?? row.phone ?? ''}
             onChange={event => updateDraft(row.id, { phone: event.target.value })}
-            placeholder="+228 90 00 00 00"
             disabled={rowBusy[row.id]}
             style={{ width: 140 }}
           />
@@ -349,7 +348,6 @@ export default function UsersPage() {
               type="email"
               value={form.email}
               onChange={event => setForm({ ...form, email: event.target.value })}
-              placeholder="user@imonord.tg"
             />
           </div>
           <div className="form-field">
@@ -358,7 +356,6 @@ export default function UsersPage() {
               type="tel"
               value={form.phone}
               onChange={event => setForm({ ...form, phone: event.target.value })}
-              placeholder="+228 90 00 00 00"
             />
           </div>
           <div className="form-field">

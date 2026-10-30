@@ -32,7 +32,7 @@ const ChatScreen = () => {
   const { chats, getChatMessages, sendMessage, markMessagesAsRead, users, currentUser, t } = useApp();
   const route = useRoute<ChatScreenRouteProp>();
   const navigation = useNavigation<ChatScreenNavigationProp>();
-  const { chatId, otherUserId, propertyId: routePropertyId } = route.params;
+  const { chatId, otherUserId, otherUserName: routeOtherUserName, propertyId: routePropertyId } = route.params;
 
   const [messageText, setMessageText] = useState('');
   const [activeChatId, setActiveChatId] = useState(chatId);
@@ -41,7 +41,7 @@ const ChatScreen = () => {
   const messages = getChatMessages(activeChatId);
   const propertyId = chats.find(chat => chat.id === activeChatId)?.propertyId ?? routePropertyId;
   const otherUser = users.find(u => u.id === otherUserId);
-  const otherUserName = otherUser?.name || (otherUserId === 'support' ? 'Support' : 'Utilisateur');
+  const otherUserName = otherUser?.name || routeOtherUserName || (otherUserId === 'support' ? 'Support' : 'Utilisateur');
 
   useEffect(() => {
     setActiveChatId(chatId);

@@ -14,6 +14,7 @@ on:
       - supabase/migrations/0024_remove_legacy_storage_delete_triggers.sql
       - supabase/migrations/0025_account_deletion_requests.sql
       - supabase/migrations/0026_agent_support_inbox.sql
+      - supabase/migrations/0027_admin_initiated_agent_support.sql
       - .github/workflows/apply-storage-upload-constraints.yml
   workflow_dispatch:
 
@@ -113,4 +114,13 @@ jobs:
         run: |
           psql --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file=supabase/migrations/0026_agent_support_inbox.sql \
+            "$SUPABASE_DB_URL"
+
+      - name: Allow admins to initiate agent support conversations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PGSSLMODE: require
+        run: |
+          psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file=supabase/migrations/0027_admin_initiated_agent_support.sql \
             "$SUPABASE_DB_URL"

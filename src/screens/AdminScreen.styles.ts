@@ -17,6 +17,7 @@ export type AdminTheme = {
   accent: string;
   accentSoft: string;
   accentText: string;
+  onAccent: string;
   warning: string;
   warningSoft: string;
   info: string;
@@ -51,6 +52,7 @@ export const createAdminTheme = (name: AdminTheme['name']): AdminTheme => {
     accent: colors.primary,
     accentSoft: colors.primaryContainer,
     accentText: colors.primary,
+    onAccent: name === 'light' ? colors.onBrand : colors.background,
     warning: colors.warning,
     warningSoft: colors.warningContainer,
     info: colors.info,
@@ -152,7 +154,7 @@ export const createAdminStyles = (theme: AdminTheme) => StyleSheet.create({
   },
   gateButtonText: {
     ...typography.button,
-    color: theme.onBrand,
+    color: theme.accentText,
   },
   header: {
     flexDirection: 'row',
@@ -376,8 +378,11 @@ export const createAdminStyles = (theme: AdminTheme) => StyleSheet.create({
   },
   tabContent: {
     flex: 1,
+  },
+  tabContentContainer: {
+    flexGrow: 1,
     padding: 16,
-    paddingBottom: 140,
+    paddingBottom: 32,
   },
   propertyListViewport: {
     flex: 1,
@@ -396,6 +401,77 @@ export const createAdminStyles = (theme: AdminTheme) => StyleSheet.create({
     borderColor: theme.border,
     padding: 12,
     marginBottom: 18,
+  },
+  supportInboxActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  supportBulkToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+    borderRadius: 9,
+    backgroundColor: theme.accent,
+  },
+  supportBulkToggleText: {
+    color: theme.onAccent,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  supportBulkComposer: {
+    gap: 8,
+    padding: 10,
+    marginBottom: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
+  },
+  supportBulkHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportBulkSelectAll: {
+    color: theme.accentText,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  supportRecipientList: {
+    maxHeight: 180,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 9,
+  },
+  supportRecipientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 38,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  supportRecipientRowSelected: {
+    backgroundColor: theme.accentSoft,
+  },
+  supportRecipientName: {
+    flex: 1,
+    color: theme.text,
+    fontSize: 12,
+  },
+  supportBulkMessage: {
+    marginTop: 0,
+    minHeight: 72,
+  },
+  supportBulkResult: {
+    color: theme.accentText,
+    fontSize: 12,
+    fontWeight: '700',
   },
   supportConversationCard: {
     backgroundColor: theme.surface,
@@ -456,7 +532,7 @@ export const createAdminStyles = (theme: AdminTheme) => StyleSheet.create({
     lineHeight: 18,
   },
   supportAdminMessageText: {
-    color: theme.onBrand,
+    color: theme.onAccent,
   },
   supportMessageTime: {
     color: theme.textMuted,
@@ -465,11 +541,26 @@ export const createAdminStyles = (theme: AdminTheme) => StyleSheet.create({
     textAlign: 'right',
   },
   supportAdminMessageTime: {
-    color: theme.onBrand,
+    color: theme.onAccent,
   },
   supportReplyInput: {
     marginTop: 10,
     minHeight: 76,
+  },
+  supportComposerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  supportCancelButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  supportCancelButtonText: {
+    color: theme.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
   },
   supportSendButton: {
     alignSelf: 'flex-end',
@@ -487,7 +578,7 @@ export const createAdminStyles = (theme: AdminTheme) => StyleSheet.create({
     opacity: 0.55,
   },
   supportSendButtonText: {
-    color: theme.onBrand,
+    color: theme.onAccent,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -558,7 +649,7 @@ export const createAdminStyles = (theme: AdminTheme) => StyleSheet.create({
     borderRadius: 10,
   },
   backupButtonText: {
-    color: theme.onBrand,
+    color: theme.accentText,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -847,7 +938,7 @@ export const createAdminStyles = (theme: AdminTheme) => StyleSheet.create({
     color: theme.textMuted,
   },
   filterTabTextActive: {
-    color: theme.onBrand,
+    color: theme.accentText,
     fontWeight: '600',
   },
   filterToggleRow: {
@@ -1112,7 +1203,7 @@ export const createAdminStyles = (theme: AdminTheme) => StyleSheet.create({
   clientInitials: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.onBrand,
+    color: theme.accentText,
   },
   clientInfo: {
     flex: 1,
@@ -1167,7 +1258,7 @@ export const createAdminStyles = (theme: AdminTheme) => StyleSheet.create({
   accountInitials: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.onBrand,
+    color: theme.accentText,
   },
   accountInfo: {
     flex: 1,
@@ -1213,7 +1304,7 @@ export const createAdminStyles = (theme: AdminTheme) => StyleSheet.create({
   accountVerifyText: {
     fontSize: 12,
     fontWeight: '700',
-    color: theme.onBrand,
+    color: theme.accentText,
   },
   accountEditButton: {
     width: 30,
@@ -1637,7 +1728,7 @@ export const createAdminStyles = (theme: AdminTheme) => StyleSheet.create({
     color: theme.textMuted,
   },
   selectChipTextActive: {
-    color: theme.onBrand,
+    color: theme.accentText,
   },
   typeSelector: {
     flexDirection: 'row',

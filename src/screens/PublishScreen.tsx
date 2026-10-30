@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,7 @@ import {
 import { AppAlert as Alert } from '../components/ui/appAlertService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
@@ -27,6 +27,14 @@ import { useApp } from '../context/AppContext';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { supabase } from '../lib/supabase';
 import { isDirectPublishingEnabled } from '../lib/publishing';
+import { canActivateSmartPublish } from '../lib/smartPublishAccess';
+import {
+  getFirstIncompletePublishStep,
+  getFirstInvalidProgressionStep,
+  getPublishStepErrors,
+  type PublishField,
+} from '../lib/smartPublishValidation';
+import { SmartPublishAssistant } from '../components/SmartPublishAssistant';
 import { PROPERTY_TYPE_COLORS, Property, PropertyType } from '../types';
 import COLORS from '../theme/colors';
 import { safeImpactLight } from '../lib/expoHapticsSafe';
@@ -36,15 +44,9 @@ import { logger } from '../lib/logger';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 type PublishRouteProp = RouteProp<RootStackParamList, 'Publish'>;
-type PublishGuideStep = 0 | 1 | 2 | 3;
-type PublishField = 'title' | 'price' | 'images' | 'city' | 'location' | 'clientPhone';
-
-const PUBLISH_GUIDE_STEPS = [
-  { title: 'publish_guide_step_0_title', body: 'publish_guide_step_0_body' },
-  { title: 'publish_guide_step_1_title', body: 'publish_guide_step_1_body' },
-  { title: 'publish_guide_step_2_title', body: 'publish_guide_step_2_body' },
-  { title: 'publish_guide_step_3_title', body: 'publish_guide_step_3_body' },
-] as const;
+type PublishAccessStatus = 'checking' | 'ready' | 'unauthenticated' | 'inactive' | 'unauthorized' | 'error';
+type PublishRole = 'USER' | 'AGENT' | 'ADMIN' | 'ACCOUNTANT';
+type AgentStatus = 'none' | 'pending' | 'approved' | 'rejected';
 
 const getPublishErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) return error.message.trim();
@@ -58,12 +60,20 @@ const getPublishErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const isAuthSessionError = (error: unknown) => {
+  if (typeof error !== 'object' || error === null) return false;
+  const status = Reflect.get(error, 'status');
+  const name = Reflect.get(error, 'name');
+  return status === 401 || name === 'AuthSessionMissingError';
+};
+
 const PublishScreen: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
   const themeColors = useThemeColors();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<PublishRouteProp>();
+  const isFocused = useIsFocused();
   const {
     addProperty,
     neighborhoods,
@@ -83,18 +93,29 @@ const PublishScreen: React.FC = () => {
   const isEditing = Boolean(editingProperty);
   const MAX_IMAGES = 8;
   const [submitting, setSubmitting] = useState(false);
-  const [publishGuideStep, setPublishGuideStep] = useState<PublishGuideStep | null>(null);
+  const [smartPublishVisible, setSmartPublishVisible] = useState(false);
+  const [smartPublishTechnicalError, setSmartPublishTechnicalError] = useState<string | null>(null);
   const [draftImages, setDraftImages] = useState<string[]>([]);
   const [step, setStep] = useState(0);
   const [neighborhoodPickerOpen, setNeighborhoodPickerOpen] = useState(false);
   const [neighborhoodQuery, setNeighborhoodQuery] = useState('');
   const [customNeighborhood, setCustomNeighborhood] = useState(false);
-  const checkedGuideSteps = useRef(new Set<number>());
   const submitInProgress = useRef(false);
+  const confirmingSubmitRef = useRef(false);
+  const submissionCompletedRef = useRef(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<PublishField, string>>>({});
+  const [publishAccessStatus, setPublishAccessStatus] = useState<PublishAccessStatus>('checking');
+  const [verifiedAuthUserId, setVerifiedAuthUserId] = useState<string | null>(null);
+  const [verifiedProfile, setVerifiedProfile] = useState<{
+    id: string;
+    accountStatus: 'active' | 'pending' | 'suspended';
+    role: PublishRole;
+    agentStatus: AgentStatus;
+  } | null>(null);
   const fieldRefs = useRef<Partial<Record<PublishField, TextInput>>>({});
   const contentScrollRef = useRef<ScrollView>(null);
+  const verificationRunRef = useRef(0);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -110,6 +131,15 @@ const PublishScreen: React.FC = () => {
     bathrooms: '',
     amenities: '',
   });
+  const verifiedAuthUserIdRef = useRef<string | null>(null);
+  const currentUserIdRef = useRef<string | undefined>(currentUser?.id);
+  const latestDraftRef = useRef({ formData, draftImages, step });
+  const openSmartPublish = useCallback(() => setSmartPublishVisible(true), []);
+  const closeSmartPublish = useCallback(() => setSmartPublishVisible(false), []);
+  useEffect(() => {
+    currentUserIdRef.current = currentUser?.id;
+    latestDraftRef.current = { formData, draftImages, step };
+  }, [currentUser?.id, draftImages, formData, step]);
   const availableNeighborhoods = useMemo(
     () => [...new Map(neighborhoods.map(name => [name.trim().toLocaleLowerCase(), name.trim()]))
       .values()]
@@ -141,49 +171,199 @@ const PublishScreen: React.FC = () => {
     );
   };
 
-  const draftKey = currentUser ? `imo:publish-draft:${currentUser.id}` : null;
+  const draftKey = verifiedAuthUserId ? `imo:publish-draft:${verifiedAuthUserId}` : null;
+
+  const persistDraftForUser = useCallback(async (userId: string) => {
+    const draft = latestDraftRef.current;
+    const contactFields = new Set(['clientName', 'clientPhone', 'clientEmail']);
+    const hasContent =
+      Object.entries(draft.formData).some(([key, value]) => !contactFields.has(key) && value.trim()) ||
+      draft.draftImages.length > 0;
+    if (!hasContent) return;
+    try {
+      await AsyncStorage.setItem(
+        `imo:publish-draft:${userId}`,
+        JSON.stringify(draft)
+      );
+    } catch (error) {
+      logger.warn('Unable to preserve the publishing draft after authentication changed.', error);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!draftLoaded || isEditing || step < 0 || step > 3 || checkedGuideSteps.current.has(step)) return;
-    checkedGuideSteps.current.add(step);
+    if (!isFocused) return;
 
-    let cancelled = false;
-    const guideKey = `imo:publish-step-guide:v1:${currentUser?.id ?? 'guest'}:${step}`;
-    void AsyncStorage.multiGet([
-      guideKey,
-      'imo:publish-step-guide-disabled',
-    ])
-      .then(([seenEntry, disabledEntry]) => {
-        if (
-          !cancelled &&
-          seenEntry[1] !== 'true' &&
-          disabledEntry[1] !== 'true'
-        ) {
-          setPublishGuideStep(step as PublishGuideStep);
+    let active = true;
+    let authCheckTimeout: ReturnType<typeof setTimeout> | null = null;
+    const verifySession = async () => {
+      const runId = ++verificationRunRef.current;
+
+      try {
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError;
+        if (!authData.user) {
+          if (active && runId === verificationRunRef.current) {
+            verifiedAuthUserIdRef.current = null;
+            setVerifiedAuthUserId(null);
+            setVerifiedProfile(null);
+            setPublishAccessStatus('unauthenticated');
+          }
+          return;
         }
-      })
-      .catch(error => {
-        logger.warn('Unable to load the publishing guide state.', error);
-        if (!cancelled) setPublishGuideStep(step as PublishGuideStep);
-      });
+
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, account_status, role, agent_status')
+          .eq('id', authData.user.id)
+          .maybeSingle();
+        if (profileError) throw profileError;
+        if (!active || runId !== verificationRunRef.current) return;
+        if (!profile) {
+          setPublishAccessStatus('error');
+          return;
+        }
+
+        const accountStatus = profile.account_status;
+        if (accountStatus !== 'active' && accountStatus !== 'pending' && accountStatus !== 'suspended') {
+          setPublishAccessStatus('error');
+          return;
+        }
+        const role = profile.role;
+        if (role !== 'USER' && role !== 'AGENT' && role !== 'ADMIN' && role !== 'ACCOUNTANT') {
+          setPublishAccessStatus('error');
+          return;
+        }
+        const agentStatus = profile.agent_status;
+        if (
+          agentStatus !== 'none' &&
+          agentStatus !== 'pending' &&
+          agentStatus !== 'approved' &&
+          agentStatus !== 'rejected'
+        ) {
+          setPublishAccessStatus('error');
+          return;
+        }
+        verifiedAuthUserIdRef.current = authData.user.id;
+        setVerifiedAuthUserId(authData.user.id);
+        setVerifiedProfile({ id: profile.id, accountStatus, role, agentStatus });
+        if (accountStatus !== 'active') {
+          setPublishAccessStatus('inactive');
+          return;
+        }
+        const authorizedRole = role === 'ADMIN' || (
+          role === 'AGENT' &&
+          (
+            agentStatus === 'approved' ||
+            isDirectPublishingEnabled({ role, agentStatus, accountStatus })
+          )
+        );
+        setPublishAccessStatus(authorizedRole ? 'ready' : 'unauthorized');
+      } catch (error) {
+        if (!active || runId !== verificationRunRef.current) return;
+        logger.warn('Unable to verify the publishing session.', error);
+        if (isAuthSessionError(error)) {
+          const previousUserId = verifiedAuthUserIdRef.current ?? currentUserIdRef.current;
+          verifiedAuthUserIdRef.current = null;
+          setVerifiedAuthUserId(null);
+          setVerifiedProfile(null);
+          setPublishAccessStatus('unauthenticated');
+          if (previousUserId) void persistDraftForUser(previousUserId);
+        } else {
+          setPublishAccessStatus('error');
+        }
+      }
+    };
+
+    void verifySession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user) {
+        const previousUserId = verifiedAuthUserIdRef.current ?? currentUserIdRef.current;
+        verificationRunRef.current += 1;
+        verifiedAuthUserIdRef.current = null;
+        setVerifiedAuthUserId(null);
+        setVerifiedProfile(null);
+        setPublishAccessStatus('unauthenticated');
+        setSmartPublishVisible(false);
+        if (previousUserId) void persistDraftForUser(previousUserId);
+        return;
+      }
+
+      verifiedAuthUserIdRef.current = null;
+      setVerifiedAuthUserId(null);
+      setVerifiedProfile(null);
+      setPublishAccessStatus('checking');
+      if (authCheckTimeout) clearTimeout(authCheckTimeout);
+      authCheckTimeout = setTimeout(() => {
+        void verifySession();
+      }, 0);
+    });
 
     return () => {
-      cancelled = true;
+      active = false;
+      verificationRunRef.current += 1;
+      verifiedAuthUserIdRef.current = null;
+      if (authCheckTimeout) clearTimeout(authCheckTimeout);
+      subscription.unsubscribe();
     };
-  }, [currentUser?.id, draftLoaded, isEditing, step]);
+  }, [isFocused, persistDraftForUser]);
 
-  const dismissPublishGuide = (disableAll = false) => {
-    const guideStep = publishGuideStep;
-    setPublishGuideStep(null);
-    if (guideStep === null) return;
+  useEffect(() => {
+    if (!isFocused || publishAccessStatus === 'checking' || publishAccessStatus === 'ready') return;
+    if (publishAccessStatus === 'unauthenticated') {
+      Alert.alert(t('loginRequired'), t('publish_login_required'));
+      navigation.replace('MainTabs', { screen: 'Profile', params: { authMode: 'login' } });
+      return;
+    }
+    if (publishAccessStatus === 'inactive') {
+      Alert.alert(t('error'), t('publish_account_inactive'));
+      navigation.goBack();
+      return;
+    }
+    if (publishAccessStatus === 'unauthorized') {
+      Alert.alert(t('error'), t('publish_agent_only'));
+      navigation.goBack();
+      return;
+    }
+    Alert.alert(t('error'), t('publish_session_check_failed'));
+    navigation.goBack();
+  }, [isFocused, navigation, publishAccessStatus, t]);
 
-    const guideKey = `imo:publish-step-guide:v1:${currentUser?.id ?? 'guest'}:${guideStep}`;
-    const writes: [string, string][] = [[guideKey, 'true']];
-    if (disableAll) writes.push(['imo:publish-step-guide-disabled', 'true']);
-    void AsyncStorage.multiSet(writes).catch(error => {
-      logger.warn('Unable to save the publishing guide state.', error);
+  const isSmartPublishActive = isFocused && publishAccessStatus === 'ready' &&
+    currentUser?.id === verifiedAuthUserId &&
+    currentUser.accountStatus === 'active' &&
+    currentUser.role === verifiedProfile?.role &&
+    currentUser.agentStatus === verifiedProfile?.agentStatus &&
+    canActivateSmartPublish({
+      inPublicationArea: true,
+      verifiedAuthUserId,
+      profileUserId: verifiedProfile?.id ?? null,
+      accountStatus: verifiedProfile?.accountStatus ?? null,
+      role: verifiedProfile?.role ?? null,
+      agentApproved: verifiedProfile?.agentStatus === 'approved',
+      directPublishingEnabled: verifiedProfile
+        ? isDirectPublishingEnabled({
+          role: verifiedProfile.role,
+          agentStatus: verifiedProfile.agentStatus,
+          accountStatus: verifiedProfile.accountStatus,
+        })
+        : false,
     });
-  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('blur', () => {
+      const previousUserId = verifiedAuthUserIdRef.current;
+      if (previousUserId && !submissionCompletedRef.current) {
+        void persistDraftForUser(previousUserId);
+      }
+      verificationRunRef.current += 1;
+      verifiedAuthUserIdRef.current = null;
+      setVerifiedAuthUserId(null);
+      setVerifiedProfile(null);
+      setPublishAccessStatus('checking');
+      setSmartPublishVisible(false);
+    });
+    return unsubscribe;
+  }, [navigation, persistDraftForUser]);
 
   useEffect(() => {
     if (!draftKey || isEditing) {
@@ -229,7 +409,27 @@ const PublishScreen: React.FC = () => {
                 onPress: () => {
                   if (draft.formData) setFormData(draft.formData);
                   if (draft.draftImages) setDraftImages(draft.draftImages);
-                  if (typeof draft.step === 'number') setStep(Math.min(Math.max(draft.step, 0), 4));
+                  if (typeof draft.step === 'number' && draft.formData) {
+                    const images = draft.draftImages ?? [];
+                    const messages = {
+                      title: t('publish_title_required_error'),
+                      price: t('publish_price_invalid_error'),
+                      images: images.length > MAX_IMAGES
+                        ? t('publish_photo_limit_max_message').replace('{{n}}', String(MAX_IMAGES))
+                        : t('publish_photo_required_error'),
+                      city: t('publish_city_required_error'),
+                      location: t('publish_location_required_error'),
+                      clientPhone: t('publish_phone_required_error'),
+                    };
+                    const firstIncomplete = getFirstIncompletePublishStep(
+                      draft.formData,
+                      currentUser?.phone ?? '',
+                      images.length,
+                      MAX_IMAGES,
+                      messages,
+                    );
+                    setStep(Math.min(Math.max(draft.step, 0), firstIncomplete, 4));
+                  }
                   setDraftLoaded(true);
                 },
               },
@@ -391,47 +591,59 @@ const PublishScreen: React.FC = () => {
     ]);
   };
 
-  const goStep = (next: number) => {
-    Keyboard.dismiss();
-    setFieldErrors({});
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setStep(next);
-  };
-
   const numericInput = (value: string) => value.replace(/[^\d]/g, '');
 
+  const validationMessages = {
+    title: t('publish_title_required_error'),
+    price: t('publish_price_invalid_error'),
+    images: draftImages.length > MAX_IMAGES
+      ? t('publish_photo_limit_max_message').replace('{{n}}', String(MAX_IMAGES))
+      : t('publish_photo_required_error'),
+    city: t('publish_city_required_error'),
+    location: t('publish_location_required_error'),
+    clientPhone: t('publish_phone_required_error'),
+  };
+  const getStepErrors = (targetStep: number) => getPublishStepErrors(
+    targetStep,
+    formData,
+    currentUser?.phone ?? '',
+    draftImages.length,
+    MAX_IMAGES,
+    validationMessages,
+  );
+
   const validateStep = (targetStep: number, includeAll = false) => {
-    const errors: Partial<Record<PublishField, string>> = {};
-    const requiredMessage = t('publish_required_error');
-    if (includeAll || targetStep === 0) {
-      if (!formData.title.trim()) errors.title = requiredMessage;
-      if ((parseInt(formData.price, 10) || 0) <= 0) errors.price = requiredMessage;
-    }
-    if (includeAll || targetStep === 2) {
-      if (!formData.city.trim()) errors.city = requiredMessage;
-      if (!formData.location.trim()) errors.location = requiredMessage;
-    }
-    if (includeAll || targetStep === 3) {
-      if (!(formData.clientPhone.trim() || currentUser?.phone?.trim())) {
-        errors.clientPhone = requiredMessage;
-      }
-    }
+    const errors = getStepErrors(includeAll ? 4 : targetStep);
     setFieldErrors(errors);
     const firstInvalid = (['title', 'price', 'images', 'city', 'location', 'clientPhone'] as const)
       .find(field => errors[field]);
     if (firstInvalid && firstInvalid !== 'images') {
       requestAnimationFrame(() => fieldRefs.current[firstInvalid]?.focus());
     }
+    if (Object.keys(errors).length) setSmartPublishVisible(true);
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = async () => {
+  const goStep = (next: number) => {
+    if (!Number.isInteger(next) || next < 0 || next > 4) return false;
+    const invalidStep = getFirstInvalidProgressionStep(step, next, validateStep);
+    if (invalidStep !== null) return false;
+    Keyboard.dismiss();
+    setFieldErrors({});
+    setSmartPublishTechnicalError(null);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setStep(next);
+    return true;
+  };
+
+  const submitPublication = async () => {
     if (submitting || submitInProgress.current) return;
+    setSmartPublishTechnicalError(null);
     const priceValue = parseInt(formData.price, 10);
     const contactName = formData.clientName.trim() || currentUser?.name?.trim() || t('publish_advertiser');
     const contactPhone = formData.clientPhone.trim() || currentUser?.phone?.trim() || '';
     const contactEmail = formData.clientEmail.trim() || currentUser?.email?.trim() || '';
-    if (!validateStep(step, true)) {
+    if (!isSmartPublishActive || !validateStep(4, true)) {
       return;
     }
     if (!contactPhone) return;
@@ -444,7 +656,18 @@ const PublishScreen: React.FC = () => {
       const authenticatedUser = data.user;
       if (!authenticatedUser) {
         Alert.alert(t('loginRequired'), t('publish_login_required'));
-        navigation.navigate('MainTabs', { screen: 'Profile' });
+        navigation.replace('MainTabs', { screen: 'Profile', params: { authMode: 'login' } });
+        return;
+      }
+      if (
+        !isSmartPublishActive ||
+        authenticatedUser.id !== verifiedAuthUserId ||
+        currentUser?.id !== authenticatedUser.id ||
+        currentUser.accountStatus !== 'active'
+      ) {
+        Alert.alert(t('error'), t('publish_session_check_failed'));
+        if (verifiedAuthUserId) void persistDraftForUser(verifiedAuthUserId);
+        navigation.replace('MainTabs', { screen: 'Profile', params: { authMode: 'login' } });
         return;
       }
       const directPublishing = isDirectPublishingEnabled(currentUser);
@@ -461,12 +684,17 @@ const PublishScreen: React.FC = () => {
         ? editingProperty?.listingStatus ?? 'pending'
         : directPublishing ? 'approved' : 'pending';
       if (
-        !directPublishing &&
-        (!currentUser || (currentUser.role !== 'AGENT' && currentUser.role !== 'ADMIN'))
+        !currentUser ||
+        (currentUser.role !== 'AGENT' && currentUser.role !== 'ADMIN') ||
+        (
+          currentUser.role === 'AGENT' &&
+          currentUser.agentStatus !== 'approved' &&
+          !directPublishing
+        )
       ) {
         Alert.alert(
-          'Compte agent non validé',
-          'Votre demande agent doit être validée par un administrateur avant la publication.'
+          t('error'),
+          t('publish_agent_only')
         );
         return;
       }
@@ -500,31 +728,85 @@ const PublishScreen: React.FC = () => {
           createdAt: new Date().toISOString(),
         },
       };
+      let savedListingStatus: Property['listingStatus'];
       if (editingProperty) {
         await updateProperty(editingProperty.id, {
           ...propertyData,
           listingStatus: listingStatusOnSave,
           rejectionReason: preserveListingState ? editingProperty.rejectionReason : null,
         });
+        const { data: savedProperty, error: savedPropertyError } = await supabase
+          .from('properties')
+          .select('listing_status')
+          .eq('id', editingProperty.id)
+          .single();
+        if (savedPropertyError) throw savedPropertyError;
+        savedListingStatus = savedProperty.listing_status;
         addMyPropertyId(editingProperty.id);
       } else {
         const created = await addProperty(propertyData);
+        savedListingStatus = created.listingStatus;
         addMyPropertyId(created.id);
       }
 
+      const publishedImmediately = savedListingStatus === 'approved';
       Alert.alert(
-        directPublishing ? t('publish_direct_success_title') : t('publish_success_title'),
-        directPublishing ? t('publish_direct_success_message') : t('publish_success_message')
+        publishedImmediately ? t('publish_direct_success_title') : t('publish_success_title'),
+        publishedImmediately ? t('publish_direct_success_message') : t('publish_success_message')
       );
+      submissionCompletedRef.current = true;
       resetForm();
       navigation.goBack();
     } catch (e) {
+      if (isAuthSessionError(e)) {
+        logger.warn('Publishing stopped because the authenticated session expired.', e);
+        if (verifiedAuthUserId) void persistDraftForUser(verifiedAuthUserId);
+        Alert.alert(t('loginRequired'), t('publish_login_required'));
+        setPublishAccessStatus('unauthenticated');
+        navigation.replace('MainTabs', { screen: 'Profile', params: { authMode: 'login' } });
+        return;
+      }
+      if (
+        typeof e === 'object' &&
+        e !== null &&
+        (Reflect.get(e, 'code') === '42501' ||
+          /row-level security|permission denied/i.test(getPublishErrorMessage(e, '')))
+      ) {
+        const message = t('publish_agent_only');
+        setSmartPublishTechnicalError(message);
+        setSmartPublishVisible(true);
+        Alert.alert(t('error'), message);
+        return;
+      }
       const message = getPublishErrorMessage(e, t('publish_unknown_error'));
-      Alert.alert(t('error'), message);
+      setSmartPublishTechnicalError(message);
+      setSmartPublishVisible(true);
     } finally {
       submitInProgress.current = false;
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = () => {
+    if (submitting || submitInProgress.current || confirmingSubmitRef.current) return;
+    if (!isSmartPublishActive || !validateStep(4, true)) return;
+    confirmingSubmitRef.current = true;
+    Alert.alert(t('publish_confirm_title'), t('publish_confirm_message'), [
+      {
+        text: t('cancel'),
+        style: 'cancel',
+        onPress: () => {
+          confirmingSubmitRef.current = false;
+        },
+      },
+      {
+        text: t('publish_submit'),
+        onPress: () => {
+          confirmingSubmitRef.current = false;
+          void submitPublication();
+        },
+      },
+    ]);
   };
 
   const stepLabel = useMemo(() => {
@@ -537,35 +819,52 @@ const PublishScreen: React.FC = () => {
     ][step] || t('publish_step_listing');
   }, [step, t]);
 
-  const canContinue = useMemo(() => {
-    if (step === 0) {
-      return formData.title.trim().length > 0 && (parseInt(formData.price, 10) || 0) > 0;
-    }
-    if (step === 1) return true;
-    if (step === 2) {
-      return formData.city.trim().length > 0 && formData.location.trim().length > 0;
-    }
-    if (step === 3) {
-      return Boolean(formData.clientPhone.trim() || currentUser?.phone?.trim());
-    }
-    if (step === 4) {
-      return Boolean(
-        formData.title.trim() &&
-        formData.city.trim() &&
-        formData.location.trim() &&
-        (parseInt(formData.price, 10) || 0) > 0 &&
-        formData.clientPhone.trim() &&
-        draftImages.length
-      );
-    }
-    return true;
-  }, [step, formData, draftImages, currentUser?.phone]);
+  const currentStepErrors = getStepErrors(step);
+  const canContinue = Object.keys(currentStepErrors).length === 0;
+  const stepLabels = [
+    t('publish_step_info'),
+    t('publish_step_photos'),
+    t('publish_step_location'),
+    t('publish_step_contact'),
+    t('publish_step_review'),
+  ];
+  const smartPublishSteps = stepLabels.map((label, index) => {
+    const complete = Object.keys(getStepErrors(index)).length === 0;
+    return {
+      label,
+      status: index === step ? 'current' as const : complete ? 'complete' as const : 'upcoming' as const,
+    };
+  });
+  const fieldLabelKeys = {
+    title: 'publish_title_label',
+    price: 'publish_price_label',
+    images: 'publish_photo_label',
+    city: 'publish_city_label',
+    location: 'publish_neighborhood_label',
+    clientPhone: 'publish_owner_phone_label',
+  } as const;
+  const smartPublishIssues = (Object.entries(currentStepErrors) as [PublishField, string][])
+    .map(([field, message]) => ({
+      field,
+      message,
+      label: t(fieldLabelKeys[field]),
+    }));
 
-  const renderFieldError = (field: PublishField) => fieldErrors[field] ? (
+  const fieldError = (field: PublishField) => fieldErrors[field] ?? currentStepErrors[field];
+
+  const renderFieldError = (field: PublishField) => fieldError(field) ? (
     <Text style={styles.fieldError} accessibilityLiveRegion="polite">
-      {fieldErrors[field]}
+      {fieldError(field)}
     </Text>
   ) : null;
+
+  if (!isSmartPublishActive) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator color={themeColors.primary} size="large" />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -588,6 +887,34 @@ const PublishScreen: React.FC = () => {
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}
         contentContainerStyle={styles.contentContainer}
       >
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={t('smart_publish_open')}
+          onPress={openSmartPublish}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            marginBottom: 16,
+            padding: 14,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: themeColors.primary,
+            backgroundColor: themeColors.primaryContainer,
+          }}
+        >
+          <Ionicons name="sparkles" size={22} color={themeColors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: themeColors.onPrimaryContainer, fontWeight: '700', fontSize: 14 }}>
+              {t('smart_publish_title')}
+            </Text>
+            <Text style={{ color: themeColors.onPrimaryContainer, fontSize: 12, marginTop: 2 }}>
+              {t('smart_publish_description')}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={themeColors.primary} />
+        </TouchableOpacity>
+
         <View style={styles.stepHeader}>
           <Text style={styles.stepTitle}>{t('publish_step').replace('{{step}}', String(step + 1))}  |  {stepLabel}</Text>
           <View style={styles.stepDots}>
@@ -602,9 +929,9 @@ const PublishScreen: React.FC = () => {
             <Text style={styles.inputLabel}>{t('publish_title_label')}</Text>
             <TextInput
               ref={input => { fieldRefs.current.title = input ?? undefined; }}
-              style={[styles.input, fieldErrors.title && styles.inputInvalid]}
+              style={[styles.input, fieldError('title') && styles.inputInvalid]}
               accessibilityLabel={t('publish_title_label')}
-              accessibilityHint={fieldErrors.title}
+              accessibilityHint={fieldError('title')}
               value={formData.title}
               onChangeText={text => {
                 setFormData(previous => ({ ...previous, title: text }));
@@ -646,9 +973,9 @@ const PublishScreen: React.FC = () => {
             <Text style={styles.inputLabel}>{t('publish_price_label')}</Text>
             <TextInput
               ref={input => { fieldRefs.current.price = input ?? undefined; }}
-              style={[styles.input, fieldErrors.price && styles.inputInvalid]}
+              style={[styles.input, fieldError('price') && styles.inputInvalid]}
               accessibilityLabel={t('publish_price_label')}
-              accessibilityHint={fieldErrors.price}
+              accessibilityHint={fieldError('price')}
               value={formData.price}
               onChangeText={text => {
                 setFormData(previous => ({ ...previous, price: numericInput(text) }));
@@ -673,7 +1000,7 @@ const PublishScreen: React.FC = () => {
             </Text>
             <View style={styles.photoActions}>
               <TouchableOpacity
-                style={styles.photoButton}
+                style={[styles.photoButton, fieldError('images') && styles.inputInvalid]}
                 onPress={addImageFromCamera}
                 accessibilityRole="button"
                 accessibilityLabel={t('publish_camera')}
@@ -682,7 +1009,7 @@ const PublishScreen: React.FC = () => {
                 <Text style={styles.photoButtonText}>{t('publish_camera')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.photoButton}
+                style={[styles.photoButton, fieldError('images') && styles.inputInvalid]}
                 onPress={addImageFromLibrary}
                 accessibilityRole="button"
                 accessibilityLabel={t('publish_gallery')}
@@ -741,9 +1068,9 @@ const PublishScreen: React.FC = () => {
             <Text style={styles.inputLabel}>{t('publish_city_label')}</Text>
             <TextInput
               ref={input => { fieldRefs.current.city = input ?? undefined; }}
-              style={[styles.input, fieldErrors.city && styles.inputInvalid]}
+              style={[styles.input, fieldError('city') && styles.inputInvalid]}
               accessibilityLabel={t('publish_city_label')}
-              accessibilityHint={fieldErrors.city}
+              accessibilityHint={fieldError('city')}
               value={formData.city}
               onChangeText={text => {
                 setFormData(previous => ({ ...previous, city: text }));
@@ -760,7 +1087,7 @@ const PublishScreen: React.FC = () => {
                   style={[
                     styles.input,
                     styles.neighborhoodSelect,
-                    fieldErrors.location && styles.inputInvalid,
+                    fieldError('location') && styles.inputInvalid,
                   ]}
                   onPress={() => {
                     Keyboard.dismiss();
@@ -769,7 +1096,7 @@ const PublishScreen: React.FC = () => {
                   }}
                   accessibilityRole="button"
                   accessibilityLabel={formData.location || t('publish_choose_neighborhood')}
-                  accessibilityHint={fieldErrors.location}
+                  accessibilityHint={fieldError('location')}
                 >
                   <Text style={formData.location ? styles.neighborhoodSelected : styles.neighborhoodPlaceholder}>
                     {formData.location || t('publish_choose_neighborhood')}
@@ -779,9 +1106,9 @@ const PublishScreen: React.FC = () => {
                 {customNeighborhood && (
                   <TextInput
                     ref={input => { fieldRefs.current.location = input ?? undefined; }}
-                    style={[styles.input, fieldErrors.location && styles.inputInvalid]}
+                    style={[styles.input, fieldError('location') && styles.inputInvalid]}
                     accessibilityLabel={t('publish_neighborhood_label')}
-                    accessibilityHint={fieldErrors.location}
+                    accessibilityHint={fieldError('location')}
                     value={formData.location}
                     onChangeText={text => {
                       setFormData(previous => ({ ...previous, location: text }));
@@ -796,9 +1123,9 @@ const PublishScreen: React.FC = () => {
             ) : (
               <TextInput
                 ref={input => { fieldRefs.current.location = input ?? undefined; }}
-                style={[styles.input, fieldErrors.location && styles.inputInvalid]}
+                style={[styles.input, fieldError('location') && styles.inputInvalid]}
                 accessibilityLabel={t('publish_neighborhood_label')}
-                accessibilityHint={fieldErrors.location}
+                accessibilityHint={fieldError('location')}
                 value={formData.location}
                 onChangeText={text => {
                   setFormData(previous => ({ ...previous, location: text }));
@@ -861,9 +1188,9 @@ const PublishScreen: React.FC = () => {
             <Text style={styles.inputLabel}>{t('publish_owner_phone_label')}</Text>
             <TextInput
               ref={input => { fieldRefs.current.clientPhone = input ?? undefined; }}
-              style={[styles.input, fieldErrors.clientPhone && styles.inputInvalid]}
+              style={[styles.input, fieldError('clientPhone') && styles.inputInvalid]}
               accessibilityLabel={t('publish_owner_phone_label')}
-              accessibilityHint={fieldErrors.clientPhone}
+              accessibilityHint={fieldError('clientPhone')}
               value={formData.clientPhone}
               onChangeText={text => {
                 setFormData(previous => ({ ...previous, clientPhone: text }));
@@ -950,15 +1277,14 @@ const PublishScreen: React.FC = () => {
             style={[styles.submitButton, (!canContinue || submitting) && styles.submitDisabled]}
             onPress={() => {
               if (step < 4) {
-                if (!validateStep(step)) return;
                 goStep(step + 1);
                 return;
               }
               handleSubmit();
             }}
-            disabled={submitting}
+            disabled={!canContinue || submitting}
             accessibilityRole="button"
-            accessibilityState={{ disabled: submitting }}
+            accessibilityState={{ disabled: !canContinue || submitting }}
           >
             {submitting ? (
               <ActivityIndicator color={themeColors.white} />
@@ -1053,76 +1379,37 @@ const PublishScreen: React.FC = () => {
           </KeyboardAvoidingView>
         </Pressable>
       </Modal>
-      {publishGuideStep !== null && (
-        <Modal
-          visible
-          transparent
-          animationType="fade"
-          statusBarTranslucent
-          onRequestClose={() => dismissPublishGuide()}
-        >
-          <Pressable
-            onPress={() => dismissPublishGuide()}
-            style={styles.guideOverlay}
-          >
-            <Pressable
-              onPress={event => event.stopPropagation()}
-              style={[styles.guideCard, isDark && styles.guideCardDark]}
-            >
-              <View style={[styles.guideIcon, isDark && styles.guideIconDark]}>
-                <Ionicons name="create-outline" size={24} color={isDark ? themeColors.info : themeColors.primary} />
-              </View>
-              <Text style={styles.guideProgress}>
-                {t('publish_guide_progress')
-                  .replace('{{step}}', String(publishGuideStep + 1))
-                  .replace('{{total}}', '4')}
-              </Text>
-              <Text style={[styles.guideTitle, isDark && styles.guideTextDark]}>
-                {t(PUBLISH_GUIDE_STEPS[publishGuideStep].title)}
-              </Text>
-              <Text style={[styles.guideBody, isDark && styles.guideBodyDark]}>
-                {t(PUBLISH_GUIDE_STEPS[publishGuideStep].body)}
-              </Text>
-              {publishGuideStep === 0 && (
-                <View style={[styles.guideAccountNote, isDark && styles.guideAccountNoteDark]}>
-                  <Ionicons name="information-circle-outline" size={18} color={isDark ? themeColors.info : themeColors.primary} />
-                  <Text style={[styles.guideAccountText, isDark && styles.guideTextDark]}>
-                    {t(
-                      isDirectPublishingEnabled(currentUser)
-                        ? 'publish_guide_account_temporary'
-                        : currentUser?.role === 'AGENT' || currentUser?.role === 'ADMIN'
-                        ? 'publish_guide_account_approved'
-                        : currentUser?.agentStatus === 'pending'
-                          ? 'publish_guide_account_pending'
-                          : currentUser?.agentStatus === 'rejected'
-                            ? 'publish_guide_account_rejected'
-                            : currentUser
-                              ? 'publish_guide_account_required'
-                              : 'publish_guide_account_sign_in'
-                    )}
-                  </Text>
-                </View>
-              )}
-              <TouchableOpacity
-                accessibilityRole="button"
-                onPress={() => dismissPublishGuide()}
-                style={styles.guidePrimaryButton}
-              >
-                <Text style={styles.guidePrimaryText}>{t('publish_guide_got_it')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                accessibilityRole="button"
-                onPress={() => dismissPublishGuide(true)}
-                style={styles.guideSkipButton}
-              >
-                <Text style={[styles.guideSkipText, isDark && styles.guideSkipTextDark]}>
-                  {t('publish_guide_skip_all')}
-                </Text>
-              </TouchableOpacity>
-            </Pressable>
-          </Pressable>
-        </Modal>
-      )}
+      <SmartPublishAssistant
+        active={isSmartPublishActive}
+        visible={smartPublishVisible}
+        step={step}
+        totalSteps={5}
+        stepLabel={stepLabel}
+        steps={smartPublishSteps}
+        issues={smartPublishIssues}
+        technicalError={smartPublishTechnicalError}
+        onOpen={openSmartPublish}
+        onClose={closeSmartPublish}
+        onFix={field => {
+          const fieldSteps: Record<PublishField, number> = {
+            title: 0,
+            price: 0,
+            images: 1,
+            city: 2,
+            location: 2,
+            clientPhone: 3,
+          };
+          const targetStep = fieldSteps[field];
+          if (targetStep !== step) goStep(targetStep);
+          if (field === 'location' && availableNeighborhoods.length > 0 && !customNeighborhood) {
+            setNeighborhoodPickerOpen(true);
+            return;
+          }
+          contentScrollRef.current?.scrollTo({ y: 0, animated: true });
+          requestAnimationFrame(() => fieldRefs.current[field]?.focus());
+        }}
+        onRetry={handleSubmit}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -1156,103 +1443,6 @@ const baseStyles = StyleSheet.create({
     ...typography.title,
     color: COLORS.onSurface,
     flex: 1,
-  },
-  guideOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: COLORS.scrim55,
-  },
-  guideCard: {
-    width: '100%',
-    maxWidth: 420,
-    alignSelf: 'center',
-    padding: 24,
-    borderRadius: 24,
-    backgroundColor: COLORS.surface,
-  },
-  guideCardDark: {
-    backgroundColor: COLORS.onSurface,
-  },
-  guideIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.infoContainer,
-    marginBottom: 16,
-  },
-  guideIconDark: {
-    backgroundColor: COLORS.surfaceAlt,
-  },
-  guideProgress: {
-    color: COLORS.primary,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 8,
-  },
-  guideTitle: {
-    color: COLORS.onSurface,
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
-  guideTextDark: {
-    color: COLORS.surfaceAlt,
-  },
-  guideBody: {
-    color: COLORS.onSurfaceMuted,
-    fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 18,
-  },
-  guideBodyDark: {
-    color: COLORS.borderStrong,
-  },
-  guideAccountNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: COLORS.infoContainer,
-    marginBottom: 20,
-  },
-  guideAccountNoteDark: {
-    backgroundColor: COLORS.surfaceAlt,
-  },
-  guideAccountText: {
-    flex: 1,
-    color: COLORS.onSurface,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  guidePrimaryButton: {
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 14,
-    backgroundColor: COLORS.primary,
-    marginBottom: 10,
-  },
-  guidePrimaryText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  guideSkipButton: {
-    alignItems: 'center',
-    padding: 8,
-  },
-  guideSkipText: {
-    color: COLORS.onSurfaceMuted,
-    fontSize: 13,
-  },
-  guideSkipTextDark: {
-    color: COLORS.borderStrong,
   },
   clearDraftButton: {
     width: 36,

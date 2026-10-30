@@ -222,7 +222,6 @@ export default function TenantsPage() {
                 setForm({ ...form, phone: event.target.value });
                 setFormErrors(previous => ({ ...previous, phone: undefined }));
               }}
-              placeholder="+228 90 00 00 00"
             />
             {formErrors.phone ? <small id="tenant-phone-error" className="field-error">{formErrors.phone}</small> : null}
           </div>
@@ -231,7 +230,6 @@ export default function TenantsPage() {
             <input
               value={form.email}
               onChange={event => setForm({ ...form, email: event.target.value })}
-              placeholder="locataire@email.tg"
             />
           </div>
           <div className="form-field form-span">

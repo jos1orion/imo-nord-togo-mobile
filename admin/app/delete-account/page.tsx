@@ -35,11 +35,11 @@ export default function DeleteAccountPage() {
   return (
     <main className="account-deletion-page">
       <article className="account-deletion-card">
-        <div className="account-deletion-brand" aria-label="Imo Nord Togo">
+        <div className="account-deletion-brand" aria-label="ImoPrestige">
           <span>IMO</span>
-          <span>NORD TOGO</span>
+          <span>PRESTIGE</span>
         </div>
-        <p className="account-deletion-eyebrow">Imo Nord Togo</p>
+        <p className="account-deletion-eyebrow">ImoPrestige</p>
         <h1>Demande de suppression de compte</h1>
         <p>
           Utilisez ce formulaire même si l’application de messagerie n’est pas installée. L’équipe
@@ -49,7 +49,7 @@ export default function DeleteAccountPage() {
         <section className="account-deletion-steps" aria-labelledby="deletion-steps-title">
           <h2 id="deletion-steps-title">À savoir</h2>
           <ol>
-            <li>Indiquez l’adresse e-mail associée à votre compte Imo Nord Togo.</li>
+            <li>Indiquez l’adresse e-mail associée à votre compte ImoPrestige.</li>
             <li>Un administrateur vérifiera la demande avant toute suppression.</li>
             <li>Le formulaire n’efface pas le compte immédiatement.</li>
           </ol>
@@ -86,10 +86,14 @@ export default function DeleteAccountPage() {
         {confirmation ? (
           <p className="account-deletion-notice" role="status">{confirmation}</p>
         ) : null}
-        <p className="account-deletion-contact">
-          Si le formulaire ne fonctionne pas, écrivez à{' '}
-          <a href="mailto:imonordtogo@gmail.com">imonordtogo@gmail.com</a>.
-        </p>
+        {process.env.NEXT_PUBLIC_CONTACT_EMAIL ? (
+          <p className="account-deletion-contact">
+            Si le formulaire ne fonctionne pas, écrivez à{' '}
+            <a href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL}`}>
+              {process.env.NEXT_PUBLIC_CONTACT_EMAIL}
+            </a>.
+          </p>
+        ) : null}
         <nav className="account-deletion-links" aria-label="Informations complémentaires">
           <a href="/privacy">Politique de confidentialité</a>
           <a href="/terms">Conditions d’utilisation</a>

@@ -3,56 +3,77 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   NativeSyntheticEvent,
   NativeScrollEvent,
   ScrollView,
   TouchableOpacity,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
-import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import { safeImpactLight, safeNotificationSuccess, safeSelection } from '../lib/expoHapticsSafe';
-import type { TranslationKey } from '../i18n';
-import COLORS from '../theme/colors';
-import { typography } from '../theme/typography';
-import { SPACING } from '../theme/spacing';
 import PrimaryButton from '../components/ui/PrimaryButton';
-
-const { width } = Dimensions.get('window');
 
 type Props = {
   onComplete: () => void | Promise<void>;
 };
 
-const SLIDES: { title: TranslationKey; body: TranslationKey }[] = [
-  { title: 'onboarding_welcome_title', body: 'onboarding_welcome_body' },
-  { title: 'onboarding_1_title', body: 'onboarding_1_body' },
-  { title: 'onboarding_2_title', body: 'onboarding_2_body' },
-  { title: 'onboarding_3_title', body: 'onboarding_3_body' },
-];
-
-const SLIDE_ICONS: (keyof typeof Ionicons.glyphMap)[] = [
-  'home',
-  'search',
-  'camera',
-  'chatbubbles',
+const SLIDES: {
+  title: string;
+  body: string;
+  imageUri: string;
+  badge: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  {
+    title: 'Bienvenue dans un nouvel univers immobilier.',
+    body: 'Découvrez une expérience immobilière plus simple, plus élégante et plus intuitive.',
+    imageUri: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80',
+    badge: 'IMO PRESTIGE',
+    icon: 'diamond-outline',
+  },
+  {
+    title: 'Votre prochain chez-vous vous attend.',
+    body: 'Explorez une sélection de maisons, appartements et terrains disponibles dans le nord du Togo.',
+    imageUri: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80',
+    badge: 'EXPLORATION',
+    icon: 'home-outline',
+  },
+  {
+    title: 'La recherche devient plus simple.',
+    body: 'Filtrez les annonces selon votre budget, votre localisation et vos préférences.',
+    imageUri: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1200&q=80',
+    badge: 'RECHERCHE INTELLIGENTE',
+    icon: 'options-outline',
+  },
+  {
+    title: 'Le bon logement, le bon contact.',
+    body: 'Échangez directement avec les agents immobiliers et organisez vos visites facilement.',
+    imageUri: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1200&q=80',
+    badge: 'CONTACT DIRECT',
+    icon: 'chatbubbles-outline',
+  },
 ];
 
 const OnboardingScreen: React.FC<Props> = ({ onComplete }) => {
   const styles = useThemedStyles(baseStyles);
-  const { t, theme } = useApp();
-  const colors = useThemeColors();
-  const isDark = theme === 'dark';
+  const { t } = useApp();
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const slideHeight = Math.max(0, height - insets.top);
   const scrollRef = useRef<ScrollView>(null);
   const [page, setPage] = useState(0);
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const x = e.nativeEvent.contentOffset.x;
     const i = Math.round(x / width);
-    if (i !== page && i >= 0 && i < SLIDES.length) setPage(i);
+    if (i !== page && i >= 0 && i < SLIDES.length) {
+      setPage(i);
+      void safeSelection();
+    }
   };
 
   const goNext = () => {
@@ -72,17 +93,7 @@ const OnboardingScreen: React.FC<Props> = ({ onComplete }) => {
   };
 
   return (
-    <View
-      style={[
-        styles.root,
-        { paddingTop: insets.top, paddingBottom: insets.bottom + 12 },
-        isDark && styles.rootDark,
-      ]}
-    >
-      <TouchableOpacity style={styles.skip} onPress={skip} accessibilityRole="button" accessibilityLabel={t('onboarding_skip')}>
-        <Text style={styles.skipText}>{t('onboarding_skip')}</Text>
-      </TouchableOpacity>
-
+    <View style={[styles.root, { paddingTop: insets.top }]}>
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -91,30 +102,71 @@ const OnboardingScreen: React.FC<Props> = ({ onComplete }) => {
         onScroll={onScroll}
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
+        style={styles.scrollView}
       >
         {SLIDES.map((slide, index) => (
-          <View key={slide.title} style={[styles.slide, { width }]}>
-            <View style={styles.heroIcon}>
-              <Ionicons name={SLIDE_ICONS[index]} size={38} color={theme === 'light' ? '#A04000' : colors.gold} />
-            </View>
-            <Text style={[styles.step, isDark && styles.stepDark]}>{`${index + 1}/${SLIDES.length}`}</Text>
-            <Text style={[styles.title, isDark && styles.titleDark]}>{t(slide.title)}</Text>
-            <Text style={[styles.body, isDark && styles.bodyDark]}>{t(slide.body)}</Text>
+          <View key={slide.title} style={[styles.slide, { width, height: slideHeight }]}>
+            <ImageBackground
+              source={{ uri: slide.imageUri }}
+              style={styles.bgImage}
+              resizeMode="cover"
+            >
+              {/* Luxury gradient overlay */}
+              <View style={styles.gradientOverlay} />
+
+              <View style={[styles.topBar, { paddingTop: insets.top > 0 ? 0 : 16 }]}>
+                <View style={styles.badgeContainer}>
+                  <Ionicons name="sparkles" size={13} color="#D4AF37" style={{ marginRight: 6 }} />
+                  <Text style={styles.badgeText}>{slide.badge}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.skipButton}
+                  onPress={skip}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('onboarding_skip') || 'Passer'}
+                >
+                  <Text style={styles.skipText}>{t('onboarding_skip') || 'Passer'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.contentCard, { paddingBottom: insets.bottom + 100 }]}>
+                <View style={styles.iconWrapper}>
+                  <Ionicons name={slide.icon} size={28} color="#D4AF37" />
+                </View>
+
+                <Text style={styles.stepIndicator}>
+                  0{index + 1} <Text style={styles.stepTotal}>/ 0{SLIDES.length}</Text>
+                </Text>
+
+                <Text style={styles.slideTitle}>{slide.title}</Text>
+
+                <Text style={styles.slideBody}>{slide.body}</Text>
+              </View>
+            </ImageBackground>
           </View>
         ))}
       </ScrollView>
 
-      <View style={styles.dots}>
-        {SLIDES.map((_, i) => (
-          <View key={String(i)} style={[styles.dot, i === page && styles.dotActive]} />
-        ))}
-      </View>
+      {/* Footer controls floating above */}
+      <View style={[styles.footerContainer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+        <View style={styles.dotsRow}>
+          {SLIDES.map((_, i) => (
+            <View
+              key={String(i)}
+              style={[
+                styles.dot,
+                i === page ? styles.dotActive : styles.dotInactive,
+              ]}
+            />
+          ))}
+        </View>
 
-      <PrimaryButton
-        title={page < SLIDES.length - 1 ? t('onboarding_next') : t('onboarding_start')}
-        onPress={goNext}
-        style={styles.cta}
-      />
+        <PrimaryButton
+          title={page < SLIDES.length - 1 ? (t('onboarding_next') || 'Suivant') : (t('onboarding_start') || 'Commencer')}
+          onPress={goNext}
+          style={styles.ctaButton}
+        />
+      </View>
     </View>
   );
 };
@@ -122,79 +174,132 @@ const OnboardingScreen: React.FC<Props> = ({ onComplete }) => {
 const baseStyles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#0B0F19',
   },
-  rootDark: {
-    backgroundColor: COLORS.background,
-  },
-  skip: {
-    alignSelf: 'flex-end',
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.sm,
-  },
-  skipText: {
-    ...typography.button,
-    color: COLORS.primary,
+  scrollView: {
+    flex: 1,
   },
   slide: {
-    paddingHorizontal: 28,
-    justifyContent: 'center',
-    minHeight: 320,
+    flex: 1,
   },
-  heroIcon: {
-    width: 82,
-    height: 82,
-    borderRadius: 26,
+  bgImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    justifyContent: 'space-between',
+  },
+  gradientOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(7, 10, 18, 0.72)',
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#A0400014',
-    borderWidth: 1,
-    borderColor: '#A0400030',
-    marginBottom: 28,
+    paddingHorizontal: 24,
+    zIndex: 10,
   },
-  step: {
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    color: '#F3E5AB',
+  },
+  skipButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  skipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.onSurfaceMuted,
-    marginBottom: 12,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
-  stepDark: {
-    color: COLORS.onSurfaceMuted,
+  contentCard: {
+    paddingHorizontal: 28,
+    zIndex: 10,
   },
-  title: {
-    ...typography.heroTitle,
-    color: COLORS.onSurface,
-    marginBottom: 12,
+  iconWrapper: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
-  titleDark: {
-    color: COLORS.surfaceAlt,
+  stepIndicator: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: '#D4AF37',
+    marginBottom: 10,
   },
-  body: {
+  stepTotal: {
+    color: 'rgba(255, 255, 255, 0.4)',
+    fontWeight: '400',
+  },
+  slideTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+    lineHeight: 38,
+    marginBottom: 14,
+  },
+  slideBody: {
     fontSize: 16,
     lineHeight: 24,
-    color: COLORS.onSurfaceMuted,
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontWeight: '400',
   },
-  bodyDark: {
-    color: COLORS.onSurfaceMuted,
+  footerContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    backgroundColor: 'transparent',
+    zIndex: 20,
   },
-  dots: {
+  dotsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 20,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.border,
+    height: 6,
+    borderRadius: 3,
     marginHorizontal: 4,
   },
-  dotActive: {
-    backgroundColor: COLORS.primary,
-    width: 22,
+  dotInactive: {
+    width: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
-  cta: {
-    marginHorizontal: 24,
+  dotActive: {
+    width: 28,
+    backgroundColor: '#D4AF37',
+  },
+  ctaButton: {
+    width: '100%',
   },
 });
 

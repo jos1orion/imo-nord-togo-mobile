@@ -1,10 +1,10 @@
-# Politique de confidentialité - Imo Nord Togo
+# Politique de confidentialité - ImoPrestige
 
 **Dernière mise à jour : 11 octobre 2026**
 
 ## 1. Introduction
 
-Cette politique décrit les informations traitées lorsque vous utilisez l’application mobile Imo Nord Togo et les services associés.
+Cette politique décrit les informations traitées lorsque vous utilisez l’application mobile ImoPrestige et les services associés.
 
 ## 2. Informations traitées
 
@@ -38,4 +38,4 @@ Le service n’est pas destiné aux personnes de moins de 18 ans. Nous pouvons m
 - **Téléphone** : +228 99 21 08 81
 - **Adresse** : Kara, Togo
 
-**Imo Nord Togo** - Votre partenaire immobilier à Kara.
+**ImoPrestige** - Votre partenaire immobilier à Kara.

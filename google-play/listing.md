@@ -1,21 +1,21 @@
-# Fiche Google Play Store - Imo Nord Togo
+# Fiche Google Play Store - ImoPrestige
 
 ## Informations de base
 
 ### Titre de l'application (30 caractères max)
-Imo Nord Togo - Immobilier
+ImoPrestige
 
 ### Nom court (12 caractères max)
-Imo Nord Togo
+ImoPrestige
 
 ### Description courte (80 caractères max)
 Immobilier à Kara : maisons, appartements et terrains
 
 ### Description complète (4000 caractères max)
 ```
-🏠 Imo Nord Togo - Votre Partenaire Immobilier à Kara
+🏠 ImoPrestige - Votre Partenaire Immobilier à Kara
 
-Imo Nord Togo est une application immobilière consacrée à Kara et à ses environs. Consultez des annonces de vente ou de location, recherchez un bien par critères et contactez son annonceur.
+ImoPrestige est une application immobilière consacrée à Kara et à ses environs. Consultez des annonces de vente ou de location, recherchez un bien par critères et contactez son annonceur.
 
 ✨ FONCTIONNALITÉS PRINCIPALES :
 
@@ -63,7 +63,7 @@ Email : imonordtogo@gmail.com
 Téléphone : +228 93 57 62 98
 Adresse : Avenue de la Libération, Kara, Togo
 
-Imo Nord Togo - Votre partenaire immobilier de confiance !
+ImoPrestige - Votre partenaire immobilier de confiance !
 ```
 
 ---

@@ -47,7 +47,9 @@ import {
 import { Language, TranslationKey, setCurrentLanguage, translate, translateStatus, translateType } from '../i18n';
 import type { ThemeMode } from '../theme/colors';
 import { isPublicProperty } from '../utils/propertyVisibility';
-import { isDirectPublishingEnabled } from '../lib/publishing';
+import { getInitialListingStatus, isDirectPublishingEnabled } from '../lib/publishing';
+import { getAgentReviewUpdates } from '../lib/agentReview';
+import { buildChatsFromMessages, getChatKey } from '../lib/chatRouting';
 import {
   dedupeProperties,
   extractMissingPropertiesColumn,
@@ -73,146 +75,9 @@ import {
   TransactionRow,
 } from '../types/db';
 import { logger } from '../lib/logger';
-
-interface AppContextType {
-  properties: Property[];
-  clients: Client[];
-  neighborhoods: string[];
-  favorites: string[];
-  savedSearches: SavedSearch[];
-  searchHistory: string[];
-  recentViewedIds: string[];
-  neighborhoodAlerts: string[];
-  users: User[];
-  currentUser: User | null;
-  hydrated: boolean;
-  syncError: string | null;
-  retrySync: () => void;
-  reports: Report[];
-  loadAdminOperationalData: () => Promise<void>;
-  propertyStats: Record<string, PropertyStats>;
-  myPropertyIds: string[];
-  visitorCount: number;
-  privacySettings: { hideContact: boolean; hideListings: boolean };
-  language: Language;
-  setLanguage: (language: Language) => void;
-  theme: ThemeMode;
-  setTheme: (theme: ThemeMode) => void;
-  t: (key: TranslationKey) => string;
-  tType: (type: PropertyType) => string;
-  tStatus: (status: PropertyStatus) => string;
-  filters: SearchFilters;
-  selectedProperty: Property | null;
-  setSelectedProperty: (property: Property | null) => void;
-  filterType: PropertyType | 'ALL';
-  setFilterType: (type: PropertyType | 'ALL') => void;
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
-  setFilters: (updates: Partial<SearchFilters>) => void;
-  resetFilters: () => void;
-  addProperty: (property: Omit<Property, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Property>;
-  updateProperty: (id: string, updates: Partial<Omit<Property, 'id' | 'createdAt'>>) => Promise<void>;
-  updatePropertyStatus: (id: string, status: PropertyStatus) => Promise<void>;
-  completeProperty: (id: string, completionType: PropertyCompletionType) => Promise<void>;
-  markPropertySold: (id: string) => Promise<void>;
-  clearSoldStatus: (id: string) => Promise<void>;
-  deleteProperty: (id: string) => Promise<void>;
-  addClient: (client: Omit<Client, 'id' | 'createdAt'>) => Promise<Client>;
-  updateClient: (id: string, updates: Partial<Omit<Client, 'id' | 'createdAt'>>) => Promise<void>;
-  addNeighborhood: (name: string) => Promise<void>;
-  updateNeighborhood: (oldName: string, newName: string) => Promise<void>;
-  removeNeighborhood: (name: string) => Promise<void>;
-  addMyPropertyId: (id: string) => void;
-  toggleFavorite: (id: string) => Promise<void>;
-  isFavorite: (id: string) => boolean;
-  addSavedSearch: (data: Omit<SavedSearch, 'id' | 'createdAt'>) => void;
-  removeSavedSearch: (id: string) => void;
-  addSearchHistory: (query: string) => void;
-  clearSearchHistory: () => void;
-  toggleNeighborhoodAlert: (name: string) => void;
-  setPrivacySetting: (key: 'hideContact' | 'hideListings', value: boolean) => void;
-  registerUser: (data: { name: string; email: string; phone: string; password: string; wantsAgentAccess: boolean }) => Promise<{ ok: true; confirmationRequired: boolean } | { ok: false; code: string }>;
-  loginUser: (email: string, password: string) => Promise<{ ok: true } | { ok: false; code: string }>;
-  requestAgentAccess: () => Promise<void>;
-  logoutUser: () => Promise<void>;
-  verifyUser: (id: string, value: boolean) => Promise<void>;
-  reviewAgentRequest: (id: string, approved: boolean, reason?: string) => Promise<void>;
-  updateUser: (id: string, updates: Partial<Pick<User, 'name' | 'email' | 'phone'>>) => void;
-  addReport: (data: { propertyId: string; reason: ReportReason; message: string }) => Promise<Report>;
-  resolveReport: (id: string) => Promise<void>;
-  trackPropertyView: (id: string) => void;
-  trackContact: (id: string) => void;
-  trackShare: (id: string) => void;
-  replaceData: (data: { properties: Property[]; clients: Client[] }) => void;
-  getFilteredProperties: () => Property[];
-  getMyProperties: () => Property[];
-  // New enhanced features
-  messages: Message[];
-  chats: Chat[];
-  reviews: Review[];
-  agentProfiles: AgentProfile[];
-  searchAlerts: SearchAlert[];
-  premiumListings: PremiumListing[];
-  commissionRules: CommissionRule[];
-  transactions: Transaction[];
-  documents: Document[];
-  contracts: Contract[];
-  payments: Payment[];
-  tenantDocuments: TenantDocument[];
-  notifications: AppNotification[];
-  markNotificationRead: (id: string) => Promise<void>;
-  clearNotifications: () => Promise<void>;
-  addTenantDocumentRecord: (doc: TenantDocument) => void;
-  addContract: (data: Omit<Contract, 'id' | 'createdAt'>) => Promise<Contract>;
-  updateContract: (id: string, updates: Partial<Omit<Contract, 'id' | 'createdAt'>>) => Promise<void>;
-  updateContractStatus: (id: string, status: Contract['status']) => Promise<void>;
-  addPayment: (data: Omit<Payment, 'id' | 'createdAt'>) => Promise<Payment>;
-  updatePayment: (id: string, updates: Partial<Omit<Payment, 'id' | 'createdAt'>>) => Promise<void>;
-  updatePaymentStatus: (id: string, status: Payment['status']) => Promise<void>;
-  // Profile completion
-  updateProfile: (updates: Partial<Pick<User, 'name' | 'phone'>> & { photoUri?: string }) => Promise<void>;
-  // Messaging functions
-  sendMessage: (receiverId: string, content: string, propertyId?: string) => Promise<{ message: Message; chatId: string }>;
-  getChatMessages: (chatId: string) => Message[];
-  markMessagesAsRead: (chatId: string, userId: string) => Promise<void>;
-  // Review functions
-  addReview: (propertyId: string, rating: number, comment: string) => Promise<Review>;
-  setReviewVerified: (id: string, verified: boolean) => Promise<void>;
-  getPropertyReviews: (propertyId: string) => Review[];
-  getAverageRating: (propertyId: string) => number;
-  // Agent profile functions
-  createAgentProfile: (data: Omit<AgentProfile, 'rating' | 'reviewCount' | 'totalSales' | 'totalCommission'>) => Promise<void>;
-  updateAgentProfile: (userId: string, updates: Partial<AgentProfile>) => Promise<void>;
-  getAgentProfile: (userId: string) => AgentProfile | null;
-  // Search alerts
-  createSearchAlert: (data: Omit<SearchAlert, 'id' | 'createdAt'>) => Promise<SearchAlert>;
-  updateSearchAlert: (id: string, updates: Partial<SearchAlert>) => Promise<void>;
-  deleteSearchAlert: (id: string) => Promise<void>;
-  checkSearchAlerts: (newProperty: Property) => Promise<void>;
-  // Premium listings
-  createPremiumListing: (propertyId: string, plan: 'BASIC' | 'FEATURED' | 'PREMIUM') => Promise<PremiumListing>;
-  getPremiumFeatures: (propertyId: string) => string[];
-  isPremium: (propertyId: string) => boolean;
-  // Commission system
-  createCommissionRule: (data: Omit<CommissionRule, 'id'>) => Promise<CommissionRule>;
-  toggleCommissionRule: (id: string) => Promise<void>;
-  calculateCommission: (propertyId: string, salePrice: number) => number;
-  // Transactions
-  createTransaction: (data: Omit<Transaction, 'id' | 'createdAt'>) => Promise<Transaction>;
-  updateTransactionStatus: (id: string, status: Transaction['status']) => Promise<void>;
-  // Documents
-  addDocument: (data: Omit<Document, 'id' | 'uploadedAt'>) => Promise<Document>;
-  getPropertyDocuments: (propertyId: string) => Document[];
-}
+import type { AppContextType, SmartGuideMode } from './AppContext.types';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
-
-// Ajout de la fonction pour gérer le défilement des quartiers
-const handleNeighborhoodScroll = (neighborhoods: string[]) => {
-  // Implémentation de la logique de défilement
-  console.log('Défilement des quartiers activé');
-  return neighborhoods;
-};
 
 const STORAGE_KEYS = {
   properties: 'imo:properties',
@@ -238,6 +103,11 @@ const STORAGE_KEYS = {
   payments: 'imo:payments',
   tenantDocuments: 'imo:tenantDocuments',
   notifications: 'imo:notifications',
+  // SmartGuide state
+  onboardingProgress: 'imo:onboardingProgress',
+  smartGuideMode: 'imo:smartGuideMode',
+  smartGuideEnabled: 'imo:smartGuideEnabled',
+  legacyGuideDisabled: 'imo:firstVisitGuideDisabled',
 };
 
 const DEFAULT_FILTERS: SearchFilters = {
@@ -248,42 +118,6 @@ const DEFAULT_FILTERS: SearchFilters = {
   minArea: null,
 };
 
-const getChatKey = (participants: string[], propertyId?: string) =>
-  JSON.stringify([[...participants].sort(), propertyId ?? null]);
-
-const buildChatsFromMessages = (items: Message[]): Chat[] => {
-  const map = new Map<string, Chat>();
-  items.forEach(message => {
-    const participants = [message.senderId, message.receiverId].sort();
-    const key = getChatKey(participants, message.propertyId);
-    const existing = map.get(key);
-    const unreadCount = existing?.unreadCount ? { ...existing.unreadCount } : {};
-    if (!message.read) {
-      unreadCount[message.receiverId] = (unreadCount[message.receiverId] || 0) + 1;
-    }
-    const lastMessage =
-      !existing?.lastMessage ||
-      new Date(message.timestamp).getTime() > new Date(existing.lastMessage.timestamp).getTime()
-        ? message
-        : existing.lastMessage;
-    const updatedAt =
-      !existing?.updatedAt ||
-      new Date(message.timestamp).getTime() > new Date(existing.updatedAt).getTime()
-        ? message.timestamp
-        : existing.updatedAt;
-    map.set(key, {
-      id: existing?.id ?? key,
-      participants,
-      propertyId: message.propertyId,
-      lastMessage,
-      updatedAt,
-      unreadCount,
-    });
-  });
-  return Array.from(map.values()).sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  );
-};
 const storage = {
   async getItem(key: string) {
     try {
@@ -349,6 +183,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [payments, setPayments] = useState<Payment[]>([]);
   const [tenantDocuments, setTenantDocuments] = useState<TenantDocument[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [onboardingProgress, setOnboardingProgress] = useState<Record<string, boolean>>({});
+  const [smartGuideMode, setSmartGuideMode] = useState<SmartGuideMode>('normal');
+  const [smartGuideEnabled, setSmartGuideEnabled] = useState(true);
+
+  const updateOnboardingProgress = (key: string, value: boolean) => {
+    setOnboardingProgress(prev => ({ ...prev, [key]: value }));
+  };
+
+  const getOnboardingProgress = () => {
+    return onboardingProgress;
+  };
+
   const [filters, setFiltersState] = useState<SearchFilters>(DEFAULT_FILTERS);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [filterType, setFilterType] = useState<PropertyType | 'ALL'>('ALL');
@@ -428,6 +274,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setContracts(parse<Contract[]>(STORAGE_KEYS.contracts, []));
         setPayments(parse<Payment[]>(STORAGE_KEYS.payments, []));
         setTenantDocuments(parse<TenantDocument[]>(STORAGE_KEYS.tenantDocuments, []));
+        setOnboardingProgress(parse<Record<string, boolean>>(STORAGE_KEYS.onboardingProgress, {}));
+        const savedSmartGuideMode = parse<string>(STORAGE_KEYS.smartGuideMode, 'normal');
+        setSmartGuideMode(
+          savedSmartGuideMode === 'discovery' || savedSmartGuideMode === 'expert'
+            ? savedSmartGuideMode
+            : 'normal'
+        );
+        const savedSmartGuideEnabled = parse<boolean | null>(STORAGE_KEYS.smartGuideEnabled, null);
+        setSmartGuideEnabled(
+          savedSmartGuideEnabled ?? !parse<boolean>(STORAGE_KEYS.legacyGuideDisabled, false)
+        );
         void AsyncStorage.multiRemove([
           'imo:agentProfiles',
           'imo:searchAlerts',
@@ -450,6 +307,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!hydrated) return;
     storage.setItem(STORAGE_KEYS.favorites, JSON.stringify(favorites));
   }, [favorites, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    storage.setItem(STORAGE_KEYS.onboardingProgress, JSON.stringify(onboardingProgress));
+  }, [onboardingProgress, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    storage.setItem(STORAGE_KEYS.smartGuideMode, smartGuideMode);
+  }, [smartGuideMode, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    storage.setItem(STORAGE_KEYS.smartGuideEnabled, JSON.stringify(smartGuideEnabled));
+  }, [smartGuideEnabled, hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -1287,9 +1159,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     ownerId?: string
   ) => {
     const submittedAt = new Date().toISOString();
-    const listingStatus =
-      propertyData.listingStatus ??
-      (isDirectPublishingEnabled(currentUser) ? 'approved' : 'pending');
+    const listingStatus = getInitialListingStatus(
+      propertyData.listingStatus,
+      isDirectPublishingEnabled(currentUser)
+    );
     const contactName = propertyData.client?.name?.trim() || currentUser?.name?.trim() || null;
     const contactPhone = propertyData.client?.phone?.trim() || currentUser?.phone?.trim() || null;
     const contactEmail = propertyData.client?.email?.trim() || currentUser?.email?.trim() || null;
@@ -2218,9 +2091,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const reviewAgentRequest = async (id: string, approved: boolean, reason?: string) => {
     if (!currentUser?.isAdmin) throw new Error('Accès administrateur requis.');
-    const updates = approved
-      ? { role: 'AGENT' as const, agent_status: 'approved' as const, agent_rejection_reason: null }
-      : { role: 'USER' as const, agent_status: 'rejected' as const, agent_rejection_reason: reason?.trim() || 'Votre demande doit être complétée.' };
+    const updates = getAgentReviewUpdates(
+      approved,
+      reason,
+      translate(language, 'agent_review_default_rejection_reason')
+    );
     const { error } = await supabase.from('profiles').update(updates).eq('id', id);
     if (error) throw error;
     setUsers(prev => prev.map(user => (
@@ -3053,6 +2928,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateTransactionStatus,
         addDocument,
         getPropertyDocuments,
+        onboardingProgress,
+        updateOnboardingProgress,
+        getOnboardingProgress,
+        smartGuideMode,
+        setSmartGuideMode,
+        smartGuideEnabled,
+        setSmartGuideEnabled,
       }}
     >
       {children}

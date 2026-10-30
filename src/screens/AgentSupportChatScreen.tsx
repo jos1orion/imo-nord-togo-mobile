@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -182,6 +183,7 @@ const AgentSupportChatScreen = () => {
       });
       if (sendError) throw sendError;
       setMessageText('');
+      Keyboard.dismiss();
       await loadMessages(conversation.id);
     } catch (sendError) {
       setError(
@@ -280,6 +282,7 @@ const AgentSupportChatScreen = () => {
                 multiline
                 maxLength={4000}
                 editable={!sending}
+                accessibilityLabel={t('support_message_placeholder')}
               />
               <TouchableOpacity
                 style={[styles.sendButton, (!messageText.trim() || sending) && styles.disabledButton]}

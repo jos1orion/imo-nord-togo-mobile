@@ -1,4 +1,4 @@
-﻿// Types pour l'application Imo Nord Togo
+// Types pour l'application ImoPrestige
 
 export type PropertyType = 'house' | 'apartment' | 'land' | 'shop';
 

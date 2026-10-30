@@ -88,6 +88,7 @@ const AdminAccountsTab: React.FC<AdminAccountsTabProps> = ({
   return (
     <FlatList
       style={styles.tabContent}
+      contentContainerStyle={styles.tabContentContainer}
       refreshControl={
         <RefreshControl refreshing={refreshing || loading} onRefresh={onRefresh} />
       }
@@ -113,7 +114,6 @@ const AdminAccountsTab: React.FC<AdminAccountsTabProps> = ({
       initialNumToRender={10}
       maxToRenderPerBatch={10}
       windowSize={5}
-      removeClippedSubviews
       renderItem={({ item: user }) => (
         <View style={styles.accountItem}>
           <View style={styles.accountAvatar}>

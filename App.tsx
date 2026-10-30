@@ -45,6 +45,8 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { AppDialogProvider } from './src/components/ui/AppDialogProvider';
 import { AppAlert as Alert } from './src/components/ui/appAlertService';
+import { SmartGuideModal } from './src/components/SmartGuide';
+import { SmartGuideFloatingButton } from './src/components/SmartGuideFloatingButton';
 import { createPaperTheme } from './src/theme/paperTheme';
 import { THEME_PALETTES } from './src/theme/colors';
 import { typography } from './src/theme/typography';
@@ -55,14 +57,13 @@ import {
   matchesAuthCallbackUrl,
 } from './src/lib/supabase';
 import { logger } from './src/lib/logger';
+import type { SmartGuideContext, SmartGuideTopic } from './src/lib/smartGuide';
 
 const ONBOARDING_KEY = 'imo:onboardingComplete';
 const FIRST_VISIT_GUIDE_PREFIX = 'imo:firstVisitGuide:';
-const FIRST_VISIT_GUIDE_DISABLED_KEY = 'imo:firstVisitGuideDisabled';
 
 const FIRST_VISIT_GUIDES = {
   Home: { title: 'guide_home_title', body: 'guide_home_body' },
-  Publish: { title: 'guide_publish_title', body: 'guide_publish_body' },
   Messages: { title: 'guide_messages_title', body: 'guide_messages_body' },
   Profile: { title: 'guide_profile_title', body: 'guide_profile_body' },
 } as const;
@@ -84,7 +85,7 @@ export type RootStackParamList = {
   Admin: undefined;
   Publish: { propertyId?: string } | undefined;
   Messages: undefined;
-  Chat: { chatId: string; otherUserId: string; propertyId?: string };
+  Chat: { chatId: string; otherUserId: string; otherUserName?: string; propertyId?: string };
   AgentSupportChat: undefined;
   AgentProfile: { userId: string };
   Reviews: { propertyId: string };
@@ -211,16 +212,25 @@ const TabNavigator = () => {
 };
 
 const AppContent = () => {
-  const { theme, t } = useApp();
+  const {
+    theme,
+    t,
+    currentUser,
+    smartGuideMode,
+    smartGuideEnabled,
+    setSmartGuideEnabled,
+  } = useApp();
   const colors = THEME_PALETTES[theme];
   const paperTheme = createPaperTheme(theme);
   const navigationTheme = theme === 'light' ? NavigationLightTheme : NavigationDarkTheme;
+  const insets = useSafeAreaInsets();
   const [navReady, setNavReady] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [guideSection, setGuideSection] = useState<GuideSection | null>(null);
+  const [smartGuideVisible, setSmartGuideVisible] = useState(false);
+  const [activeRouteName, setActiveRouteName] = useState<string>();
   const activeRouteRef = React.useRef<string | undefined>(undefined);
   const checkedGuideSectionsRef = React.useRef(new Set<GuideSection>());
-  const guideDisabledRef = React.useRef(false);
   const pendingResetNavigationRef = React.useRef(false);
   const pendingAuthNavigationRef = React.useRef(false);
 
@@ -238,54 +248,102 @@ const AppContent = () => {
 
   const checkFirstVisitGuide = React.useCallback((routeName?: string) => {
     activeRouteRef.current = routeName;
+    setActiveRouteName(routeName);
+    if (!smartGuideEnabled || smartGuideMode !== 'discovery') return;
     if (!routeName || !(routeName in FIRST_VISIT_GUIDES)) return;
     const section = routeName as GuideSection;
-    if (guideDisabledRef.current || checkedGuideSectionsRef.current.has(section)) return;
+    if (checkedGuideSectionsRef.current.has(section)) return;
     checkedGuideSectionsRef.current.add(section);
 
     void (async () => {
       try {
-        const [disabled, seen] = await Promise.all([
-          AsyncStorage.getItem(FIRST_VISIT_GUIDE_DISABLED_KEY),
-          AsyncStorage.getItem(`${FIRST_VISIT_GUIDE_PREFIX}${section}`),
-        ]);
-        if (disabled === 'true') {
-          guideDisabledRef.current = true;
-          return;
-        }
+        const seen = await AsyncStorage.getItem(`${FIRST_VISIT_GUIDE_PREFIX}${section}`);
         if (
           seen !== 'true' &&
           activeRouteRef.current === section &&
-          !guideDisabledRef.current
+          smartGuideEnabled &&
+          smartGuideMode === 'discovery'
         ) {
           setGuideSection(section);
         }
       } catch (error) {
         console.warn('Unable to load first-visit guide state.', error);
-        if (activeRouteRef.current === section && !guideDisabledRef.current) {
+        if (
+          activeRouteRef.current === section &&
+          smartGuideEnabled &&
+          smartGuideMode === 'discovery'
+        ) {
           setGuideSection(section);
         }
       }
     })();
-  }, []);
+  }, [smartGuideEnabled, smartGuideMode]);
+
+  const handleNavigationStateChange = React.useCallback(() => {
+    const route = navigationRef.getCurrentRoute();
+    if (activeRouteRef.current === 'Publish' && route?.name !== 'Publish') {
+      setSmartGuideVisible(false);
+    }
+    checkFirstVisitGuide(route?.name);
+  }, [checkFirstVisitGuide]);
 
   const dismissGuide = React.useCallback((disableAll = false) => {
     const section = guideSection;
     setGuideSection(null);
-    if (disableAll) guideDisabledRef.current = true;
+    if (disableAll) setSmartGuideEnabled(false);
     if (!section) return;
 
     void (async () => {
       try {
         await AsyncStorage.setItem(`${FIRST_VISIT_GUIDE_PREFIX}${section}`, 'true');
-        if (disableAll) {
-          await AsyncStorage.setItem(FIRST_VISIT_GUIDE_DISABLED_KEY, 'true');
-        }
       } catch (error) {
         console.warn('Unable to save first-visit guide state.', error);
       }
     })();
-  }, [guideSection]);
+  }, [guideSection, setSmartGuideEnabled]);
+
+  const activeGuideContext: SmartGuideContext =
+    activeRouteName === 'Publish' ? 'publish'
+      : activeRouteName === 'PropertyDetail' ? 'property'
+        : activeRouteName === 'Profile' ? 'profile'
+          : activeRouteName === 'Agent' || activeRouteName === 'AgentProfile' ? 'agent'
+            : activeRouteName === 'Messages' || activeRouteName === 'Chat' || activeRouteName === 'AgentSupportChat'
+              ? 'messages'
+              : activeRouteName === 'Home' ? 'home' : 'general';
+
+  const navigateFromSmartGuide = React.useCallback((
+    topic: SmartGuideTopic,
+    context: SmartGuideContext,
+  ) => {
+    if (!navigationRef.isReady()) return;
+    switch (topic) {
+      case 'publish':
+      case 'photos':
+        navigationRef.navigate('Publish');
+        break;
+      case 'edit':
+      case 'delete':
+        navigationRef.navigate('MainTabs', {
+          screen: currentUser?.role === 'AGENT' || currentUser?.role === 'ADMIN' ? 'Agent' : 'Profile',
+        });
+        break;
+      case 'search':
+      case 'price':
+        navigationRef.navigate('MainTabs', { screen: 'Home' });
+        break;
+      case 'favorites':
+      case 'agent':
+        navigationRef.navigate('MainTabs', { screen: 'Profile' });
+        break;
+      case 'contact':
+      case 'visit':
+      case 'unknown':
+      case 'moderation':
+      case 'transaction':
+        if (context !== 'property') navigationRef.navigate('MainTabs', { screen: 'Messages' });
+        break;
+    }
+  }, [currentUser?.role]);
 
   useEffect(() => {
     const handleAuthUrl = async (url: string | null) => {
@@ -420,9 +478,9 @@ const AppContent = () => {
         onReady={() => {
           navigateToPendingResetPassword();
           navigateToPendingAuthProfile();
-          checkFirstVisitGuide(navigationRef.getCurrentRoute()?.name);
+          handleNavigationStateChange();
         }}
-        onStateChange={() => checkFirstVisitGuide(navigationRef.getCurrentRoute()?.name)}
+        onStateChange={handleNavigationStateChange}
       >
         <StatusBar style={theme === 'light' ? 'dark' : 'light'} />
         <Stack.Navigator
@@ -463,6 +521,25 @@ const AppContent = () => {
           <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ presentation: 'card' }} />
         </Stack.Navigator>
       </NavigationContainer>
+      {activeRouteName && activeRouteName !== 'Onboarding' && activeRouteName !== 'Publish' ? (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: 'absolute',
+            right: 16,
+            bottom: 88 + insets.bottom,
+            zIndex: 10,
+          }}
+        >
+          <SmartGuideFloatingButton onPress={() => setSmartGuideVisible(true)} />
+        </View>
+      ) : null}
+      <SmartGuideModal
+        visible={smartGuideVisible}
+        onClose={() => setSmartGuideVisible(false)}
+        onNavigate={navigateFromSmartGuide}
+        initialContext={activeGuideContext}
+      />
       {guideSection && (
         <Modal
           visible

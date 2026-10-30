@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  getInitialListingStatus,
   isDirectPublishingEnabled,
   TEMPORARY_APPLICANT_PUBLISHING_ENDS_AT,
   TEMPORARY_APPLICANT_PUBLISHING_STARTS_AT,
@@ -28,6 +29,18 @@ describe('isDirectPublishingEnabled', () => {
     expect(isDirectPublishingEnabled(makeUser('AGENT'), insideWindow)).toBe(true);
     expect(isDirectPublishingEnabled(makeUser('AGENT'), lastAgentDay)).toBe(true);
     expect(isDirectPublishingEnabled(makeUser('AGENT'), agentEndBoundary)).toBe(false);
+  });
+
+  describe('getInitialListingStatus', () => {
+    it('uses the authorization decision when no status was explicitly requested', () => {
+      expect(getInitialListingStatus(undefined, true)).toBe('approved');
+      expect(getInitialListingStatus(undefined, false)).toBe('pending');
+    });
+
+    it('preserves an explicitly requested status', () => {
+      expect(getInitialListingStatus('pending', true)).toBe('pending');
+      expect(getInitialListingStatus('approved', false)).toBe('approved');
+    });
   });
 
   it('limits eligibility to active administrators, agents and qualifying applicants', () => {

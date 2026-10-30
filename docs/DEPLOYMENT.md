@@ -19,11 +19,11 @@ conservés sous `docs/` ne sont plus des entrées de déploiement.
    bootstrap `0002` qui contient déjà `USER`), `0003_production.sql`,
    `0006_admin_platform.sql`, `0004_auth_hardening.sql`, puis `0007` à `0015`
    dans l’ordre numérique, et enfin `0017` à `0020`, `0021` après `0012`, puis
-   `0022`, `0023`, `0024`, `0025`, puis `0026`. Ne pas rejouer une migration déjà appliquée.
+   `0022`, `0023`, `0024`, `0025`, `0026` et `0027`. Ne pas rejouer une migration déjà appliquée.
 3. `0001_rls.sql` est un brouillon hérité explicitement marqué : ne pas
    l’appliquer en production. Ne pas appliquer `0002_bootstrap.sql` à une base
    existante.
-4. Les migrations `0017` à `0020` et `0022` à `0026` sont appliquées automatiquement par GitHub
+4. Les migrations `0017` à `0020` et `0022` à `0027` sont appliquées automatiquement par GitHub
    Actions lorsqu’elles sont poussées sur `main`. Le workflow attend un schéma
    existant avec les prérequis de `0006_admin_platform.sql` ; il ne consulte pas
    l’historique ni n’applique les migrations antérieures.
@@ -95,6 +95,17 @@ Avant une nouvelle version visible dans le Play Store, mettre à jour `version`
 (ex. `1.2.0`) dans `app.json`. Contrôler le `versionCode` attribué à distance
 dans le résultat du build EAS avant de téléverser l’AAB.
 
+### Suivi des plantages (Sentry)
+
+Le SDK Sentry est intégré au point d’entrée mobile. Créer un projet Sentry
+React Native, puis renseigner son DSN dans `EXPO_PUBLIC_SENTRY_DSN` pour
+l’environnement local et dans les variables EAS des profils utilisés. Sans DSN,
+le suivi reste désactivé. Le DSN est une clé publique d’ingestion ; ne jamais
+placer le jeton `SENTRY_AUTH_TOKEN` dans le code ou dans une variable
+`EXPO_PUBLIC_*`. Pour téléverser les source maps et obtenir des traces lisibles,
+configurer aussi `SENTRY_ORG`, `SENTRY_PROJECT` et le secret `SENTRY_AUTH_TOKEN`
+dans EAS.
+
 ### Distribution APK (hors Play Store)
 
 Option recommandée :
@@ -111,9 +122,11 @@ Variables d’environnement attendues :
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `ADMIN_EMAIL` (required email address for the master-admin login)
+- `NEXT_PUBLIC_CONTACT_EMAIL` and `NEXT_PUBLIC_CONTACT_PHONE` (optional public legal contact details)
 - `SUPABASE_SERVICE_ROLE_KEY` (clé API secrète `sb_secret_` ou ancien JWT `service_role`, serveur uniquement : routes API Next)
 
-Voir `admin/README.md` et `admin/.env.local.example`.
+Voir `admin/README.md` et `admin/.env.example`.
 
 ## Site public (Expo Web)
 
@@ -178,7 +191,7 @@ Le callback Netlify PKCE est utilisé par le site pour Google et après confirma
 de l’inscription ; le site échange le code puis revient sur le profil. Le callback
 Vercel reste nécessaire pour l’App Link HTTPS Android. Pour activer sa
 vérification, le domaine doit être contrôlé par le projet et publier
-`/.well-known/assetlinks.json` avec `com.imonordtogo.app` et l’empreinte SHA-256
+`/.well-known/assetlinks.json` avec `com.imoprestige.app` et l’empreinte SHA-256
 du certificat de signature réellement utilisé (EAS Play/App Signing selon le
 canal). Il faut aussi vérifier que le déploiement Vercel sert ce fichier sans
 redirection ni authentification. Régénérer le projet natif avec
@@ -253,3 +266,6 @@ les administrateurs consultent et répondent dans **Messages → Demandes agents
 du back-office. Elle active aussi les événements Realtime si la publication
 `supabase_realtime` existe. Déployer cette migration avant de présenter la
 fonctionnalité aux agents.
+La migration `0027_admin_initiated_agent_support.sql` autorise les
+administrateurs à ouvrir une conversation privée avec un agent pour lui envoyer
+un message groupé, sans exposer les autres destinataires.

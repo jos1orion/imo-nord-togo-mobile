@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import LoadingState from './LoadingState';
+import { roleLabels, AppRole } from '../lib/rbac';
 
 export type Column<T> = {
   key: keyof T | string;
@@ -76,13 +77,20 @@ export default function DataTable<T>({
               {rows.map((row, index) => (
                 <tr key={index}>
                   {columns.map(column => (
-                    <td
-                      key={String(column.key)}
-                      className={clsx({})}
-                      style={{ textAlign: column.align ?? 'left' }}
-                    >
-                      {column.render ? column.render(row) : String((row as Record<string, unknown>)[column.key as string] ?? '')}
-                    </td>
+                      <td
+                        key={String(column.key)}
+                        style={{ textAlign: column.align ?? 'left' }}
+                      >
+                        {column.render ? column.render(row) : (
+                          column.key === 'role' ? (
+                            <span className={clsx('status', String((row as Record<string, unknown>)[column.key as string] ?? '').toLowerCase())}>
+                              {roleLabels[(row as Record<string, unknown>)[column.key as string] as AppRole] || String((row as Record<string, unknown>)[column.key as string] ?? '')}
+                            </span>
+                          ) : (
+                            String((row as Record<string, unknown>)[column.key as string] ?? '')
+                          )
+                        )}
+                      </td>
                   ))}
                 </tr>
               ))}

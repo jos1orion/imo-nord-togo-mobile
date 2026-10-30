@@ -15,8 +15,8 @@ const displayFont = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'Imo Nord Togo Admin',
-  description: 'Back-office professionnel pour la gestion immobiliere.',
+  title: 'ImoPrestige — Back-office',
+  description: 'Back-office professionnel ImoPrestige pour la gestion immobilière.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

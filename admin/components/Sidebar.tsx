@@ -20,10 +20,10 @@ export default function Sidebar() {
   return (
     <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
       <div className="sidebar-brand">
-        <div className="sidebar-brand-mark" aria-hidden="true">IN</div>
+        <div className="sidebar-brand-mark" aria-hidden="true">IP</div>
         <div className="sidebar-brand-copy">
           <small>BACK-OFFICE</small>
-          <span>Imo Nord Togo</span>
+          <span>ImoPrestige</span>
         </div>
         <button
           type="button"

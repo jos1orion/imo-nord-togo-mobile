@@ -59,13 +59,13 @@ const LegalScreen: React.FC<LegalScreenProps> = ({ type, onClose }) => {
 };
 
 const privacyContentFr = `
-POLITIQUE DE CONFIDENTIALITÉ - IMO NORD TOGO
+POLITIQUE DE CONFIDENTIALITÉ - IMOPRESTIGE
 
 Dernière mise à jour : 20 octobre 2026
 
 1. INTRODUCTION
 
-Cette politique décrit les informations traitées lorsque vous utilisez l'application mobile Imo Nord Togo et les services associés.
+Cette politique décrit les informations traitées lorsque vous utilisez l'application mobile ImoPrestige et les services associés.
 
 2. INFORMATIONS TRAITÉES
 
@@ -85,7 +85,7 @@ L’application accède à la caméra ou à la photothèque uniquement lorsque v
 
 6. RECHERCHE VOCALE
 
-La recherche vocale est facultative et n’active le microphone qu’après votre action et votre autorisation. La reconnaissance est effectuée par le service vocal configuré sur votre appareil, qui peut traiter l’audio selon ses propres conditions et sa politique de confidentialité. Imo Nord Togo utilise le texte reconnu pour renseigner la recherche.
+La recherche vocale est facultative et n’active le microphone qu’après votre action et votre autorisation. La reconnaissance est effectuée par le service vocal configuré sur votre appareil, qui peut traiter l’audio selon ses propres conditions et sa politique de confidentialité. ImoPrestige utilise le texte reconnu pour renseigner la recherche.
 
 7. CONSERVATION ET SÉCURITÉ
 
@@ -105,21 +105,21 @@ Adresse : Kara, Togo
 
 Le service n’est pas destiné aux personnes de moins de 18 ans. Nous pouvons mettre à jour cette politique ; la date de mise à jour sera alors modifiée sur cette page.
 
-Imo Nord Togo - votre partenaire immobilier à Kara.
+ImoPrestige - votre partenaire immobilier à Kara.
 `;
 
 const termsContentFr = `
-CONDITIONS D'UTILISATION - IMO NORD TOGO
+CONDITIONS D'UTILISATION - IMOPRESTIGE
 
 Derniere mise a jour : fevrier 2024
 
 1. ACCEPTATION DES CONDITIONS
 
-En telechargeant et en utilisant l'application Imo Nord Togo, vous acceptez d'etre lie par ces conditions.
+En telechargeant et en utilisant l'application ImoPrestige, vous acceptez d'etre lie par ces conditions.
 
 2. DESCRIPTION DU SERVICE
 
-Imo Nord Togo est une plateforme de mise en relation pour :
+ImoPrestige est une plateforme de mise en relation pour :
 - La vente de biens immobiliers
 - La location de biens
 - La publication d'annonces immobilieres
@@ -140,19 +140,19 @@ Vous vous engagez a :
 
 5. PROPRIETE INTELLECTUELLE
 
-- Le contenu de la plateforme appartient a Imo Nord Togo ou a ses concedants
+- Le contenu de la plateforme appartient a ImoPrestige ou a ses concedants
 - Les photos restent la propriete de leurs auteurs
 - Toute utilisation commerciale est interdite sans autorisation
 
 6. RESPONSABILITES
 
-- Imo Nord Togo n'est pas partie aux transactions entre utilisateurs
+- ImoPrestige n'est pas partie aux transactions entre utilisateurs
 - Nous ne garantissons pas l'exactitude des annonces
 - Nous pouvons supprimer tout contenu inapproprie
 
 7. LIMITATION DE RESPONSABILITE
 
-Imo Nord Togo ne peut etre tenu responsable des :
+ImoPrestige ne peut etre tenu responsable des :
 - Dommages directs ou indirects
 - Pertes financieres liees aux transactions
 - Contenus publies par les utilisateurs
@@ -171,17 +171,17 @@ E-mail : ${getContactEmail()}
 Telephone : +${getContactPhoneDigits()}
 Adresse : Avenue de la Liberation, Kara, Togo
 
-Imo Nord Togo - votre partenaire immobilier a Kara.
+ImoPrestige - votre partenaire immobilier a Kara.
 `;
 
 const privacyContentEn = `
-PRIVACY POLICY - IMO NORD TOGO
+PRIVACY POLICY - IMOPRESTIGE
 
 Last updated: October 20, 2026
 
 1. INTRODUCTION
 
-This policy explains how information is handled when you use the Imo Nord Togo mobile app and related services.
+This policy explains how information is handled when you use the ImoPrestige mobile app and related services.
 
 2. INFORMATION WE HANDLE
 
@@ -201,7 +201,7 @@ The app accesses your camera or photo library only when you choose to add photos
 
 6. VOICE SEARCH
 
-Voice search is optional and accesses the microphone only after you choose the feature and grant permission. Speech recognition is provided by the service configured on your device, which may process audio under its own terms and privacy policy. Imo Nord Togo uses the recognized text to fill in your search.
+Voice search is optional and accesses the microphone only after you choose the feature and grant permission. Speech recognition is provided by the service configured on your device, which may process audio under its own terms and privacy policy. ImoPrestige uses the recognized text to fill in your search.
 
 7. RETENTION AND SECURITY
 
@@ -223,7 +223,7 @@ The service is not intended for anyone under 18. We may update this policy and w
 `;
 
 const termsContentEn = `
-TERMS OF USE - IMO NORD TOGO
+TERMS OF USE - IMOPRESTIGE
 
 Last update: February 2024
 
@@ -254,7 +254,7 @@ You agree to:
 
 5. INTELLECTUAL PROPERTY
 
-- Platform content belongs to Imo Nord Togo or its licensors
+- Platform content belongs to ImoPrestige or its licensors
 - Photos remain the property of their authors
 - No commercial use without permission
 

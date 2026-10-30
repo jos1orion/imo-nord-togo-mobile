@@ -1,4 +1,4 @@
-import type { User } from '../types';
+import type { ListingStatus, User } from '../types';
 
 export const TEMPORARY_AGENT_PUBLISHING_STARTS_AT = '2026-10-11T00:00:00.000Z';
 export const TEMPORARY_APPLICANT_PUBLISHING_STARTS_AT = '2026-12-01T00:00:00.000Z';
@@ -6,6 +6,11 @@ export const TEMPORARY_AGENT_PUBLISHING_ENDS_AT = '2027-06-02T00:00:00.000Z';
 export const TEMPORARY_APPLICANT_PUBLISHING_ENDS_AT = '2027-06-01T00:00:00.000Z';
 
 type PublishingUser = Pick<User, 'role' | 'agentStatus' | 'accountStatus'>;
+
+export const getInitialListingStatus = (
+  requestedStatus: ListingStatus | null | undefined,
+  canPublishDirectly: boolean
+): ListingStatus => requestedStatus ?? (canPublishDirectly ? 'approved' : 'pending');
 
 export const isDirectPublishingEnabled = (
   user: PublishingUser | null | undefined,

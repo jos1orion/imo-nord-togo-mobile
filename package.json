@@ -1,5 +1,5 @@
 {
-  "name": "imo-nord-togo-mobile",
+  "name": "imo-prestige-mobile",
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
@@ -32,6 +32,7 @@
     "@react-navigation/bottom-tabs": "^7.19.2",
     "@react-navigation/native": "^7.4.1",
     "@react-navigation/stack": "^7.11.2",
+    "@sentry/react-native": "~7.11.0",
     "@supabase/supabase-js": "^2.100.0",
     "babel-preset-expo": "^57.0.12",
     "expo": "~57.0.31",
@@ -48,7 +49,7 @@
     "expo-print": "~57.0.2",
     "expo-secure-store": "~57.0.4",
     "expo-sharing": "~57.0.24",
-    "expo-speech-recognition": "^3.1.2",
+    "expo-speech-recognition": "^3.1.3",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",

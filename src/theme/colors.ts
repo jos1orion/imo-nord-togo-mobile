@@ -1,7 +1,7 @@
 const BASE_THEME_PALETTES = {
   light: {
-    primary: '#1B4F72',
-    primaryDark: '#163A4A',
+    primary: '#062C65',
+    primaryDark: '#041E49',
     accent: '#2E6DA6',
     background: '#F5F8F8',
     surface: '#FFFFFF',
@@ -26,7 +26,7 @@ const BASE_THEME_PALETTES = {
     info: '#2563EB',
     infoContainer: '#DBEAFE',
     onInfoContainer: '#1D4ED8',
-    brand: '#1B4F72',
+    brand: '#062C65',
     onBrand: '#FFFFFF',
     brandAccent: '#D5E4F0',
     onBrandMuted: '#E9F1F7',
