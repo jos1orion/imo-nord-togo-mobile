@@ -109,7 +109,6 @@ const TabNavigator = () => {
   const hasAgentWorkspace = currentUser?.role === 'AGENT' || currentUser?.role === 'ADMIN';
   return (
     <Tab.Navigator
-      key={`${language}-${hasAgentWorkspace ? 'agent' : 'standard'}`}
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home';
