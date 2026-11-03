@@ -102,7 +102,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-const createStyles = (palette: ThemePalette) => StyleSheet.create({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const createStyles = (palette: ThemePalette) => StyleSheet.create<any>({
   container: {
     flex: 1,
     justifyContent: 'center',
