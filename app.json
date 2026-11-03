@@ -131,8 +131,7 @@
           "style": "dark"
         }
       ],
-      "expo-web-browser",
-      "@sentry/react-native"
+      "expo-web-browser"
     ],
     "extra": {
       "contactPhone": "22893576298",
@@ -149,10 +148,23 @@
               "./assets/fonts/Poppins-SemiBold.ttf"
             ]
           }
+        },
+        {
+          "Poppins": {
+            "fontFamily": "Poppins",
+            "srcs": [
+              "./assets/fonts/Poppins-Regular.ttf",
+              "./assets/fonts/Poppins-SemiBold.ttf"
+            ]
+          }
         }
       ],
       "eas": {
         "projectId": "7faf2828-55ef-491d-be14-b568686f71fc"
+      },
+      "expo-navigation-bar": {
+        "enforceContrast": true,
+        "style": "dark"
       }
     },
     "owner": "josild"
