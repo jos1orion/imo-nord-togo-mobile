@@ -11,11 +11,9 @@ import {
 import { AppAlert as Alert } from '../components/ui/appAlertService';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { RootStackParamList } from '../../App';
 import PropertyCard from '../components/PropertyCard';
 import Skeleton from '../components/ui/Skeleton';
 import { useApp } from '../context/AppContext';
@@ -26,15 +24,9 @@ import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { logger } from '../lib/logger';
 import { isDirectPublishingEnabled } from '../lib/publishing';
+import { RootStackParamList } from '../../App';
 
-type ListingsTabParamList = {
-  Home: undefined;
-  Publish: undefined;
-  Messages: undefined;
-  Profile: { authMode?: 'login' | 'register' } | undefined;
-};
-
-type NavigationProp = BottomTabNavigationProp<ListingsTabParamList, 'Publish'>;
+type NavigationProp = StackNavigationProp<RootStackParamList, 'Publish'>;
 
 const ListingsScreen: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
@@ -76,14 +68,14 @@ const ListingsScreen: React.FC = () => {
 
   const openProperty = (propertyId: string) => {
     InteractionManager.runAfterInteractions(() =>
-      navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('PropertyDetail', {
+      navigation.navigate('PropertyDetail', {
         propertyId,
       })
     );
   };
 
   const openAuthentication = (authMode: 'login' | 'register') => {
-    navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('MainTabs', {
+    navigation.navigate('MainTabs', {
       screen: 'Profile',
       params: { authMode },
     });
@@ -136,7 +128,7 @@ const ListingsScreen: React.FC = () => {
       return;
     }
     if (agentAccessState === 'approved' || agentAccessState === 'temporary') {
-      navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('Publish');
+      navigation.navigate('Publish');
       return;
     }
     if (agentAccessState === 'pending') {

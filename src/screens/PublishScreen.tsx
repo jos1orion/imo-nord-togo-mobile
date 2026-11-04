@@ -250,13 +250,7 @@ const PublishScreen: React.FC = () => {
           setPublishAccessStatus('inactive');
           return;
         }
-        const authorizedRole = role === 'ADMIN' || (
-          role === 'AGENT' &&
-          (
-            agentStatus === 'approved' ||
-            isDirectPublishingEnabled({ role, agentStatus, accountStatus })
-          )
-        );
+        const authorizedRole = role === 'ADMIN' || isDirectPublishingEnabled({ role, agentStatus, accountStatus });
         if (!authorizedRole) {
           setPublishAccessStatus('unauthorized');
           return;

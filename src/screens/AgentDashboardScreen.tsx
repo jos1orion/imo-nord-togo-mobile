@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { RootStackParamList } from '../../App';
+import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
 import { useThemeColors, useThemedStyles, type ThemePalette } from '../theme/useThemedStyles';
 import { COLORS } from '../theme/colors';
@@ -18,6 +18,7 @@ import { getOfficialWebsiteUrl, openSecureExternalUrl } from '../constants/appCo
 
 type AgentTabs = { Home: undefined; Publish: undefined; Messages: undefined; Agent: undefined; Profile: undefined };
 type Navigation = BottomTabNavigationProp<AgentTabs, 'Agent'>;
+type StackNavigation = StackNavigationProp<RootStackParamList, 'MainTabs'>;
 
 const isExpired = (expiresAt?: string | null) => {
   if (!expiresAt) return false;
@@ -105,10 +106,10 @@ const AgentDashboardScreen = () => {
       );
       return;
     }
-    navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('Publish');
+    navigation.getParent<StackNavigation>()?.navigate('Publish');
   };
   const openListing = (propertyId: string) => {
-    navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('Publish', { propertyId });
+    navigation.getParent<StackNavigation>()?.navigate('Publish', { propertyId });
   };
   const closeListingAction = () => {
     setCompletionPropertyId(null);

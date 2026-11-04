@@ -57,6 +57,7 @@ import {
   matchesAuthCallbackUrl,
 } from './src/lib/supabase';
 import { logger } from './src/lib/logger';
+import { canAgentPublishFromApk } from './src/lib/publishing';
 import type { SmartGuideContext, SmartGuideTopic } from './src/lib/smartGuide';
 
 const ONBOARDING_KEY = 'imo:onboardingComplete';
@@ -224,6 +225,7 @@ const AppContent = () => {
   const paperTheme = createPaperTheme(theme);
   const navigationTheme = theme === 'light' ? NavigationLightTheme : NavigationDarkTheme;
   const insets = useSafeAreaInsets();
+  const canPublishNow = canAgentPublishFromApk(currentUser ?? null, false);
   const [navReady, setNavReady] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [guideSection, setGuideSection] = useState<GuideSection | null>(null);
@@ -319,7 +321,11 @@ const AppContent = () => {
     switch (topic) {
       case 'publish':
       case 'photos':
-        navigationRef.navigate('Publish');
+        if (canPublishNow) {
+          navigationRef.navigate('Publish');
+        } else if (currentUser?.role === 'AGENT' || currentUser?.role === 'ADMIN') {
+          Alert.alert(t('agent_publishing_section_title'), t('agent_publishing_post_launch_msg'));
+        }
         break;
       case 'edit':
       case 'delete':
@@ -343,7 +349,7 @@ const AppContent = () => {
         if (context !== 'property') navigationRef.navigate('MainTabs', { screen: 'Messages' });
         break;
     }
-  }, [currentUser?.role]);
+  }, [canPublishNow, currentUser?.role]);
 
   useEffect(() => {
     const handleAuthUrl = async (url: string | null) => {

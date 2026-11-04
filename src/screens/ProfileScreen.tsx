@@ -35,7 +35,7 @@ import { formatPrice } from '../utils/format';
 import type { ThemeMode } from '../theme/colors';
 import { baseStyles } from './ProfileScreen.styles';
 import { getNetlifeUrl, getOfficialWebsiteUrl, openSecureExternalUrl } from '../constants/appConfig';
-import { isLaunchPeriodActive, getLaunchCountdown } from '../lib/publishing';
+import { isLaunchPeriodActive, getLaunchCountdown, canAgentPublishFromApk } from '../lib/publishing';
 
 type ProfileRouteProp = RouteProp<
   { Profile: { authMode?: 'login' | 'register' } | undefined },
@@ -82,6 +82,7 @@ const ProfileScreen: React.FC = () => {
     notifications,
     setPrivacySetting,
     updateProfile,
+    requestAgentAccess,
   } = useApp();
   const theme = selectedTheme === 'light' ? 'light' : 'dark';
   const secretTapCount = useRef(0);
@@ -163,6 +164,23 @@ const ProfileScreen: React.FC = () => {
     InteractionManager.runAfterInteractions(() =>
       navigation.navigate('MainTabs', { screen: 'Home' })
     );
+  };
+
+  const canPublishNow = canAgentPublishFromApk(currentUser ?? null, false);
+
+  const openPublish = (propertyId?: string) => {
+    if (!canPublishNow) {
+      Alert.alert(
+        t('agent_publishing_section_title'),
+        t('agent_publishing_post_launch_msg')
+      );
+      return;
+    }
+    if (propertyId) {
+      navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('Publish', { propertyId });
+    } else {
+      navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('Publish');
+    }
   };
 
   const resolveAuthError = (code: string) => {
@@ -1144,7 +1162,28 @@ const ProfileScreen: React.FC = () => {
             </View>
             <TouchableOpacity
               style={styles.agentAccessButton}
-              onPress={() => navigation.navigate('MainTabs', { screen: 'Publish' })}
+              onPress={async () => {
+                if (currentUser.agentStatus === 'pending') {
+                  Alert.alert(t('profile_agent_pending_title'), t('profile_agent_pending_subtitle'));
+                  return;
+                }
+                if (currentUser.agentStatus === 'rejected') {
+                  try {
+                    await requestAgentAccess();
+                    Alert.alert(t('success'), t('listing_agent_request_sent'));
+                  } catch (error) {
+                    Alert.alert(t('error'), t('listing_agent_request_error'));
+                  }
+                  return;
+                }
+                // Pour 'none' ou tout autre état, demander l'accès
+                try {
+                  await requestAgentAccess();
+                  Alert.alert(t('success'), t('listing_agent_request_sent'));
+                } catch (error) {
+                  Alert.alert(t('error'), t('listing_agent_request_error'));
+                }
+              }}
               accessibilityRole="button"
             >
               <Text style={styles.agentAccessButtonText}>
@@ -1159,7 +1198,7 @@ const ProfileScreen: React.FC = () => {
           </View>
         )}
 
-        {isAgent && currentUser && false && (
+        {isAgent && currentUser && (
           <View style={[styles.agentDashboard, theme === 'dark' && styles.agentDashboardDark, { backgroundColor: themeColors.primaryContainer }]}>
             <View style={styles.agentDashboardHeader}>
               <View style={styles.agentDashboardHeading}>
@@ -1284,7 +1323,7 @@ const ProfileScreen: React.FC = () => {
             <View style={styles.agentActions}>
               <TouchableOpacity
                 style={styles.agentPrimaryAction}
-                onPress={() => navigation.navigate('Publish')}
+                onPress={() => openPublish()}
                 accessibilityRole="button"
               >
                 <Ionicons name="add" size={18} color={themeColors.onSurfaceMuted} />
@@ -1293,7 +1332,7 @@ const ProfileScreen: React.FC = () => {
               <View style={styles.agentSecondaryActions}>
                 <TouchableOpacity
                   style={[styles.agentSecondaryAction, theme === 'dark' && styles.agentSecondaryActionDark]}
-                  onPress={() => navigation.navigate('MainTabs', { screen: 'Publish' })}
+                  onPress={() => openPublish()}
                   accessibilityRole="button"
                 >
                   <Ionicons name="list-outline" size={16} color={theme === 'dark' ? themeColors.onSurfaceMuted : themeColors.primary} />
@@ -1350,7 +1389,7 @@ const ProfileScreen: React.FC = () => {
                 <TouchableOpacity
                   key={`rejected-${property.id}`}
                   style={styles.agentTodoRow}
-                  onPress={() => navigation.navigate('Publish', { propertyId: property.id })}
+                  onPress={() => openPublish(property.id)}
                   accessibilityRole="button"
                 >
                   <Ionicons name="alert-circle-outline" size={19} color={themeColors.danger} />
@@ -1366,7 +1405,7 @@ const ProfileScreen: React.FC = () => {
                   <TouchableOpacity
                     key={`expiring-${property.id}`}
                     style={styles.agentTodoRow}
-                    onPress={() => navigation.navigate('Publish', { propertyId: property.id })}
+                    onPress={() => openPublish(property.id)}
                     accessibilityRole="button"
                   >
                     <Ionicons name="time-outline" size={19} color={themeColors.warning} />
@@ -1391,7 +1430,7 @@ const ProfileScreen: React.FC = () => {
                   {t('profile_agent_manage_listings')}
                 </Text>
                 <TouchableOpacity
-                  onPress={() => navigation.navigate('Publish')}
+                  onPress={() => openPublish()}
                   accessibilityRole="button"
                 >
                   <Text style={styles.agentSeeAll}>{t('profile_agent_publish')}</Text>
@@ -1469,7 +1508,7 @@ const ProfileScreen: React.FC = () => {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.agentListingEdit}
-                      onPress={() => navigation.navigate('Publish', { propertyId: property.id })}
+                      onPress={() => openPublish(property.id)}
                       accessibilityRole="button"
                       accessibilityLabel={t('profile_agent_edit_listing')}
                     >
@@ -1557,16 +1596,6 @@ const ProfileScreen: React.FC = () => {
               </Text>
             </View>
           </View>
-          {!isAgent && currentUser.agentStatus === 'rejected' && (
-            <TouchableOpacity
-              style={styles.agentStatusAction}
-              onPress={() => navigation.navigate('MainTabs', { screen: 'Publish' })}
-              accessibilityRole="button"
-            >
-              <Text style={styles.agentStatusActionText}>{t('profile_agent_request_again')}</Text>
-              <Ionicons name="chevron-forward" size={16} color={themeColors.primary} />
-            </TouchableOpacity>
-          )}
         </View>
 
         <View style={[styles.section, theme === 'dark' && styles.sectionDark, styles.activityAccordion]}>

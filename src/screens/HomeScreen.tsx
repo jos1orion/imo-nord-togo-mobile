@@ -33,6 +33,7 @@ import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import heroImage from '../../assets/branding/maison-ocre.jpg';
+import { canAgentPublishFromApk } from '../lib/publishing';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 type PlacePicker = 'city' | 'neighborhood' | null;
@@ -206,6 +207,19 @@ const HomeScreen: React.FC = () => {
     setSelectedProperty(property);
     trackPropertyView(property.id);
     navigation.navigate('PropertyDetail', { propertyId: property.id });
+  };
+
+  const canPublishNow = canAgentPublishFromApk(currentUser ?? null, false);
+
+  const openPublish = () => {
+    if (!canPublishNow) {
+      Alert.alert(
+        t('agent_publishing_section_title'),
+        t('agent_publishing_post_launch_msg')
+      );
+      return;
+    }
+    navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('Publish');
   };
 
   const handleSearch = () => {
@@ -677,19 +691,21 @@ const HomeScreen: React.FC = () => {
         </TouchableOpacity>
       ) : null}
 
-      <TouchableOpacity
-        style={styles.publishBanner}
-        onPress={() => navigation.navigate('Publish')}
-      >
-        <View style={styles.publishIcon}>
-          <Ionicons name="add" size={21} color={colors.onGold} />
-        </View>
-        <View style={styles.publishCopy}>
-          <Text style={styles.publishTitle}>{t('home_publish_card_title')}</Text>
-          <Text style={styles.publishSubtitle}>{t('home_publish_card_sub')}</Text>
-        </View>
-        <Ionicons name="arrow-forward" size={18} color={colors.onBrand} />
-      </TouchableOpacity>
+      {currentUser && currentUser.role !== 'AGENT' && currentUser.role !== 'ADMIN' && (
+        <TouchableOpacity
+          style={styles.publishBanner}
+          onPress={openPublish}
+        >
+          <View style={styles.publishIcon}>
+            <Ionicons name="add" size={21} color={colors.onGold} />
+          </View>
+          <View style={styles.publishCopy}>
+            <Text style={styles.publishTitle}>{t('home_publish_card_title')}</Text>
+            <Text style={styles.publishSubtitle}>{t('home_publish_card_sub')}</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color={colors.onBrand} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 
