@@ -4,14 +4,11 @@
 import LoadingState from '../../../components/LoadingState';
 import { useSession } from '../../../lib/useSession';
 
-function StatCard({ title, value, icon }: { title: string; value: React.ReactNode; icon: React.ReactNode }) {
+function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="stat-card" role="region" aria-label={title}>
-      <div className="stat-card-icon" aria-hidden="true">{icon}</div>
-      <div className="stat-card-content">
-        <div className="stat-card-title">{title}</div>
-        <div className="stat-card-value">{value}</div>
-      </div>
+    <div className="stat-card" role="region" aria-label={label}>
+      <div className="stat-card-title">{label}</div>
+      <div className="stat-card-value">{value}</div>
     </div>
   );
 }
@@ -21,7 +18,18 @@ export default function SmartGuidePage() {
 
   if (loading) return <LoadingState />;
 
-  if (!profile) return null;
+  if (!profile) {
+    return (
+      <div className="page-container" role="main" aria-label="Écran d'accès non disponible">
+        <h1>Accès non disponible</h1>
+        <p>Votre session a expiré ou vous n'avez pas les droits nécessaires.</p>
+        <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+          <a href="/admin/login" className="primary-button">Se reconnecter</a>
+          <a href="/admin" className="ghost-button">Retour au Dashboard</a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-container" aria-label="Smart Guide - Espace guide">
@@ -38,21 +46,9 @@ export default function SmartGuidePage() {
           Cette section fournit des recommandations basées sur l'analyse des données de propriétés.
         </p>
         <div className="dashboard-grid">
-          <StatCard
-            title="Biens mieux vendus"
-            value="3"
-            icon={<span aria-hidden="true">📈</span>}
-          />
-          <StatCard
-            title="Prix moyen"
-            value="15M FCFA"
-            icon={<span aria-hidden="true">💰</span>}
-          />
-          <StatCard
-            title="Durée moyenne de vente"
-            value="45 jours"
-            icon={<span aria-hidden="true">⏱️</span>}
-          />
+          <StatCard label="Biens mieux vendus" value="3" />
+          <StatCard label="Prix moyen" value="15M FCFA" />
+          <StatCard label="Durée moyenne de vente" value="45 jours" />
         </div>
       </section>
     </div>

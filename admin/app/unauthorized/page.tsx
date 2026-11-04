@@ -72,7 +72,8 @@ export default function UnauthorizedPage() {
             style={{
               width: '100%',
               textAlign: 'center',
-              display: 'inline-block'
+              display: 'inline-block',
+              minHeight: '44px'
             }}
           >
             Retour au Dashboard
@@ -83,7 +84,8 @@ export default function UnauthorizedPage() {
             style={{
               width: '100%',
               textAlign: 'center',
-              display: 'inline-block'
+              display: 'inline-block',
+              minHeight: '44px'
             }}
           >
             Retour à la connexion
@@ -93,7 +95,7 @@ export default function UnauthorizedPage() {
         <p style={{
           marginTop: 8,
           fontSize: 11,
-          color: 'rgba(160, 170, 185, 0.7)',
+          color: '#a0aa-bd',
           textAlign: 'center',
           lineHeight: 1.6,
         }}>
