@@ -122,7 +122,7 @@ Variables d’environnement attendues :
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `ADMIN_EMAIL` (required email address for the master-admin login)
+- `ADMIN_PASSWORD` (mot de passe administrateur maître pour l'accès au back-office)
 - `NEXT_PUBLIC_CONTACT_EMAIL` and `NEXT_PUBLIC_CONTACT_PHONE` (optional public legal contact details)
 - `SUPABASE_SERVICE_ROLE_KEY` (clé API secrète `sb_secret_` ou ancien JWT `service_role`, serveur uniquement : routes API Next)
 
