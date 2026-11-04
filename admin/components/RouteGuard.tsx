@@ -22,11 +22,11 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
 
     const required = getPermissionForPath(pathname);
     if (required === null) {
-      router.replace('/');
+      router.replace('/unauthorized');
       return;
     }
     if (!hasPermission(profile.role, required)) {
-      router.replace('/');
+      router.replace('/unauthorized');
     }
   }, [pathname, profile, loading, router, isMasterAdmin]);
 

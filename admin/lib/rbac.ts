@@ -30,7 +30,11 @@ export type Permission =
   | 'admins.read'
   | 'admins.write'
   | 'agents.read'
-  | 'agents.write';
+  | 'agents.write'
+  | 'smart-guide.read'
+  | 'smart-guide.write'
+  | 'publishing.read'
+  | 'publishing.write';
 
 const rolePermissions: Record<Role, Permission[]> = {
   ADMIN: [
@@ -49,8 +53,20 @@ const rolePermissions: Record<Role, Permission[]> = {
     'admins.write',
     'agents.read',
     'agents.write',
+    'smart-guide.read',
+    'smart-guide.write',
+    'publishing.read',
+    'publishing.write',
   ],
-  AGENT: ['dashboard.view', 'properties.read', 'properties.write'],
+  AGENT: [
+    'dashboard.view',
+    'properties.read',
+    'properties.write',
+    'smart-guide.read',
+    'smart-guide.write',
+    'publishing.read',
+    'publishing.write',
+  ],
   ACCOUNTANT: [
     'dashboard.view',
     'payments.read',
@@ -73,8 +89,11 @@ export const roleLabels: Record<AppRole, string> = {
 export function getPermissionForPath(pathname: string): Permission | null {
   const path = pathname.replace(/\/$/, '') || '/';
   if (path === '/' || path === '') return 'dashboard.view';
+  if (path === '/unauthorized') return null;  // Unauthorized page exempt from RBAC
   if (path.startsWith('/properties')) return 'properties.read';
   if (path.startsWith('/publications')) return 'properties.read';
+  if (path.startsWith('/smart-guide')) return 'smart-guide.read';
+  if (path.startsWith('/smart-publish')) return 'publishing.read';
   if (path.startsWith('/featured')) return 'admins.read';
   if (path.startsWith('/neighborhoods')) return 'admins.read';
   if (path.startsWith('/tenants')) return 'tenants.read';
@@ -92,5 +111,5 @@ export function getPermissionForPath(pathname: string): Permission | null {
   if (path.startsWith('/admins')) return 'admins.read';
   if (path.startsWith('/logs')) return 'admins.read';
   if (path.startsWith('/settings')) return 'admins.read';
-  return null;
+  return 'dashboard.view';
 }
