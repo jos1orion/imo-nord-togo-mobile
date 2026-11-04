@@ -55,7 +55,7 @@ export function getOfficialWebsiteUrl(): string {
     process.env.EXPO_PUBLIC_WEBSITE_URL ??
     getExtra().officialWebsiteUrl ??
     getExtra().websiteUrl ??
-    'https://curious-starburst-00e9e1.netlify.app';
+    'https://imo-prestige.netlify.app';
   return String(raw).trim().replace(/\/+$/, '');
 }
 

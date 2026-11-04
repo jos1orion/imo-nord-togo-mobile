@@ -158,7 +158,7 @@ définir l’URL de production Netlify comme **Site URL** dans
 à **Redirect URLs**. Si l’URL demandée n’est pas autorisée, Supabase peut
 rediriger vers la **Site URL** configurée (qui ne doit donc pas être le
 back-office Vercel). Pour la production, la **Site URL** est
-`https://curious-starburst-00e9e1.netlify.app`.
+`https://imo-prestige.netlify.app`.
 Les annonces partagées depuis le navigateur utilisent automatiquement le domaine
 du site. Si le navigateur ne propose pas le partage natif, le lien est copié dans
 le presse-papiers. La recherche vocale dépend de la prise en charge Web Speech du
@@ -179,8 +179,8 @@ Dans **Authentication → URL Configuration → Redirect URLs** de Supabase,
 autoriser les callbacks de production du site public et de l’application mobile :
 
 ```text
-https://curious-starburst-00e9e1.netlify.app/auth/callback
-https://curious-starburst-00e9e1.netlify.app/reset-password
+https://imo-prestige.netlify.app/auth/callback
+https://imo-prestige.netlify.app/reset-password
 imonordtogo://auth/callback
 imonordtogo://reset-password
 https://imo-nord-togo-mobile.vercel.app/auth/callback
