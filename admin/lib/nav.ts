@@ -19,8 +19,9 @@ export const navGroups: NavGroup[] = [
     items: [
       { href: '/', label: 'Tableau de bord', short: 'DB', icon: '📊', permission: 'dashboard.view' },
       { href: '/properties', label: 'Biens', short: 'BI', icon: '🏠', permission: 'properties.read' },
-      { href: '/publications', label: 'Publications', short: 'PU', icon: '🗓️', permission: 'properties.read' },
-      { href: '/featured', label: 'Featured', short: 'FE', icon: '🏷️', permission: 'admins.read' },
+      { href: '/smart-publish', label: 'Publier', short: 'PU', icon: '🗓️', permission: 'publishing.read' },
+      { href: '/smart-guide', label: 'Guide Intelligent', short: 'GI', icon: '🤖', permission: 'smart-guide.read' },
+      { href: '/featured', label: 'Vedettes', short: 'FE', icon: '🏷️', permission: 'admins.read' },
       { href: '/neighborhoods', label: 'Quartiers', short: 'QT', icon: '📍', permission: 'admins.read' },
     ],
   },

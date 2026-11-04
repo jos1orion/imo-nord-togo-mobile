@@ -91,7 +91,7 @@ export function getPermissionForPath(pathname: string): Permission | null {
   if (path === '/' || path === '') return 'dashboard.view';
   if (path === '/unauthorized') return null;  // Unauthorized page exempt from RBAC
   if (path.startsWith('/properties')) return 'properties.read';
-  if (path.startsWith('/publications')) return 'properties.read';
+  if (path.startsWith('/publications')) return 'publishing.read';
   if (path.startsWith('/smart-guide')) return 'smart-guide.read';
   if (path.startsWith('/smart-publish')) return 'publishing.read';
   if (path.startsWith('/featured')) return 'admins.read';
