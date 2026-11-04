@@ -75,6 +75,28 @@ export interface Payment {
   createdAt: string;
 }
 
+export type CommercialPaymentTier = 'standard_500' | 'premium_1000';
+export type MobileMoneyProvider = 'flooz' | 'tmoney' | 'paygate';
+export type CommercialPaymentStatus = 'pending' | 'paid' | 'failed' | 'expired';
+
+export interface ListingPaymentOrder {
+  id: string;
+  userId: string;
+  propertyId?: string | null;
+  orderReference: string;
+  provider: MobileMoneyProvider;
+  providerReference?: string | null;
+  tier: CommercialPaymentTier;
+  amount: 500 | 1000;
+  currency: 'XOF';
+  status: CommercialPaymentStatus;
+  paymentPhone?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  paidAt?: string | null;
+  failureReason?: string | null;
+}
+
 export interface TenantDocument {
   id: string;
   tenantId: string;

@@ -13,6 +13,8 @@ import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { formatPrice } from '../utils/format';
 import type { PropertyType } from '../types';
+import { isLaunchPeriodActive, getLaunchCountdown, canAgentPublishFromApk } from '../lib/publishing';
+import { getOfficialWebsiteUrl, openSecureExternalUrl } from '../constants/appConfig';
 
 type AgentTabs = { Home: undefined; Publish: undefined; Messages: undefined; Agent: undefined; Profile: undefined };
 type Navigation = BottomTabNavigationProp<AgentTabs, 'Agent'>;
@@ -90,7 +92,19 @@ const AgentDashboardScreen = () => {
   const prospects = currentUser
     ? chats.filter(chat => chat.participants.includes(currentUser.id)).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 3)
     : [];
+  const launchPeriodActive = isLaunchPeriodActive();
+  const countdown = getLaunchCountdown();
+  const canPublishNow = canAgentPublishFromApk(currentUser ?? null, false);
+  const officialSiteUrl = getOfficialWebsiteUrl();
+
   const openPublish = () => {
+    if (!canPublishNow) {
+      Alert.alert(
+        t('agent_publishing_section_title'),
+        t('agent_publishing_post_launch_msg')
+      );
+      return;
+    }
     navigation.getParent<StackNavigationProp<RootStackParamList>>()?.navigate('Publish');
   };
   const openListing = (propertyId: string) => {
@@ -300,6 +314,75 @@ const AgentDashboardScreen = () => {
             <Text style={styles.statLabel}>{item.label}</Text>
           </TouchableOpacity>
         ))}
+      </View>
+
+      {/* ── Section : Période de lancement / Publications ── */}
+      <View style={[
+        styles.launchCard,
+        { backgroundColor: launchPeriodActive ? colors.successContainer : colors.warningContainer },
+      ]}>
+        <View style={styles.launchCardHeader}>
+          <Ionicons
+            name={launchPeriodActive ? 'rocket-outline' : 'globe-outline'}
+            size={20}
+            color={launchPeriodActive ? colors.success : colors.warning}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.launchCardTitle, { color: launchPeriodActive ? colors.onSuccessContainer : colors.onWarningContainer }]}>
+              {t('agent_publishing_section_title')}
+            </Text>
+            <View style={[styles.launchBadge, { backgroundColor: launchPeriodActive ? colors.success : colors.warning }]}>
+              <Text style={styles.launchBadgeText}>
+                {launchPeriodActive ? t('agent_publishing_launch_badge') : t('agent_publishing_web_only_badge')}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {launchPeriodActive ? (
+          <>
+            <Text style={[styles.launchCardBody, { color: colors.onSuccessContainer }]}>
+              {t('agent_publishing_launch_msg')}
+            </Text>
+            {!countdown.isExpired && (
+              <View style={styles.countdownRow}>
+                <Ionicons name="time-outline" size={15} color={colors.success} />
+                <Text style={[styles.countdownText, { color: colors.onSuccessContainer }]}>
+                  {t('agent_publishing_launch_countdown')
+                    .replace('{days}', String(countdown.days))
+                    .replace('{hours}', String(countdown.hours))
+                    .replace('{minutes}', String(countdown.minutes))}
+                </Text>
+              </View>
+            )}
+            <Text style={[styles.launchDeadline, { color: colors.onSuccessContainer }]}>
+              {t('agent_publishing_launch_deadline').replace('{date}', countdown.formattedTargetDate)}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={[styles.launchCardBody, { color: colors.onWarningContainer }]}>
+              {t('agent_publishing_post_launch_msg')}
+            </Text>
+            <Text style={[styles.launchCardBody, { color: colors.onWarningContainer, fontSize: 12, marginTop: 4 }]}>
+              {t('agent_publishing_security_explanation')}
+            </Text>
+            <TouchableOpacity
+              style={[styles.launchSiteButton, { borderColor: colors.warning }]}
+              onPress={() => void openSecureExternalUrl(officialSiteUrl)}
+              accessibilityRole="link"
+              accessibilityLabel={t('agent_publishing_access_website')}
+            >
+              <Ionicons name="open-outline" size={15} color={colors.warning} />
+              <Text style={[styles.launchSiteButtonText, { color: colors.warning }]}>
+                {t('agent_publishing_access_website')}
+              </Text>
+            </TouchableOpacity>
+            <Text style={[styles.launchCardBody, { color: colors.onWarningContainer, fontSize: 11, marginTop: 6, fontStyle: 'italic' }]}>
+              {t('agent_publishing_commercial_notice')}
+            </Text>
+          </>
+        )}
       </View>
 
       {completedSetup < setupSteps.length && (
@@ -849,6 +932,17 @@ const baseStyles = StyleSheet.create<any>({
   specialtyOption: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 11, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderStrong, backgroundColor: COLORS.background },
   specialtyOptionText: { color: COLORS.onSurfaceMuted, fontSize: 13, fontWeight: '700' },
   disabled: { opacity: 0.6 },
+  launchCard: { borderRadius: RADIUS.lg, padding: 14, gap: 10 },
+  launchCardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  launchCardTitle: { fontSize: 14, fontWeight: '800', marginBottom: 4 },
+  launchBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.full },
+  launchBadgeText: { color: COLORS.white, fontSize: 11, fontWeight: '800' },
+  launchCardBody: { fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  countdownRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  countdownText: { fontSize: 13, fontWeight: '700' },
+  launchDeadline: { fontSize: 12, fontWeight: '700', marginTop: 2 },
+  launchSiteButton: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 7, borderRadius: RADIUS.md, borderWidth: 1, marginTop: 4 },
+  launchSiteButtonText: { fontSize: 13, fontWeight: '800' },
   gate: { flex: 1, backgroundColor: COLORS.background, paddingHorizontal: 28, alignItems: 'center' }, gateIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primaryContainer, marginBottom: 18 }, gateTitle: { color: COLORS.onSurface, fontSize: 20, fontWeight: '800', textAlign: 'center' }, gateBody: { color: COLORS.onSurfaceMuted, fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 10 }, primaryButton: { marginTop: 22, minHeight: 46, paddingHorizontal: 18, justifyContent: 'center', borderRadius: RADIUS.md, backgroundColor: COLORS.primary }, primaryButtonText: { color: COLORS.white, fontWeight: '800' },
 });
 

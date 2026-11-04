@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -34,6 +34,8 @@ import { logger } from '../lib/logger';
 import { formatPrice } from '../utils/format';
 import type { ThemeMode } from '../theme/colors';
 import { baseStyles } from './ProfileScreen.styles';
+import { getNetlifeUrl, getOfficialWebsiteUrl, openSecureExternalUrl } from '../constants/appConfig';
+import { isLaunchPeriodActive, getLaunchCountdown } from '../lib/publishing';
 
 type ProfileRouteProp = RouteProp<
   { Profile: { authMode?: 'login' | 'register' } | undefined },
@@ -1008,6 +1010,114 @@ const ProfileScreen: React.FC = () => {
             ))}
           </View>
         </Animated.View>
+
+        {/* ── Carte Netlife (visible uniquement si l'URL est configurée) ── */}
+        {(() => {
+          const netlifeUrl = getNetlifeUrl();
+          if (!netlifeUrl) return null;
+          return (
+            <View style={[styles.netlifeCard, theme === 'dark' && styles.netlifeCardDark]}>
+              <View style={styles.netlifeHeader}>
+                <View style={styles.netlifeIconWrap}>
+                  <Ionicons name="earth-outline" size={22} color={themeColors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.netlifeTitle, theme === 'dark' && styles.textLight]}>
+                    {t('netlife_title')}
+                  </Text>
+                  <Text style={[styles.netlifeDescription, theme === 'dark' && styles.textMutedDark]}>
+                    {t('netlife_description')}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.netlifeButton}
+                onPress={() => void openSecureExternalUrl(netlifeUrl)}
+                accessibilityRole="link"
+                accessibilityLabel={t('netlife_visit_button')}
+              >
+                <Ionicons name="open-outline" size={15} color={themeColors.onBrand} />
+                <Text style={styles.netlifeButtonText}>{t('netlife_visit_button')}</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })()}
+
+        {/* ── Lien vers le site officiel ── */}
+        <TouchableOpacity
+          style={[styles.officialSiteRow, theme === 'dark' && styles.officialSiteRowDark]}
+          onPress={() => void openSecureExternalUrl(getOfficialWebsiteUrl())}
+          accessibilityRole="link"
+          accessibilityLabel={t('official_website_title')}
+        >
+          <View style={styles.officialSiteIcon}>
+            <Ionicons name="globe-outline" size={19} color={themeColors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.officialSiteTitle, theme === 'dark' && styles.textLight]}>
+              {t('official_website_title')}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={themeColors.onSurfaceSoft} />
+        </TouchableOpacity>
+
+        {/* ── Section Publications (agents uniquement) ── */}
+        {isAgent && (() => {
+          const launchActive = isLaunchPeriodActive();
+          const cd = getLaunchCountdown();
+          return (
+            <View style={[
+              styles.agentPublishCard,
+              { backgroundColor: launchActive ? themeColors.successContainer : themeColors.warningContainer },
+            ]}>
+              <View style={styles.agentPublishHeader}>
+                <Ionicons
+                  name={launchActive ? 'rocket-outline' : 'globe-outline'}
+                  size={18}
+                  color={launchActive ? themeColors.success : themeColors.warning}
+                />
+                <Text style={[
+                  styles.agentPublishTitle,
+                  { color: launchActive ? themeColors.onSuccessContainer : themeColors.onWarningContainer },
+                ]}>
+                  {t('agent_publishing_section_title')}
+                </Text>
+              </View>
+              {launchActive ? (
+                <>
+                  <Text style={[styles.agentPublishBody, { color: themeColors.onSuccessContainer }]}>
+                    {t('agent_publishing_launch_msg')}
+                  </Text>
+                  {!cd.isExpired && (
+                    <Text style={[styles.agentPublishBody, { color: themeColors.onSuccessContainer, fontWeight: '700' }]}>
+                      {t('agent_publishing_launch_countdown')
+                        .replace('{days}', String(cd.days))
+                        .replace('{hours}', String(cd.hours))
+                        .replace('{minutes}', String(cd.minutes))}
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Text style={[styles.agentPublishBody, { color: themeColors.onWarningContainer }]}>
+                    {t('agent_publishing_post_launch_msg')}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.agentPublishSiteBtn, { borderColor: themeColors.warning }]}
+                    onPress={() => void openSecureExternalUrl(getOfficialWebsiteUrl())}
+                    accessibilityRole="link"
+                    accessibilityLabel={t('agent_publishing_access_website')}
+                  >
+                    <Ionicons name="open-outline" size={14} color={themeColors.warning} />
+                    <Text style={[styles.agentPublishSiteBtnText, { color: themeColors.warning }]}>
+                      {t('agent_publishing_access_website')}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          );
+        })()}
 
         {canRequestAgentAccess && (
           <View style={[styles.agentAccessCard, theme === 'dark' && styles.agentAccessCardDark]}>

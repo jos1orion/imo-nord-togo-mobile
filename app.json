@@ -138,17 +138,11 @@
       "contactEmail": "imonordtogo@gmail.com",
       "whatsappPhone": "22893576298",
       "adminApiUrl": "https://imo-nord-togo-mobile.vercel.app",
+      "officialWebsiteUrl": "https://imo-nord-togo-mobile.vercel.app",
+      "netlifeUrl": null,
+      "launchPeriodEndDate": "2027-11-12T23:59:59.999Z",
       "apkDownloadUrl": "",
       "fonts": [
-        {
-          "Poppins": {
-            "fontFamily": "Poppins",
-            "srcs": [
-              "./assets/fonts/Poppins-Regular.ttf",
-              "./assets/fonts/Poppins-SemiBold.ttf"
-            ]
-          }
-        },
         {
           "Poppins": {
             "fontFamily": "Poppins",

@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+﻿import { StyleSheet } from 'react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -1834,4 +1834,22 @@ export const baseStyles = StyleSheet.create<any>({
     color: COLORS.onSurfaceMuted,
     textAlign: 'center',
   },
+  netlifeCard: { borderRadius: RADIUS.lg, backgroundColor: COLORS.primaryContainer, borderWidth: 1, borderColor: COLORS.borderStrong, padding: 14, gap: 10 },
+  netlifeCardDark: { backgroundColor: COLORS.surfaceAlt, borderColor: COLORS.borderStrong },
+  netlifeHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  netlifeIconWrap: { width: 42, height: 42, borderRadius: 21, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' },
+  netlifeTitle: { color: COLORS.onSurface, fontSize: 15, fontWeight: '800' },
+  netlifeDescription: { color: COLORS.onSurfaceMuted, fontSize: 12, lineHeight: 17, marginTop: 2 },
+  netlifeButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, borderRadius: RADIUS.md, backgroundColor: COLORS.primary },
+  netlifeButtonText: { color: COLORS.white, fontSize: 14, fontWeight: '800' },
+  officialSiteRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 14, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md },
+  officialSiteRowDark: { backgroundColor: COLORS.surfaceAlt },
+  officialSiteIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.primaryContainer, alignItems: 'center', justifyContent: 'center' },
+  officialSiteTitle: { color: COLORS.onSurface, fontSize: 14, fontWeight: '700' },
+  agentPublishCard: { borderRadius: RADIUS.lg, padding: 14, gap: 8 },
+  agentPublishHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  agentPublishTitle: { fontSize: 14, fontWeight: '800', flex: 1 },
+  agentPublishBody: { fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  agentPublishSiteBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 7, borderRadius: RADIUS.md, borderWidth: 1, marginTop: 4 },
+  agentPublishSiteBtnText: { fontSize: 13, fontWeight: '800' },
 });

@@ -26,7 +26,7 @@ import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { supabase } from '../lib/supabase';
-import { isDirectPublishingEnabled } from '../lib/publishing';
+import { isDirectPublishingEnabled, canAgentPublishFromApk } from '../lib/publishing';
 import { canActivateSmartPublish } from '../lib/smartPublishAccess';
 import {
   getFirstIncompletePublishStep,
@@ -44,7 +44,7 @@ import { logger } from '../lib/logger';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 type PublishRouteProp = RouteProp<RootStackParamList, 'Publish'>;
-type PublishAccessStatus = 'checking' | 'ready' | 'unauthenticated' | 'inactive' | 'unauthorized' | 'error';
+type PublishAccessStatus = 'checking' | 'ready' | 'unauthenticated' | 'inactive' | 'unauthorized' | 'apk_locked' | 'error';
 type PublishRole = 'USER' | 'AGENT' | 'ADMIN' | 'ACCOUNTANT';
 type AgentStatus = 'none' | 'pending' | 'approved' | 'rejected';
 
@@ -257,7 +257,16 @@ const PublishScreen: React.FC = () => {
             isDirectPublishingEnabled({ role, agentStatus, accountStatus })
           )
         );
-        setPublishAccessStatus(authorizedRole ? 'ready' : 'unauthorized');
+        if (!authorizedRole) {
+          setPublishAccessStatus('unauthorized');
+          return;
+        }
+        // Vérification APK lock post-période de lancement (ne bloque PAS les ADMIN ni l'édition)
+        const apkPublishAllowed = canAgentPublishFromApk(
+          { role, agentStatus, accountStatus },
+          isEditing
+        );
+        setPublishAccessStatus(apkPublishAllowed ? 'ready' : 'apk_locked');
       } catch (error) {
         if (!active || runId !== verificationRunRef.current) return;
         logger.warn('Unable to verify the publishing session.', error);
@@ -321,6 +330,12 @@ const PublishScreen: React.FC = () => {
     }
     if (publishAccessStatus === 'unauthorized') {
       Alert.alert(t('error'), t('publish_agent_only'));
+      navigation.goBack();
+      return;
+    }
+    if (publishAccessStatus === 'apk_locked') {
+      // Après la période de lancement : création d'annonces réservée au site web
+      Alert.alert(t('agent_publishing_section_title'), t('agent_publishing_post_launch_msg'));
       navigation.goBack();
       return;
     }
