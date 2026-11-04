@@ -9,69 +9,92 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   const displayError = errorMsg || (
     errorCode === 'password'
-      ? 'Mot de passe administrateur incorrect. Vérifiez la variable ADMIN_PASSWORD sur Render.'
+      ? 'Mot de passe incorrect. Vérifiez la variable ADMIN_PASSWORD sur Render.'
       : errorCode === 'missing'
       ? "La variable ADMIN_PASSWORD n'est pas encore configurée sur Render."
       : errorCode === 'staff'
       ? "Ce compte n'a pas accès au back-office."
+      : errorCode === 'suspended'
+      ? "Ce compte est suspendu. Contactez un super-administrateur."
+      : errorCode === 'session'
+      ? "Votre session a expiré. Reconnectez-vous."
+      : errorCode === 'config'
+      ? "Configuration serveur incomplète. Vérifiez les variables d'environnement sur Render."
+      : errorCode
+      ? `Erreur d'authentification (${errorCode}). Réessayez.`
       : null
   );
 
   return (
     <div className="login-shell">
-      <section className="login-showcase" aria-label="Imo Prestige, gestion immobilière">
+
+      {/* ── Panneau gauche : présentation ── */}
+      <section className="login-showcase" aria-label="Imo Nord Togo — Espace d'administration">
+
+        {/* Décoration : cercle orbital */}
+        <div className="login-showcase-orbit" aria-hidden="true">
+          <span>IP</span>
+        </div>
+
+        {/* Logo / marque */}
         <div className="login-showcase-brand">
           <span className="login-showcase-mark" aria-hidden="true">IP</span>
-          <span>IMO <strong>PRESTIGE</strong></span>
+          <span>IMO&nbsp;<strong>NORD TOGO</strong></span>
         </div>
+
+        {/* Titre principal */}
         <div className="login-showcase-copy">
           <div className="login-showcase-eyebrow">ESPACE D&apos;ADMINISTRATION</div>
-          <h1>Gestion &amp; Pilotage<br /><em>ImoPrestige</em></h1>
-          <p>Espace sécurisé réservé à l&apos;administration de la plateforme.</p>
+          <h1>
+            Gestion &amp; Pilotage<br />
+            <em>Imo Nord Togo</em>
+          </h1>
+          <p>
+            Back-office sécurisé réservé aux administrateurs de la plateforme immobilière.
+            Gérez les annonces, les agents et les utilisateurs depuis un seul espace.
+          </p>
         </div>
+
+        {/* Pied de page showcase */}
         <div className="login-showcase-footer">
-          <span className="login-showcase-live" />
+          <span className="login-showcase-live" aria-hidden="true" />
           <span>Accès direct sécurisé</span>
-          <span className="login-showcase-divider" />
-          <span>Serveur Render</span>
+          <span className="login-showcase-divider" aria-hidden="true" />
+          <span>Render · Supabase</span>
         </div>
       </section>
 
-      <div className="login-card">
+      {/* ── Panneau droit : formulaire de connexion ── */}
+      <div className="login-card" role="main">
         <div className="login-card-heading">
-          <div className="login-card-eyebrow">ACCÈS DIRECT</div>
+          <div className="login-card-eyebrow">ACCÈS ADMINISTRATEUR</div>
           <h2>Connexion au Back-Office</h2>
-          <p>Entrez le mot de passe configuré sur le serveur Render.</p>
+          <p>Entrez le mot de passe unique configuré dans les variables d&apos;environnement Render.</p>
         </div>
 
-        {/* Formulaire HTML standard direct : fonctionne sans aucune dépendance JS */}
-        <form action="/api/auth/master-login" method="POST">
+        {/* Formulaire HTML natif — fonctionne sans JS côté client */}
+        <form action="/api/auth/master-login" method="POST" autoComplete="off">
           <div className="form-field">
             <label htmlFor="admin-password">Mot de passe Back-Office</label>
             <input
               id="admin-password"
               name="password"
               type="password"
-              placeholder="Entrez votre mot de passe secret"
+              placeholder="••••••••••••"
               autoFocus
               required
               autoComplete="current-password"
+              aria-describedby={displayError ? 'login-error' : undefined}
+              aria-invalid={displayError ? true : undefined}
             />
           </div>
 
           {displayError ? (
             <div
+              id="login-error"
+              role="alert"
               className="alert"
-              style={{
-                marginTop: 14,
-                display: 'block',
-                background: '#fee2e2',
-                color: '#991b1b',
-                padding: '10px 12px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                border: '1px solid #f87171',
-              }}
+              style={{ marginTop: 14, display: 'block' }}
             >
               {displayError}
             </div>
@@ -80,11 +103,23 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <button
             type="submit"
             className="primary-button"
-            style={{ width: '100%', marginTop: 18 }}
+            style={{ width: '100%', marginTop: 20 }}
           >
             Déverrouiller le Back-Office
           </button>
         </form>
+
+        {/* Note de sécurité */}
+        <p style={{
+          marginTop: 8,
+          fontSize: 11,
+          color: 'rgba(160,170,185,0.7)',
+          textAlign: 'center',
+          lineHeight: 1.6,
+        }}>
+          Accès réservé aux administrateurs autorisés.<br />
+          Session valide 7 jours.
+        </p>
       </div>
     </div>
   );
