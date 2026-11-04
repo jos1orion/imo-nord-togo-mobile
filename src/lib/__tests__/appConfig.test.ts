@@ -3,6 +3,7 @@ import {
   getContactEmail,
   getContactPhoneDigits,
   getContactPhoneUrl,
+  getOfficialWebsiteUrl,
   getWhatsAppDigits,
   getWhatsAppUrl,
 } from '../../constants/appConfig';
@@ -19,5 +20,9 @@ describe('contact configuration', () => {
     expect(getContactEmail()).toBe('');
     expect(getWhatsAppDigits()).toBe('');
     expect(getWhatsAppUrl()).toBeNull();
+  });
+
+  it('uses the official Imo Prestige website when no URL override is configured', () => {
+    expect(getOfficialWebsiteUrl()).toBe('https://imo-prestige.netlify.app');
   });
 });

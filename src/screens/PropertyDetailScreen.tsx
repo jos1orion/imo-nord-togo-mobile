@@ -24,6 +24,7 @@ import { logger } from '../lib/logger';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { PROPERTY_TYPE_COLORS } from '../types';
 import { formatPrice } from '../utils/format';
+import { getOfficialWebsiteUrl } from '../constants/appConfig';
 import { RootStackParamList } from '../../App';
 import COLORS from '../theme/colors';
 import { canViewProperty, isPublicProperty } from '../utils/propertyVisibility';
@@ -199,7 +200,7 @@ const PropertyDetailScreen: React.FC = () => {
       const locationLabel = [property.neighborhood, property.location].filter(Boolean).join(', ');
       const shareUrl = `${Platform.OS === 'web' && typeof window !== 'undefined'
         ? window.location.origin
-        : 'https://imo-nord-togo-mobile.vercel.app'}/property/${encodeURIComponent(property.id)}`;
+        : getOfficialWebsiteUrl()}/property/${encodeURIComponent(property.id)}`;
       const result = await shareContent({
         title: property.title,
         message: `${property.title} - ${formatPrice(property.price)} - ${locationLabel}\n${shareUrl}`,

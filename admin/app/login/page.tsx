@@ -29,7 +29,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <div className="login-shell">
 
       {/* ── Panneau gauche : présentation ── */}
-      <section className="login-showcase" aria-label="Imo Nord Togo — Espace d'administration">
+      <section className="login-showcase" aria-label="Imo Prestige — Espace d'administration">
 
         {/* Décoration : cercle orbital */}
         <div className="login-showcase-orbit" aria-hidden="true">
@@ -39,7 +39,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         {/* Logo / marque */}
         <div className="login-showcase-brand">
           <span className="login-showcase-mark" aria-hidden="true">IP</span>
-          <span>IMO&nbsp;<strong>NORD TOGO</strong></span>
+          <span>IMO&nbsp;<strong>PRESTIGE</strong></span>
         </div>
 
         {/* Titre principal */}
@@ -47,7 +47,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <div className="login-showcase-eyebrow">ESPACE D&apos;ADMINISTRATION</div>
           <h1>
             Gestion &amp; Pilotage<br />
-            <em>Imo Nord Togo</em>
+            <em>Imo Prestige</em>
           </h1>
           <p>
             Back-office sécurisé réservé aux administrateurs de la plateforme immobilière.

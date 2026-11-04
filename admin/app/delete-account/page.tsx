@@ -35,11 +35,11 @@ export default function DeleteAccountPage() {
   return (
     <main className="account-deletion-page">
       <article className="account-deletion-card">
-        <div className="account-deletion-brand" aria-label="ImoPrestige">
+        <div className="account-deletion-brand" aria-label="Imo Prestige">
           <span>IMO</span>
           <span>PRESTIGE</span>
         </div>
-        <p className="account-deletion-eyebrow">ImoPrestige</p>
+        <p className="account-deletion-eyebrow">Imo Prestige</p>
         <h1>Demande de suppression de compte</h1>
         <p>
           Utilisez ce formulaire même si l’application de messagerie n’est pas installée. L’équipe
@@ -49,7 +49,7 @@ export default function DeleteAccountPage() {
         <section className="account-deletion-steps" aria-labelledby="deletion-steps-title">
           <h2 id="deletion-steps-title">À savoir</h2>
           <ol>
-            <li>Indiquez l’adresse e-mail associée à votre compte ImoPrestige.</li>
+            <li>Indiquez l’adresse e-mail associée à votre compte Imo Prestige.</li>
             <li>Un administrateur vérifiera la demande avant toute suppression.</li>
             <li>Le formulaire n’efface pas le compte immédiatement.</li>
           </ol>

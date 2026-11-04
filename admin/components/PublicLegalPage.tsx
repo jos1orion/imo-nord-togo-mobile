@@ -15,11 +15,11 @@ const documents: Record<LegalDocument, { title: string; intro: string; sections:
   privacy: {
     title: 'Politique de confidentialité | Privacy policy',
     intro:
-      'Cette politique décrit les informations traitées par ImoPrestige lorsque vous utilisez l’application mobile et les services associés. / This policy explains how ImoPrestige handles information when you use the mobile app and related services.',
+      'Cette politique décrit les informations traitées par Imo Prestige lorsque vous utilisez l’application mobile et les services associés. / This policy explains how Imo Prestige handles information when you use the mobile app and related services.',
     sections: [
       {
         title: 'Responsable et contact | Controller and contact',
-        body: `ImoPrestige, Kara, Togo. Pour toute question concernant vos données, contactez l’équipe via les coordonnées configurées dans l’application${contactDetails ? ` : ${contactDetails}` : ''}. / ImoPrestige, Kara, Togo. For questions about your data, contact the team using the details configured in the app${contactDetails ? `: ${contactDetails}` : ''}.`,
+        body: `Imo Prestige, Kara, Togo. Pour toute question concernant vos données, contactez l’équipe via les coordonnées configurées dans l’application${contactDetails ? ` : ${contactDetails}` : ''}. / Imo Prestige, Kara, Togo. For questions about your data, contact the team using the details configured in the app${contactDetails ? `: ${contactDetails}` : ''}.`,
       },
       {
         title: 'Informations traitées | Information we handle',
@@ -34,7 +34,7 @@ const documents: Record<LegalDocument, { title: string; intro: string; sections:
       {
         title: 'Recherche vocale | Voice search',
         body:
-          'La recherche vocale est facultative et n’active le microphone qu’après votre action et votre autorisation. La reconnaissance est effectuée par le service vocal configuré sur votre appareil, qui peut traiter l’audio selon ses propres conditions et sa politique de confidentialité. ImoPrestige utilise le texte reconnu pour renseigner la recherche. / Voice search is optional and accesses the microphone only after you choose the feature and grant permission. Speech recognition is provided by the service configured on your device, which may process audio under its own terms and privacy policy. ImoPrestige uses the recognized text to fill in your search.',
+          'La recherche vocale est facultative et n’active le microphone qu’après votre action et votre autorisation. La reconnaissance est effectuée par le service vocal configuré sur votre appareil, qui peut traiter l’audio selon ses propres conditions et sa politique de confidentialité. Imo Prestige utilise le texte reconnu pour renseigner la recherche. / Voice search is optional and accesses the microphone only after you choose the feature and grant permission. Speech recognition is provided by the service configured on your device, which may process audio under its own terms and privacy policy. Imo Prestige uses the recognized text to fill in your search.',
       },
       {
         title: 'Utilisation | How we use information',
@@ -66,12 +66,12 @@ const documents: Record<LegalDocument, { title: string; intro: string; sections:
   terms: {
     title: 'Conditions d’utilisation | Terms of use',
     intro:
-      'En créant un compte ou en utilisant ImoPrestige, vous acceptez les présentes conditions. / By creating an account or using ImoPrestige, you agree to these terms.',
+      'En créant un compte ou en utilisant Imo Prestige, vous acceptez les présentes conditions. / By creating an account or using Imo Prestige, you agree to these terms.',
     sections: [
       {
         title: 'Service | Service',
         body:
-          'ImoPrestige met en relation des personnes intéressées par des biens immobiliers et permet la consultation, la publication et la gestion d’annonces de vente ou de location. / ImoPrestige connects people interested in real estate and enables users to browse, publish and manage sale or rental listings.',
+          'Imo Prestige met en relation des personnes intéressées par des biens immobiliers et permet la consultation, la publication et la gestion d’annonces de vente ou de location. / Imo Prestige connects people interested in real estate and enables users to browse, publish and manage sale or rental listings.',
       },
       {
         title: 'Compte | Account',
@@ -86,12 +86,12 @@ const documents: Record<LegalDocument, { title: string; intro: string; sections:
       {
         title: 'Transactions | Transactions',
         body:
-          'ImoPrestige fournit un service de mise en relation et n’est pas partie aux transactions conclues entre utilisateurs. Vérifiez les informations, l’identité de votre interlocuteur et le bien avant tout paiement ou engagement. / ImoPrestige provides a connection service and is not a party to transactions between users. Verify information, the other party’s identity and the property before making a payment or commitment.',
+          'Imo Prestige fournit un service de mise en relation et n’est pas partie aux transactions conclues entre utilisateurs. Vérifiez les informations, l’identité de votre interlocuteur et le bien avant tout paiement ou engagement. / Imo Prestige provides a connection service and is not a party to transactions between users. Verify information, the other party’s identity and the property before making a payment or commitment.',
       },
       {
         title: 'Disponibilité et responsabilité | Availability and liability',
         body:
-          'Nous nous efforçons de maintenir le service disponible et de modérer les annonces, mais ne garantissons ni l’absence d’interruption ni l’exactitude de tous les contenus publiés par les utilisateurs. Dans la mesure permise par la loi, ImoPrestige n’est pas responsable des accords ou pertes résultant directement des transactions entre utilisateurs. / We work to keep the service available and moderate listings, but do not guarantee uninterrupted service or the accuracy of all user-posted content. To the extent permitted by law, ImoPrestige is not responsible for agreements or losses arising directly from transactions between users.',
+          'Nous nous efforçons de maintenir le service disponible et de modérer les annonces, mais ne garantissons ni l’absence d’interruption ni l’exactitude de tous les contenus publiés par les utilisateurs. Dans la mesure permise par la loi, Imo Prestige n’est pas responsable des accords ou pertes résultant directement des transactions entre utilisateurs. / We work to keep the service available and moderate listings, but do not guarantee uninterrupted service or the accuracy of all user-posted content. To the extent permitted by law, Imo Prestige is not responsible for agreements or losses arising directly from transactions between users.',
       },
       {
         title: 'Suspension, modifications et droit applicable | Suspension, changes and governing law',
@@ -111,10 +111,10 @@ export default function PublicLegalPage({ document }: { document: LegalDocument 
   return (
     <main className="public-legal">
       <article className="public-legal-card">
-        <Link className="public-legal-brand" href="/" aria-label="ImoPrestige">
+        <Link className="public-legal-brand" href="/" aria-label="Imo Prestige">
           IMO <span>NORD TOGO</span>
         </Link>
-        <p className="public-legal-eyebrow">ImoPrestige</p>
+        <p className="public-legal-eyebrow">Imo Prestige</p>
         <h1>{content.title}</h1>
         <p className="public-legal-intro">{content.intro}</p>
         <p className="public-legal-date">Dernière mise à jour / Last updated: 20 octobre 2026 / October 20, 2026</p>

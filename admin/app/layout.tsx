@@ -15,8 +15,8 @@ const displayFont = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'ImoPrestige — Back-office',
-  description: 'Back-office professionnel ImoPrestige pour la gestion immobilière.',
+  title: 'Imo Prestige — Back-office',
+  description: 'Back-office professionnel Imo Prestige pour la gestion immobilière.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

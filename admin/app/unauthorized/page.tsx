@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unescaped-entities */
 
 export const metadata = {
-  title: 'Accès refusé | ImoPrestige Back-office',
+  title: 'Accès refusé | Imo Prestige Back-office',
 };
 
 const ERROR_MESSAGES = {
@@ -15,14 +15,14 @@ export default function UnauthorizedPage() {
 
   return (
     <div className="login-shell">
-      <section className="login-showcase" aria-label="Imo Nord Togo - Espace d'administration">
+      <section className="login-showcase" aria-label="Imo Prestige - Espace d'administration">
         <div className="login-showcase-orbit" aria-hidden="true">
           <span>IP</span>
         </div>
 
         <div className="login-showcase-brand">
           <span className="login-showcase-mark" aria-hidden="true">IP</span>
-          <span>IMO&nbsp;<strong>NORD TOGO</strong></span>
+          <span>IMO&nbsp;<strong>PRESTIGE</strong></span>
         </div>
 
         <div className="login-showcase-copy">

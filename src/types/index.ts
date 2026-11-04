@@ -1,4 +1,4 @@
-// Types pour l'application ImoPrestige
+// Types pour l'application Imo Prestige
 
 export type PropertyType = 'house' | 'apartment' | 'land' | 'shop';
 

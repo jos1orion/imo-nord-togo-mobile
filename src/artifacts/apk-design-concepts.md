@@ -1,6 +1,6 @@
-# Three Premium APK Design Concepts for Imo Nord Togo
+# Three Premium APK Design Concepts for Imo Prestige
 
-Here are three distinct visual directions for the Imo Nord Togo real estate application, each representing a premium, modern aesthetic while honoring Togo culture and architecture.
+Here are three distinct visual directions for the Imo Prestige real estate application, each representing a premium, modern aesthetic while honoring Togo culture and architecture.
 
 ---
 
@@ -78,7 +78,7 @@ Here are three distinct visual directions for the Imo Nord Togo real estate appl
 
 ## Recommendation
 
-For the **Imo Nord Togo** brand, I recommend **Concept 1 (Terroir Prestige)** because:
+For the **Imo Prestige** brand, I recommend **Concept 1 (Terroir Prestige)** because:
 
 1. **Cultural authenticity** — The terracotta and earth tones directly reference Togo's architecture and landscape
 2. **Universal appeal** — Warm colors are inviting without being too casual

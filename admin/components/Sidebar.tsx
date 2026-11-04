@@ -23,7 +23,7 @@ export default function Sidebar() {
         <div className="sidebar-brand-mark" aria-hidden="true">IP</div>
         <div className="sidebar-brand-copy">
           <small>BACK-OFFICE</small>
-          <span>ImoPrestige</span>
+          <span>Imo Prestige</span>
         </div>
         <button
           type="button"

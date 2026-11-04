@@ -544,7 +544,7 @@ const AdminScreen: React.FC = () => {
           </head>
           <body>
             <h1>${tAdmin("Reçu de paiement")}</h1>
-            <div class="muted">ImoPrestige - ${formatAdminDate(new Date())}</div>
+            <div class="muted">Imo Prestige - ${formatAdminDate(new Date())}</div>
             <div class="card">
               <div class="row"><div class="label">${tAdmin("Locataire")}</div><div class="value">${escapeHtml(tenant?.name || tAdmin("Locataire"))}</div></div>
               <div class="row"><div class="label">${tAdmin("Bien")}</div><div class="value">${escapeHtml(property?.title || tAdmin("Bien"))}</div></div>

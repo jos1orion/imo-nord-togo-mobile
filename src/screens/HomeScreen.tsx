@@ -386,7 +386,7 @@ const HomeScreen: React.FC = () => {
             <View style={styles.heroTopline}>
               <View style={styles.brandPill}>
                 <Ionicons name="diamond-outline" size={14} color={colors.premiumGold} />
-                <Text style={styles.brandText}>ImoPrestige</Text>
+                <Text style={styles.brandText}>Imo Prestige</Text>
               </View>
             </View>
             <View style={styles.heroBottom}>

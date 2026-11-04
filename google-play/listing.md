@@ -1,21 +1,21 @@
-# Fiche Google Play Store - ImoPrestige
+# Fiche Google Play Store - Imo Prestige
 
 ## Informations de base
 
 ### Titre de l'application (30 caractères max)
-ImoPrestige
+Imo Prestige
 
 ### Nom court (12 caractères max)
-ImoPrestige
+Imo Prestige
 
 ### Description courte (80 caractères max)
 Immobilier à Kara : maisons, appartements et terrains
 
 ### Description complète (4000 caractères max)
 ```
-🏠 ImoPrestige - Votre Partenaire Immobilier à Kara
+🏠 Imo Prestige - Votre Partenaire Immobilier à Kara
 
-ImoPrestige est une application immobilière consacrée à Kara et à ses environs. Consultez des annonces de vente ou de location, recherchez un bien par critères et contactez son annonceur.
+Imo Prestige est une application immobilière consacrée à Kara et à ses environs. Consultez des annonces de vente ou de location, recherchez un bien par critères et contactez son annonceur.
 
 ✨ FONCTIONNALITÉS PRINCIPALES :
 
@@ -63,7 +63,7 @@ Email : imonordtogo@gmail.com
 Téléphone : +228 93 57 62 98
 Adresse : Avenue de la Libération, Kara, Togo
 
-ImoPrestige - Votre partenaire immobilier de confiance !
+Imo Prestige - Votre partenaire immobilier de confiance !
 ```
 
 ---

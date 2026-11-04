@@ -1,10 +1,10 @@
-# Politique de confidentialité - ImoPrestige
+# Politique de confidentialité - Imo Prestige
 
 **Dernière mise à jour : 11 octobre 2026**
 
 ## 1. Introduction
 
-Cette politique décrit les informations traitées lorsque vous utilisez l’application mobile ImoPrestige et les services associés.
+Cette politique décrit les informations traitées lorsque vous utilisez l’application mobile Imo Prestige et les services associés.
 
 ## 2. Informations traitées
 
@@ -18,7 +18,7 @@ Les informations servent à créer et sécuriser votre compte, publier et gérer
 
 ## 4. Partage et prestataires
 
-Les annonces publiées et les coordonnées que vous choisissez d’y inclure peuvent être visibles par les utilisateurs de l’application. Nous utilisons des prestataires techniques, notamment Supabase pour l’authentification, la base de données et le stockage, ainsi que Vercel pour héberger le site web. Lorsque vous choisissez WhatsApp, l’appel ou l’e-mail, vous êtes redirigé vers le service correspondant, qui applique ses propres règles de confidentialité.
+Les annonces publiées et les coordonnées que vous choisissez d’y inclure peuvent être visibles par les utilisateurs de l’application. Nous utilisons des prestataires techniques, notamment Supabase pour l’authentification, la base de données et le stockage, ainsi que Netlify pour héberger le site web. Lorsque vous choisissez WhatsApp, l’appel ou l’e-mail, vous êtes redirigé vers le service correspondant, qui applique ses propres règles de confidentialité.
 
 ## 5. Conservation et sécurité
 
@@ -26,7 +26,7 @@ Les données sont conservées aussi longtemps que nécessaire au fonctionnement 
 
 ## 6. Vos choix et suppression du compte
 
-Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte en écrivant à **imonordtogo@gmail.com** depuis l’adresse associée au compte. Indiquez **« Suppression de compte Imo Nord Togo »** dans l’objet. Nous pouvons demander des éléments raisonnables pour vérifier votre identité. La suppression entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité.
+Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte en écrivant à **imonordtogo@gmail.com** depuis l’adresse associée au compte. Indiquez **« Suppression de compte Imo Prestige »** dans l’objet. Nous pouvons demander des éléments raisonnables pour vérifier votre identité. La suppression entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité.
 
 ## 7. Mineurs et modifications
 
@@ -38,4 +38,4 @@ Le service n’est pas destiné aux personnes de moins de 18 ans. Nous pouvons m
 - **Téléphone** : +228 99 21 08 81
 - **Adresse** : Kara, Togo
 
-**ImoPrestige** - Votre partenaire immobilier à Kara.
+**Imo Prestige** - Votre partenaire immobilier à Kara.

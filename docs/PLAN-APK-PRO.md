@@ -1,4 +1,4 @@
-# Plan detaille  -  APK e pro e (Imo Nord Togo)
+# Plan detaille  -  APK e pro e (Imo Prestige)
 
 Document de travail pour **repartition en parallele** entre plusieurs personnes. Chaque piste peut avancer independamment tant que les **dependances** sont respectees.
 

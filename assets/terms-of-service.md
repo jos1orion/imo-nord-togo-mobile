@@ -1,14 +1,14 @@
-# Conditions d’utilisation - ImoPrestige
+# Conditions d’utilisation - Imo Prestige
 
 **Dernière mise à jour : 30 septembre 2026**
 
 ## 1. Acceptation des conditions
 
-En créant un compte ou en utilisant ImoPrestige, vous acceptez les présentes conditions.
+En créant un compte ou en utilisant Imo Prestige, vous acceptez les présentes conditions.
 
 ## 2. Description du service
 
-ImoPrestige met en relation des personnes intéressées par des biens immobiliers et permet la consultation, la publication et la gestion d’annonces de vente ou de location.
+Imo Prestige met en relation des personnes intéressées par des biens immobiliers et permet la consultation, la publication et la gestion d’annonces de vente ou de location.
 
 ## 3. Inscription et compte
 
@@ -27,11 +27,11 @@ Vous vous engagez à :
 
 ## 5. Propriété intellectuelle
 
-Le contenu de la plateforme appartient à ImoPrestige ou à ses concédants. Les photos restent la propriété de leurs auteurs. Toute utilisation commerciale non autorisée est interdite.
+Le contenu de la plateforme appartient à Imo Prestige ou à ses concédants. Les photos restent la propriété de leurs auteurs. Toute utilisation commerciale non autorisée est interdite.
 
 ## 6. Transactions et responsabilités
 
-ImoPrestige fournit un service de mise en relation et n’est pas partie aux transactions conclues entre utilisateurs. Vérifiez les informations, l’identité de votre interlocuteur et le bien avant tout paiement ou engagement. Nous ne garantissons ni l’exactitude de tous les contenus publiés ni l’absence d’interruption du service.
+Imo Prestige fournit un service de mise en relation et n’est pas partie aux transactions conclues entre utilisateurs. Vérifiez les informations, l’identité de votre interlocuteur et le bien avant tout paiement ou engagement. Nous ne garantissons ni l’exactitude de tous les contenus publiés ni l’absence d’interruption du service.
 
 ## 7. Suspension et résiliation
 
@@ -47,4 +47,4 @@ Les conditions peuvent être mises à jour. Elles sont régies par les lois de l
 - **Téléphone** : +228 99 21 08 81
 - **Adresse** : Kara, Togo
 
-**ImoPrestige** - Votre partenaire immobilier à Kara.
+**Imo Prestige** - Votre partenaire immobilier à Kara.

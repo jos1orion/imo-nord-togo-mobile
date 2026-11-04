@@ -402,7 +402,7 @@ const ProfileScreen: React.FC = () => {
               <Text style={styles.authLogoText}>IMO</Text>
             </View>
             <View style={styles.authBrandCopy}>
-              <Text style={styles.authTitle}>ImoPrestige</Text>
+              <Text style={styles.authTitle}>Imo Prestige</Text>
               <Text style={styles.authSubtitle}>{t('app_tagline')}</Text>
             </View>
           </TouchableOpacity>
@@ -924,7 +924,7 @@ const ProfileScreen: React.FC = () => {
                 <View style={styles.profileCoverBrandMark}>
                   <Ionicons name="home" size={16} color={themeColors.onGold} />
                 </View>
-                <Text style={styles.profileCoverBrandText}>ImoPrestige</Text>
+                <Text style={styles.profileCoverBrandText}>Imo Prestige</Text>
               </TouchableOpacity>
               <Text style={styles.profileCoverSubtitle}>{t('profile_header_subtitle')}</Text>
             </View>
@@ -2032,7 +2032,7 @@ const ProfileScreen: React.FC = () => {
                 </View>
                 <View style={styles.profileThemeSampleCopy}>
                   <Text style={[styles.profileThemeSampleTitle, { color: THEME_PALETTES[themePreview].onSurface }]}>
-                    ImoPrestige
+                    Imo Prestige
                   </Text>
                   <Text style={[styles.profileThemeSampleSubtitle, { color: THEME_PALETTES[themePreview].onSurfaceMuted }]}>
                     {t('profile_theme_selected')}
