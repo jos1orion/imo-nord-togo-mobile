@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
 import type { SmartGuideMode } from '../context/AppContext.types';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
+import { type ThemePalette } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { safeImpactLight } from '../lib/expoHapticsSafe';
@@ -187,7 +188,7 @@ export const SmartGuideModal: React.FC<SmartGuideProps> = ({
     onboardingProgress,
     updateOnboardingProgress,
   } = useApp();
-  const colors = useThemeColors();
+  const colors = useThemeColors() as ThemePalette;
   const styles = useThemedStyles(baseStyles);
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();

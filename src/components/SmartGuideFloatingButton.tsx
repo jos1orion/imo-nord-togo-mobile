@@ -2,7 +2,8 @@ import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
-import { RADIUS, SPACING } from '../theme/spacing';
+import { type ThemePalette } from '../theme/colors';
+import { RADIUS } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { safeImpactLight } from '../lib/expoHapticsSafe';
 import { useApp } from '../context/AppContext';
@@ -16,7 +17,7 @@ export const SmartGuideFloatingButton: React.FC<SmartGuideFloatingButtonProps> =
   onPress,
   label,
 }) => {
-  const themeColors = useThemeColors();
+  const themeColors = useThemeColors() as ThemePalette;
   const styles = useThemedStyles(baseStyles);
   const { language } = useApp();
 

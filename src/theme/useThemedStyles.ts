@@ -18,6 +18,7 @@ const resolveStyleTokens = (style: unknown, mode: ThemeMode): unknown => {
   );
 };
 
+export type { ThemePalette } from './colors';
 export const useThemeColors = (): ThemePalette => {
   const { theme } = useApp();
   return THEME_PALETTES[theme];

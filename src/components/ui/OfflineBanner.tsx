@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, AppState, AppStateStatus } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import COLORS from '../../theme/colors';
+import { COLORS, type ThemePalette } from '../../theme/colors';
 import { useApp } from '../../context/AppContext';
 import { safeGetNetworkStateAsync } from '../../lib/expoNetworkSafe';
 import { useThemeColors, useThemedStyles } from '../../theme/useThemedStyles';
 
 const OfflineBanner: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
-  const themeColors = useThemeColors();
+  const themeColors = useThemeColors() as ThemePalette;
   const { t } = useApp();
   const [offline, setOffline] = useState(false);
 
@@ -24,7 +24,9 @@ const OfflineBanner: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refresh().catch(() => {});
+
     const interval = setInterval(() => void refresh(), 5000);
     const onAppState = (next: AppStateStatus) => {
       if (next === 'active') void refresh();
@@ -46,7 +48,8 @@ const OfflineBanner: React.FC = () => {
   );
 };
 
-const baseStyles = StyleSheet.create({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const baseStyles = StyleSheet.create<any>({
   icon: { marginRight: 8 },
   bar: {
     flexDirection: 'row',

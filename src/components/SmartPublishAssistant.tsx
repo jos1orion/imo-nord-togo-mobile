@@ -15,6 +15,7 @@ import { useApp } from '../context/AppContext';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { useThemeColors } from '../theme/useThemedStyles';
+import { type ThemePalette } from '../theme/colors';
 import type { PublishField } from '../lib/smartPublishValidation';
 
 export type SmartPublishIssue = {
@@ -58,7 +59,7 @@ export const SmartPublishAssistant: React.FC<SmartPublishAssistantProps> = ({
   onClose,
 }) => {
   const { t } = useApp();
-  const colors = useThemeColors();
+  const colors = useThemeColors() as ThemePalette;
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const limits = useMemo(() => ({
@@ -247,7 +248,8 @@ export const SmartPublishAssistant: React.FC<SmartPublishAssistantProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const styles = StyleSheet.create<any>({
   launcher: {
     position: 'absolute',
     width: LAUNCHER_WIDTH,

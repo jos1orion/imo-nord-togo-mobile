@@ -28,7 +28,7 @@ import { RootStackParamList } from '../../App';
 import { Property, PropertyType, SavedSearch, PROPERTY_TYPE_COLORS } from '../types';
 import { getRecentProperties } from '../utils/recentProperties';
 import { isFeaturedProperty, isPublicProperty } from '../utils/propertyVisibility';
-import { COLORS } from '../theme/colors';
+import { COLORS, type ThemePalette } from '../theme/colors';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -88,7 +88,7 @@ const matchesSavedSearch = (property: Property, search: SavedSearch) => {
 
 const HomeScreen: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
-  const colors = useThemeColors();
+  const colors = useThemeColors() as ThemePalette;
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -820,7 +820,8 @@ const HomeScreen: React.FC = () => {
   );
 };
 
-const baseStyles = StyleSheet.create({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const baseStyles = StyleSheet.create<any>({
   screen: { flex: 1, backgroundColor: COLORS.background },
   syncErrorBanner: {
     flexDirection: 'row',

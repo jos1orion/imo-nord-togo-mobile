@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
   FlatList,
   StatusBar,
   Dimensions,
-  TextStyle,
 } from 'react-native';
 import { AppAlert as Alert } from './ui/appAlertService';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +25,7 @@ import { Property, PROPERTY_TYPE_COLORS } from '../types';
 import { formatPrice } from '../utils/format';
 import { useApp } from '../context/AppContext';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
-import { COLORS } from '../theme/colors';
+import { COLORS, type ThemePalette } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import LazyImage from './LazyImage';
@@ -51,7 +50,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({
   const isFeatured = isFeaturedProp ?? isFeaturedProperty(property);
   const isVerified = isVerifiedProp ?? (property.listingStatus === 'approved');
   const styles = useThemedStyles(baseStyles);
-  const themeColors = useThemeColors();
+  const themeColors = useThemeColors() as ThemePalette;
   const { width } = useWindowDimensions();
 
   const cardWidth = compact ? width * 0.8 : width - 32;
@@ -77,8 +76,11 @@ const PropertyCard: React.FC<PropertyCardProps> = ({
   };
 
   const publishedLabel = formatShortDate(property.publishedAt ?? property.createdAt);
-  const createdTime = new Date(property.publishedAt ?? property.createdAt).getTime();
-  const isNew = Number.isFinite(createdTime) && Date.now() - createdTime < 7 * 24 * 60 * 60 * 1000;
+  const [now] = useState(() => Date.now());
+  const isNew = useMemo(() => {
+    const createdTime = new Date(property.publishedAt ?? property.createdAt).getTime();
+    return Number.isFinite(createdTime) && now - createdTime < 7 * 24 * 60 * 60 * 1000;
+  }, [property.publishedAt, property.createdAt, now]);
 
   const imageStatusLabel = property.status === 'occupied'
     ? t('status_occupied')
@@ -125,6 +127,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability
     cardOpacity.value = withTiming(1, { duration: 260 });
   }, [cardOpacity]);
 
@@ -175,6 +178,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({
           onPress={(event) => {
             event.stopPropagation?.();
             void safeImpactLight();
+            // eslint-disable-next-line react-hooks/immutability
             favoriteScale.value = withSequence(
               withTiming(1.2, { duration: 100 }),
               withSpring(1, { damping: 8, stiffness: 220 })
@@ -330,7 +334,8 @@ const PropertyCard: React.FC<PropertyCardProps> = ({
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const baseStyles = StyleSheet.create({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const baseStyles = StyleSheet.create<any>({
   premiumBadgeContainer: {
     position: 'absolute',
     top: 12,

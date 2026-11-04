@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import type {
   ExpoSpeechRecognitionErrorEvent,
   ExpoSpeechRecognitionResultEvent,
 } from 'expo-speech-recognition';
-import COLORS from '../theme/colors';
+import { COLORS, type ThemePalette } from '../theme/colors';
 import { useApp } from '../context/AppContext';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 
@@ -48,14 +48,12 @@ type BrowserSpeechRecognitionWindow = Window & {
   webkitSpeechRecognition?: new () => BrowserSpeechRecognition;
 };
 
-const loadSpeechRecognitionModule = () => {
-  try {
-    // Can throw at runtime if the native module isn't present (e.g. Expo Go).
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require('expo-speech-recognition').ExpoSpeechRecognitionModule as any;
-  } catch {
-    return null;
-  }
+type SpeechModule = {
+  isRecognitionAvailable?: () => boolean;
+  requestPermissionsAsync?: () => Promise<{ granted?: boolean }>;
+  start: (options: { lang?: string; interimResults?: boolean; continuous?: boolean }) => void;
+  stop?: () => void;
+  abort?: () => void;
 };
 
 interface SearchBarProps {
@@ -72,18 +70,18 @@ const SearchBar: React.FC<SearchBarProps> = ({
   onSearch,
 }) => {
   const styles = useThemedStyles(baseStyles);
-  const themeColors = useThemeColors();
+  const themeColors = useThemeColors() as ThemePalette;
   const { language, t } = useApp();
-  const speechModule = useMemo(loadSpeechRecognitionModule, []);
+  const [speechModule, setSpeechModule] = useState<SpeechModule | null>(null);
+  const [voiceAvailable, setVoiceAvailable] = useState(false);
   const speechEventEmitter = (speechModule ?? noopEmitter) as unknown as Parameters<
     typeof useEventListener
   >[0];
 
   const [isListening, setIsListening] = useState(false);
-  const [voiceAvailable, setVoiceAvailable] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
   const [textWidth, setTextWidth] = useState(0);
-  const translateX = useRef(new Animated.Value(0)).current;
+  const [translateX] = useState(() => new Animated.Value(0));
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
   const isListeningRef = useRef(false);
   const browserSpeechRef = useRef<BrowserSpeechRecognition | null>(null);
@@ -104,36 +102,28 @@ const SearchBar: React.FC<SearchBarProps> = ({
         }
         return;
       }
-      if (!speechModule) {
-        if (mounted) setVoiceAvailable(false);
-        return;
-      }
-      try {
-        const available =
-          typeof speechModule.isRecognitionAvailable === 'function'
-            ? speechModule.isRecognitionAvailable()
-            : true;
-        if (mounted) setVoiceAvailable(Boolean(available));
-      } catch {
-        if (mounted) setVoiceAvailable(false);
-      }
+      import('expo-speech-recognition')
+        .then(module => {
+          if (!mounted) return;
+          const availableModule = module.ExpoSpeechRecognitionModule as SpeechModule | undefined;
+          setSpeechModule(availableModule ?? null);
+          setVoiceAvailable(Boolean(availableModule));
+        })
+        .catch(() => {
+          if (mounted) {
+            setVoiceAvailable(false);
+            setSpeechModule(null);
+          }
+        });
     };
 
     checkAvailability();
 
     return () => {
       mounted = false;
-      if (isListeningRef.current && speechModule) {
-        try {
-          speechModule.abort();
-        } catch {
-          /* ignore */
-        }
-      }
-      browserSpeechRef.current?.abort();
-      browserSpeechRef.current = null;
+      // Cleanup handled by browser SpeechRecognition
     };
-  }, [speechModule]);
+  }, []);
 
   useEventListener(speechEventEmitter, 'start' as never, () => {
     setIsListening(true);
@@ -357,7 +347,8 @@ const SearchBar: React.FC<SearchBarProps> = ({
   );
 };
 
-const baseStyles = StyleSheet.create({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const baseStyles = StyleSheet.create<any>({
   container: {
     flexDirection: 'row',
     alignItems: 'center',

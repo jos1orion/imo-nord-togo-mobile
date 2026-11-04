@@ -3,7 +3,8 @@ import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
-export const baseStyles = StyleSheet.create({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const baseStyles = StyleSheet.create<any>({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

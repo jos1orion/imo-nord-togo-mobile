@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, ImageResizeMode, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import PropertyImage from './ui/PropertyImage';
-import COLORS from '../theme/colors';
+import { COLORS } from '../theme/colors';
 import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 
 type LazyImageProps = {
@@ -16,7 +16,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
   resizeMode = 'cover',
 }) => {
   const styles = useThemedStyles(baseStyles);
-  const themeColors = useThemeColors();
+  const themeColors = useThemeColors() as typeof COLORS;
   const [loaded, setLoaded] = useState(false);
 
   return (
@@ -37,7 +37,8 @@ const LazyImage: React.FC<LazyImageProps> = ({
   );
 };
 
-const baseStyles = StyleSheet.create({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const baseStyles = StyleSheet.create<any>({
   wrapper: {
     backgroundColor: COLORS.background,
   },

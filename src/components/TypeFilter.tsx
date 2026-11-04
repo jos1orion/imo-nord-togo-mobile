@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  View,
   Text,
   StyleSheet,
   TouchableOpacity,
@@ -9,7 +8,7 @@ import {
 import { PropertyType } from '../types';
 import { useApp } from '../context/AppContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import COLORS from '../theme/colors';
+import { COLORS } from '../theme/colors';
 
 interface TypeFilterProps {
   selectedType: PropertyType | 'ALL';
@@ -55,7 +54,8 @@ const TypeFilter: React.FC<TypeFilterProps> = ({ selectedType, onSelectType }) =
   );
 };
 
-const baseStyles = StyleSheet.create({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const baseStyles = StyleSheet.create<any>({
   container: {
     marginVertical: 0,
     paddingVertical: 6,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import type { AdminTranslationKey } from '../../i18n/admin';
+import { validateBulkMessageContent } from '../../lib/validation';
 
 export type SupportConversation = {
   id: string;
@@ -260,13 +261,15 @@ export const useAdminSupportInbox = ({
     recipientIds: string[],
     message: string
   ): Promise<BulkSupportSendResult> => {
-    const content = message.trim();
+    // Client-side validation before sending
+    const validation = validateBulkMessageContent({ content: message });
+    if (!validation.valid) {
+      throw new Error(validation.error);
+    }
+    const content = validation.trimmedContent ?? message.trim();
     const recipientIdSet = new Set(recipientIds);
     const recipients = agents.filter(agent => recipientIdSet.has(agent.id));
     if (!currentUserId) throw new Error(translate('Session administrateur introuvable.'));
-    if (!content || content.length > 4000) {
-      throw new Error(translate('Le message doit contenir entre 1 et 4000 caractères.'));
-    }
     if (recipients.length === 0) {
       throw new Error(translate('Sélectionnez au moins un agent.'));
     }

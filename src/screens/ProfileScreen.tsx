@@ -25,7 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LegalScreen from './SettingsScreen';
 import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
-import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, type ThemePalette, useThemedStyles } from '../theme/useThemedStyles';
 import { authCallbackUrl, exchangeAuthCallback, resetPasswordCallbackUrl, supabase } from '../lib/supabase';
 import PropertyCard from '../components/PropertyCard';
 import { THEME_PALETTES } from '../theme/colors';
@@ -48,7 +48,7 @@ const isExpiringSoon = (expiresAt?: string | null) => {
 
 const ProfileScreen: React.FC = () => {
   const styles = useThemedStyles(baseStyles);
-  const themeColors = useThemeColors();
+  const themeColors = useThemeColors() as ThemePalette;
   const [legalModal, setLegalModal] = useState<'privacy' | 'terms' | null>(null);
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const route = useRoute<ProfileRouteProp>();

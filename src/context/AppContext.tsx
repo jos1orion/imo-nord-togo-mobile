@@ -76,6 +76,7 @@ import {
 } from '../types/db';
 import { logger } from '../lib/logger';
 import type { AppContextType, SmartGuideMode } from './AppContext.types';
+import { validateMessageContent } from '../lib/validation';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -2316,6 +2317,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const sendMessage = useCallback(async (receiverId: string, content: string, propertyId?: string): Promise<{ message: Message; chatId: string }> => {
     if (!currentUser) throw new Error('User not logged in');
 
+    // Client-side validation before sending
+    const validation = validateMessageContent({ content });
+    if (!validation.valid) {
+      throw new Error(validation.error);
+    }
+
     const participants = [currentUser.id, receiverId].sort();
     const chatId = getChatKey(participants, propertyId);
     const existingChat = chats.find(chat =>
@@ -2326,7 +2333,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       senderId: currentUser.id,
       receiverId,
       propertyId,
-      content,
+      content: validation.trimmedContent ?? content,
       timestamp: new Date().toISOString(),
       read: false,
       type: propertyId ? 'property_link' : 'text',

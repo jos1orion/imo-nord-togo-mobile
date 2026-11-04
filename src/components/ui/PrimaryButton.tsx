@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, ViewStyle } from 'react-native';
-import COLORS from '../../theme/colors';
-import { useThemeColors, useThemedStyles } from '../../theme/useThemedStyles';
+import { COLORS, type ThemePalette } from '../../theme/colors';
+import { useThemeColors } from '../../theme/useThemedStyles';
 
 type Props = {
   title: string;
@@ -12,9 +12,19 @@ type Props = {
   style?: ViewStyle;
 };
 
+type PrimaryButtonStyles = {
+  base: ViewStyle;
+  primary: ViewStyle;
+  secondary: ViewStyle;
+  disabled: ViewStyle;
+  label: ViewStyle;
+  textPrimary: ViewStyle;
+  textSecondary: ViewStyle;
+};
+
 const PrimaryButton: React.FC<Props> = ({ title, onPress, loading, variant = 'primary', disabled, style }) => {
-  const styles = useThemedStyles(baseStyles);
-  const themeColors = useThemeColors();
+  const themeColors = useThemeColors() as ThemePalette;
+  const styles = baseStyles(themeColors);
   const isPrimary = variant === 'primary';
   return (
     <TouchableOpacity
@@ -34,20 +44,23 @@ const PrimaryButton: React.FC<Props> = ({ title, onPress, loading, variant = 'pr
   );
 };
 
-const baseStyles = StyleSheet.create({
-  base: {
-    minHeight: 48,
-    paddingHorizontal: 20,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primary: { backgroundColor: COLORS.primary },
-  secondary: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
-  disabled: { opacity: 0.55 },
-  label: { fontSize: 14, fontWeight: '700', lineHeight: 18 },
-  textPrimary: { color: COLORS.white },
-  textSecondary: { color: COLORS.primary },
-});
+function baseStyles(themeColors: ThemePalette): PrimaryButtonStyles {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return StyleSheet.create<any>({
+    base: {
+      minHeight: 48,
+      paddingHorizontal: 20,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    primary: { backgroundColor: themeColors.primary },
+    secondary: { backgroundColor: themeColors.surface, borderWidth: 1, borderColor: themeColors.border },
+    disabled: { opacity: 0.55 },
+    label: { fontSize: 14, fontWeight: '700', lineHeight: 18 },
+    textPrimary: { color: themeColors.white },
+    textSecondary: { color: themeColors.primary },
+  });
+}
 
 export default PrimaryButton;

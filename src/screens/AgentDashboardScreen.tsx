@@ -8,7 +8,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
-import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles, type ThemePalette } from '../theme/useThemedStyles';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { formatPrice } from '../utils/format';
@@ -33,7 +33,7 @@ const AGENT_SPECIALTY_OPTIONS: PropertyType[] = ['house', 'apartment', 'land', '
 
 const AgentDashboardScreen = () => {
   const styles = useThemedStyles(baseStyles);
-  const colors = useThemeColors();
+  const colors = useThemeColors() as ThemePalette;
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Navigation>();
   const { currentUser, properties, propertyStats, chats, getAgentProfile, createAgentProfile, updateAgentProfile, updateProfile, completeProperty, updateProperty, updatePropertyStatus, deleteProperty, t, tType } = useApp();
@@ -771,7 +771,8 @@ const AgentDashboardScreen = () => {
   );
 };
 
-const baseStyles = StyleSheet.create({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const baseStyles = StyleSheet.create<any>({
   container: { flex: 1, backgroundColor: COLORS.background }, content: { padding: SPACING.lg, paddingBottom: 40, gap: 12 },
   hero: { backgroundColor: COLORS.brand, padding: 20, borderRadius: RADIUS.xl, gap: 18 }, heroTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   eyebrow: { color: COLORS.brandAccent, fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: .6 }, title: { color: COLORS.white, fontSize: 22, fontWeight: '800', marginTop: 4 },

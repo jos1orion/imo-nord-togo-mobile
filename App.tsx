@@ -103,7 +103,7 @@ LogBox.ignoreLogs([
 ]);
 
 const TabNavigator = () => {
-  const { t, language, currentUser, theme } = useApp();
+  const { t, currentUser, theme } = useApp();
   const paper = useTheme();
   const insets = useSafeAreaInsets();
   const colors = THEME_PALETTES[theme];

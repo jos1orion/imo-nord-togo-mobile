@@ -15,9 +15,9 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useApp } from '../context/AppContext';
-import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
+import { useThemeColors, useThemedStyles, type ThemePalette } from '../theme/useThemedStyles';
 import { RootStackParamList } from '../../App';
-import COLORS from '../theme/colors';
+import { COLORS } from '../theme/colors';
 import EmptyState from '../components/ui/EmptyState';
 import Skeleton from '../components/ui/Skeleton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,7 +31,7 @@ type MessagesScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Mes
 
 const MessagesScreen = () => {
   const styles = useThemedStyles(baseStyles);
-  const themeColors = useThemeColors();
+  const themeColors = useThemeColors() as ThemePalette;
   const { chats, currentUser, users, properties, t, language, hydrated } = useApp();
   const navigation = useNavigation<MessagesScreenNavigationProp>();
   const insets = useSafeAreaInsets();
@@ -424,7 +424,8 @@ const MessagesScreen = () => {
   );
 };
 
-const baseStyles = StyleSheet.create({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const baseStyles = StyleSheet.create<any>({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

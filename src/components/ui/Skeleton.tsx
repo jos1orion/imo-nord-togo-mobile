@@ -7,7 +7,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { useThemeColors } from '../../theme/useThemedStyles';
+import { useThemeColors, type ThemePalette } from '../../theme/useThemedStyles';
 
 interface SkeletonProps {
   style: StyleProp<ViewStyle>;
@@ -15,7 +15,7 @@ interface SkeletonProps {
 }
 
 const Skeleton: React.FC<SkeletonProps> = ({ style, borderRadius = 8 }) => {
-  const themeColors = useThemeColors();
+  const themeColors = useThemeColors() as ThemePalette;
   const shimmer = useSharedValue(0);
 
   useEffect(() => {

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
-import { useThemeColors } from '../../theme/useThemedStyles';
+import { useThemeColors, type ThemePalette } from '../../theme/useThemedStyles';
 import { RADIUS, SPACING } from '../../theme/spacing';
 import {
   registerAppAlertListener,
@@ -23,7 +23,7 @@ type DialogRequest = AppAlertRequest & {
 
 export const AppDialogProvider = ({ children }: React.PropsWithChildren) => {
   const { t } = useApp();
-  const colors = useThemeColors();
+  const colors = useThemeColors() as ThemePalette;
   const [queue, setQueue] = useState<DialogRequest[]>([]);
   const [inputState, setInputState] = useState<{ id: number; value: string } | null>(null);
   const current = queue[0];
@@ -234,3 +234,5 @@ const styles = StyleSheet.create({
     opacity: 0.78,
   },
 });
+
+export default AppDialogProvider;
