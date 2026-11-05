@@ -60,7 +60,7 @@ Kara et ses environs :
 
 📞 CONTACT
 Email : imonordtogo@gmail.com
-Téléphone : +228 93 57 62 98
+Téléphone : +228 99 21 08 81
 Adresse : Avenue de la Libération, Kara, Togo
 
 Imo Prestige - Votre partenaire immobilier de confiance !
@@ -129,22 +129,22 @@ immo, immobilier, togolais, togo, kara, vente, location, terrain, villa, maison,
 
 ## Coordonnées
 
-- **Site web** : https://imo-nord-togo-mobile.vercel.app/privacy
+- **Site web** : https://imo-prestige.netlify.app
 - **Email** : imonordtogo@gmail.com
-- **Téléphone** : +228 93 57 62 98
+- **Téléphone** : +228 99 21 08 81
 - **Adresse** : Avenue de la Libération, Kara, Togo
 
 ---
 
 ## Politique de confidentialité
 
-URL requise : https://imo-nord-togo-mobile.vercel.app/privacy
+URL requise : https://imo-prestige.netlify.app/privacy
 
 ---
 
-## Conditions d'utilisation
+## Suppression du compte
 
-URL recommandée : https://imo-nord-togo-mobile.vercel.app/terms
+URL requise : https://imo-prestige.netlify.app/delete-account
 
 ---
 
@@ -162,5 +162,5 @@ URL recommandée : https://imo-nord-togo-mobile.vercel.app/terms
 
 3. Vérifications à effectuer dans Play Console avant publication :
    - Confirmer la conformité du contenu et de la fiche aux règles Google Play en vigueur.
-   - Vérifier que les URL de confidentialité et de suppression de compte sont accessibles.
+   - Vérifier que https://imo-prestige.netlify.app/privacy et https://imo-prestige.netlify.app/delete-account sont accessibles.
    - Déclarer les permissions réellement présentes dans le bundle soumis et justifier leur usage.

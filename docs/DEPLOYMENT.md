@@ -210,9 +210,15 @@ Le fournisseur Google doit être activé dans le projet Supabase utilisé par le
    - `SUPABASE_SERVICE_ROLE_KEY` (clé API secrète `sb_secret_` ou ancien JWT `service_role`, serveur uniquement)
 5. Déployer : chaque push crée une Preview, et la branche de prod (souvent `main`) crée la Production.
 
-Après déploiement, la ressource Web publique de demande de suppression pour Google
-Play est `https://imo-nord-togo-mobile.vercel.app/delete-account`. Vérifier qu’elle
-s’ouvre sans connexion avant de l’ajouter à la fiche Play Console.
+Les pages légales publiques sont également publiées avec le site Netlify :
+
+- Politique de confidentialité : `https://imo-prestige.netlify.app/privacy`
+- Demande de suppression de compte : `https://imo-prestige.netlify.app/delete-account`
+
+Elles sont des pages HTML statiques du dossier `public/`, servies sans connexion. Vérifier
+les deux URL après chaque déploiement avant de les ajouter à Google Play Console. La
+demande de suppression indique une procédure par e-mail et ne prétend pas effectuer une
+suppression immédiate du compte.
 
 ### Vercel (CLI)
 

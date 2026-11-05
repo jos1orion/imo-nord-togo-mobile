@@ -13,7 +13,7 @@ import { useThemeColors, useThemedStyles } from '../theme/useThemedStyles';
 import COLORS from '../theme/colors';
 import { typography } from '../theme/typography';
 import { RADIUS, SPACING } from '../theme/spacing';
-import { getContactEmail, getContactPhoneDigits } from '../constants/appConfig';
+import { getContactEmail, getContactPhoneDisplay } from '../constants/appConfig';
 
 interface LegalScreenProps {
   type: 'privacy' | 'terms';
@@ -45,7 +45,12 @@ const LegalScreen: React.FC<LegalScreenProps> = ({ type, onClose }) => {
   return (
     <SafeAreaView style={[styles.container, isDark && styles.containerDark]}>
       <View style={[styles.header, isDark && styles.headerDark]}>
-        <TouchableOpacity onPress={onClose} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={onClose}
+          style={styles.backButton}
+          accessibilityRole="button"
+          accessibilityLabel={language === 'en' ? 'Back' : 'Retour'}
+        >
           <Ionicons name="arrow-back" size={24} color={themeColors.primary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, isDark && styles.headerTitleDark]}>{title}</Text>
@@ -89,16 +94,16 @@ La recherche vocale est facultative et n’active le microphone qu’après votr
 
 7. CONSERVATION ET SÉCURITÉ
 
-Les données sont conservées aussi longtemps que nécessaire au fonctionnement du compte et du service, puis supprimées ou conservées uniquement lorsque cela est nécessaire pour des obligations légales, la sécurité ou le règlement de litiges. Pour une demande de suppression envoyée via le formulaire en ligne, l’adresse e-mail est effacée du dossier lorsque la demande est terminée ou refusée; le statut et les dates de traitement sont conservés. Nous mettons en œuvre des mesures raisonnables pour protéger les données, sans pouvoir garantir une sécurité absolue.
+Les données sont conservées aussi longtemps que nécessaire au fonctionnement du compte et du service, puis supprimées ou conservées uniquement lorsque cela est nécessaire pour des obligations légales, la sécurité ou le règlement de litiges. Pour une demande de suppression envoyée par e-mail, l’adresse est effacée du dossier de demande lorsque son traitement est terminé ou refusé; son statut et ses dates de traitement peuvent être conservés. Nous mettons en œuvre des mesures raisonnables pour protéger les données, sans pouvoir garantir une sécurité absolue.
 
 8. VOS CHOIX ET SUPPRESSION DU COMPTE
 
-Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte via le formulaire en ligne. Un administrateur vérifiera la demande et traitera manuellement la suppression; l’envoi du formulaire ne supprime pas immédiatement le compte. L’adresse e-mail est effacée du dossier lorsque la demande est terminée ou refusée, tandis que le statut et les dates de traitement sont conservés. Vous pouvez aussi écrire à ${getContactEmail()}. La suppression entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité.
+Vous pouvez demander l’accès, la correction ou la suppression de vos données et de votre compte par e-mail à ${getContactEmail()}, depuis l’adresse associée au compte, avec l’objet « Suppression de compte Imo Prestige ». La demande sera vérifiée et traitée manuellement; son envoi ne supprime pas immédiatement le compte. Consultez aussi https://imo-prestige.netlify.app/delete-account pour connaître la procédure. La suppression entraîne la suppression ou la désassociation des données personnelles, sous réserve des informations que nous devons conserver pour des raisons légales ou de sécurité.
 
 9. CONTACT
 
 E-mail : ${getContactEmail()}
-Téléphone : +${getContactPhoneDigits()}
+Téléphone : ${getContactPhoneDisplay()}
 Adresse : Kara, Togo
 
 10. MINEURS ET MODIFICATIONS
@@ -168,7 +173,7 @@ Ces conditions sont regies par les lois de la Republique togolaise.
 10. CONTACT
 
 E-mail : ${getContactEmail()}
-Telephone : +${getContactPhoneDigits()}
+Telephone : ${getContactPhoneDisplay()}
 Adresse : Avenue de la Liberation, Kara, Togo
 
 Imo Prestige - votre partenaire immobilier a Kara.
@@ -205,16 +210,16 @@ Voice search is optional and accesses the microphone only after you choose the f
 
 7. RETENTION AND SECURITY
 
-Data is kept for as long as needed to operate the account and service, then deleted or retained only where needed for legal obligations, security or dispute resolution. For an online deletion request, the email address is cleared from the request when it is completed or rejected; its status and processing dates are retained. We use reasonable safeguards, but cannot guarantee absolute security.
+Data is kept for as long as needed to operate the account and service, then deleted or retained only where needed for legal obligations, security or dispute resolution. For an email deletion request, the address is cleared from the request record when it is completed or rejected; its status and processing dates may be retained. We use reasonable safeguards, but cannot guarantee absolute security.
 
 8. YOUR CHOICES AND ACCOUNT DELETION
 
-You may request access, correction or deletion of your data and account using the online form. An administrator will verify the request and handle deletion manually; submitting the form does not delete the account immediately. The email address is cleared from the request when it is completed or rejected, while its status and processing dates are retained. You may also email ${getContactEmail()}. Account deletion removes or de-links personal data, except information that must be retained for legal or security reasons.
+You may request access, correction or deletion of your data and account by emailing ${getContactEmail()} from the address linked to your account, with the subject “Imo Prestige account deletion.” The request will be verified and handled manually; sending it does not delete the account immediately. See https://imo-prestige.netlify.app/delete-account for the procedure. Account deletion removes or de-links personal data, except information that must be retained for legal or security reasons.
 
 9. CONTACT
 
 Email: ${getContactEmail()}
-Phone: +${getContactPhoneDigits()}
+Phone: ${getContactPhoneDisplay()}
 Address: Kara, Togo
 
 10. CHILDREN AND CHANGES
@@ -282,7 +287,7 @@ These terms are governed by the laws of Togo.
 10. CONTACT
 
 Email: ${getContactEmail()}
-Phone: +${getContactPhoneDigits()}
+Phone: ${getContactPhoneDisplay()}
 Address: Avenue de la Liberation, Kara, Togo
 `;
 
@@ -306,8 +311,12 @@ const baseStyles = StyleSheet.create({
     borderBottomColor: COLORS.onSurfaceMuted,
   },
   backButton: {
+    minWidth: 48,
+    minHeight: 48,
     padding: SPACING.sm,
     borderRadius: RADIUS.full,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     flex: 1,
