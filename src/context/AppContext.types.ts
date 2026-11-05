@@ -8,6 +8,7 @@ import type {
 } from '../types';
 
 export type SmartGuideMode = 'discovery' | 'normal' | 'expert';
+export type SyncError = 'configuration' | 'request';
 
 export interface AppContextType {
   properties: Property[];
@@ -21,7 +22,8 @@ export interface AppContextType {
   users: User[];
   currentUser: User | null;
   hydrated: boolean;
-  syncError: string | null;
+  syncLoading: boolean;
+  syncError: SyncError | null;
   retrySync: () => void;
   reports: Report[];
   loadAdminOperationalData: () => Promise<void>;

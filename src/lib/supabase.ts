@@ -3,6 +3,12 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { logger } from './logger';
+import {
+  exchangeAuthCallbackWithClient,
+  getAuthCallbackUrlForPlatform,
+  isValidSupabaseClientConfig,
+  NATIVE_AUTH_CALLBACK_URL,
+} from './authFlow';
 
 export const supabaseUrl =
   process.env.EXPO_PUBLIC_SUPABASE_URL ??
@@ -13,18 +19,14 @@ export const supabaseAnonKey =
   process.env.SUPABASE_ANON_KEY ??
   '';
 
-export const authCallbackUrl = 'imonordtogo://auth/callback';
+export const authCallbackUrl = NATIVE_AUTH_CALLBACK_URL;
 export const resetPasswordCallbackUrl = 'imonordtogo://reset-password';
 
 export const getAuthCallbackUrl = () => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    try {
-      return new URL('/auth/callback', window.location.origin).toString();
-    } catch (e) {
-      return authCallbackUrl;
-    }
-  }
-  return authCallbackUrl;
+  return getAuthCallbackUrlForPlatform(
+    Platform.OS,
+    typeof window !== 'undefined' ? window.location.origin : undefined
+  );
 };
 
 export const getResetPasswordCallbackUrl = () => {
@@ -52,26 +54,7 @@ export const matchesAuthCallbackUrl = (url: string | null, callbackUrl: string) 
   }
 };
 
-const isValidHttpUrl = (value: string) => {
-  if (!value) return false;
-  const trimmed = value.trim();
-  if (!/^https?:\/\//i.test(trimmed)) return false;
-  try {
-    if (typeof URL !== 'undefined') {
-      const url = new URL(trimmed);
-      return url.protocol === 'http:' || url.protocol === 'https:';
-    }
-  } catch {
-    return false;
-  }
-  return true;
-};
-
-const isSupabaseConfigured =
-  isValidHttpUrl(supabaseUrl) &&
-  supabaseAnonKey.length > 0 &&
-  !supabaseUrl.includes('YOUR_SUPABASE_URL') &&
-  !supabaseAnonKey.includes('YOUR_SUPABASE_ANON_KEY');
+export const isSupabaseConfigured = isValidSupabaseClientConfig(supabaseUrl, supabaseAnonKey);
 
 const makeNotConfiguredError = () => ({
   message: 'Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.',
@@ -174,6 +157,10 @@ const createNoopSupabase = (): SupabaseClient =>
       resetPasswordForEmail: async () => ({ data: null, error: makeNotConfiguredError() }),
       signUp: async () => ({ data: null, error: makeNotConfiguredError() }),
       signInWithPassword: async () => ({ data: null, error: makeNotConfiguredError() }),
+      signInWithOAuth: async () => ({
+        data: { provider: null, url: null },
+        error: makeNotConfiguredError(),
+      }),
       signOut: async () => ({ error: makeNotConfiguredError() }),
     },
     from: () => createNoopQueryBuilder(),
@@ -215,55 +202,10 @@ export const supabase: SupabaseClient = isSupabaseConfigured
     })
   : createNoopSupabase();
 
-const authCodeExchanges = new Map<
-  string,
-  Promise<{ error: Error | null }>
->();
-
-const clearAuthExchange = (code: string) => {
-  setTimeout(() => {
-    authCodeExchanges.delete(code);
-  }, 1000 * 60 * 5); // Clear after 5 minutes
-};
-
-export const exchangeAuthCallback = async (url: string) => {
-  let callbackUrl: URL;
-  try {
-    callbackUrl = new URL(url);
-  } catch (e) {
-    return { error: new Error('Invalid callback URL') };
-  }
-  const fragmentParams = new URLSearchParams(callbackUrl.hash.slice(1));
-  const oauthError =
-    callbackUrl.searchParams.get('error') || fragmentParams.get('error');
-  if (oauthError) {
-    const description =
-      callbackUrl.searchParams.get('error_description') ||
-      fragmentParams.get('error_description') ||
-      callbackUrl.searchParams.get('error_code') ||
-      fragmentParams.get('error_code') ||
-      oauthError;
-    return { error: new Error(description) };
-  }
-
-  const code =
-    callbackUrl.searchParams.get('code') || fragmentParams.get('code');
-  if (code) {
-    const existingExchange = authCodeExchanges.get(code);
-    if (existingExchange) return existingExchange;
-
-    const exchange = supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-      clearAuthExchange(code);
-      return {
-        error: error ?? null,
-      };
-    });
-    authCodeExchanges.set(code, exchange);
-    return exchange;
-  }
-
-  return null;
-};
+export const exchangeAuthCallback = (
+  url: string,
+  options?: { requireProfile?: boolean }
+) => exchangeAuthCallbackWithClient(supabase, url, options);
 
 if (!isSupabaseConfigured) {
   logger.warn(

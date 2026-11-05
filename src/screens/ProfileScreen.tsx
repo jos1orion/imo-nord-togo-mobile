@@ -26,7 +26,18 @@ import LegalScreen from './SettingsScreen';
 import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
 import { useThemeColors, type ThemePalette, useThemedStyles } from '../theme/useThemedStyles';
-import { authCallbackUrl, exchangeAuthCallback, resetPasswordCallbackUrl, supabase } from '../lib/supabase';
+import {
+  exchangeAuthCallback,
+  getAuthCallbackUrl,
+  isSupabaseConfigured,
+  resetPasswordCallbackUrl,
+  supabase,
+} from '../lib/supabase';
+import {
+  AuthFlowError,
+  getAuthFailureKind,
+  getAuthFailureMessageKey,
+} from '../lib/authFlow';
 import PropertyCard from '../components/PropertyCard';
 import { THEME_PALETTES } from '../theme/colors';
 import { isPublicProperty } from '../utils/propertyVisibility';
@@ -278,22 +289,31 @@ const ProfileScreen: React.FC = () => {
 
   const handleGoogleAuth = async () => {
     setAuthError('');
+    if (!isSupabaseConfigured) {
+      setAuthError(t(
+        Platform.OS === 'web'
+          ? 'profile_auth_google_config'
+          : 'profile_auth_google_failed'
+      ));
+      return;
+    }
     setAuthLoading(true);
     let authStage = 'requesting Google authorization';
     try {
+      const callbackUrl = getAuthCallbackUrl();
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: authCallbackUrl,
+          redirectTo: callbackUrl,
           skipBrowserRedirect: Platform.OS !== 'web',
         },
       });
       if (error) throw error;
+      if (!data.url) throw new AuthFlowError('invalid_callback');
       if (Platform.OS === 'web') return;
-      if (!data.url) throw new Error('Missing Google OAuth URL.');
 
       authStage = 'opening the Google sign-in page';
-      const result = await WebBrowser.openAuthSessionAsync(data.url, authCallbackUrl);
+      const result = await WebBrowser.openAuthSessionAsync(data.url, callbackUrl);
       if (result.type === 'success') {
         authStage = 'completing the Supabase session';
         const sessionResult = await exchangeAuthCallback(result.url);
@@ -301,7 +321,7 @@ const ProfileScreen: React.FC = () => {
           const { data, error: sessionError } = await supabase.auth.getSession();
           if (sessionError) throw sessionError;
           if (!data.session) {
-            throw new Error('Google returned no authorization code or session tokens.');
+            throw new AuthFlowError('invalid_callback');
           }
         }
         if (sessionResult?.error) throw sessionResult.error;
@@ -311,11 +331,13 @@ const ProfileScreen: React.FC = () => {
         });
       }
     } catch (error) {
-      const errorDetails = error instanceof Error
-        ? { name: error.name, message: error.message }
-        : { message: String(error) };
-      logger.error(`Google sign-in failed while ${authStage}.`, errorDetails);
-      setAuthError(t('profile_auth_google_failed'));
+      const failureKind = getAuthFailureKind(error);
+      logger.error(`Google sign-in failed while ${authStage}.`, { failureKind });
+      setAuthError(t(
+        Platform.OS === 'web'
+          ? getAuthFailureMessageKey(error)
+          : 'profile_auth_google_failed'
+      ));
     } finally {
       setAuthLoading(false);
     }
@@ -569,12 +591,15 @@ const ProfileScreen: React.FC = () => {
             </View>
           )}
 
-          {authError.length > 0 && (
-            <Text style={styles.authError}>{authError}</Text>
-          )}
-          {authNotice.length > 0 && (
-            <Text style={styles.authNotice}>{authNotice}</Text>
-          )}
+          <View
+            accessibilityLiveRegion={Platform.OS === 'web' ? 'assertive' : undefined}
+            accessibilityRole={Platform.OS === 'web' ? 'alert' : undefined}
+          >
+            {authError.length > 0 && <Text style={styles.authError}>{authError}</Text>}
+          </View>
+          <View accessibilityLiveRegion={Platform.OS === 'web' ? 'polite' : undefined}>
+            {authNotice.length > 0 && <Text style={styles.authNotice}>{authNotice}</Text>}
+          </View>
 
           {authMode === 'login' && (
             <TouchableOpacity style={styles.forgotButton} onPress={handleResetPassword}>

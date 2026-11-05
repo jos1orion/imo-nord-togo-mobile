@@ -7,9 +7,11 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import {
   getAuthCallbackUrl,
+  isSupabaseConfigured,
   supabase,
   supabaseUrl,
 } from '../lib/supabase';
+import { runInitialHomeDataTasks } from './initialHomeData';
 import {
   PROPERTY_IMAGE_MAX_BYTES,
   PROPERTY_IMAGE_MAX_COUNT,
@@ -75,7 +77,7 @@ import {
   TransactionRow,
 } from '../types/db';
 import { logger } from '../lib/logger';
-import type { AppContextType, SmartGuideMode } from './AppContext.types';
+import type { AppContextType, SmartGuideMode, SyncError } from './AppContext.types';
 import { validateMessageContent } from '../lib/validation';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -201,7 +203,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [filterType, setFilterType] = useState<PropertyType | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [hydrated, setHydrated] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncLoading, setSyncLoading] = useState(true);
+  const [syncError, setSyncError] = useState<SyncError | null>(null);
   const visitRecorded = useRef(false);
   const listingStatusRef = useRef<Record<string, ListingStatus | undefined>>({});
   const remoteNotificationIdsRef = useRef<Set<string>>(new Set());
@@ -892,6 +895,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const fetchData = useCallback(async () => {
       if (!hydrated) return;
+      setSyncLoading(true);
       const adminAccountId = currentUser && (
         currentUser.isAdmin === true || currentUser.role === 'ADMIN'
       )
@@ -909,10 +913,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       setSyncError(null);
       try {
-        // The home screen depends only on neighbourhoods and listings. Optional
-        // modules may not exist yet on an older Supabase project, so they must
-        // not make the whole catalogue appear unavailable.
-        const coreTasks: Promise<void>[] = [
+        if (!isSupabaseConfigured) {
+          throw new Error(
+            'Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.'
+          );
+        }
+        // Listings are the only required shared data. Neighbourhoods can be
+        // inferred from listings if that optional table is unavailable.
+        const coreTasks: Promise<void>[] = [reloadProperties()];
+        const optionalTasks: Promise<void>[] = [
           (async () => {
             const { data, error } = await supabase
               .from('neighborhoods')
@@ -928,9 +937,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               });
             }
           })(),
-          reloadProperties(),
-        ];
-        const optionalTasks: Promise<void>[] = [
           loadReviewsFromSupabase(),
           loadReportsFromSupabase(),
           loadBusinessFeaturesFromSupabase(),
@@ -952,16 +958,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setTenantDocuments([]);
         }
 
-        await Promise.all(coreTasks);
-        const optionalResults = await Promise.allSettled(optionalTasks);
-        optionalResults.forEach(result => {
-          if (result.status === 'rejected') {
-            logger.warn('Optional Supabase module could not be loaded.', result.reason);
-          }
-        });
+        await runInitialHomeDataTasks(
+          coreTasks,
+          optionalTasks,
+          error => logger.warn('Optional Supabase module could not be loaded.', error)
+        );
       } catch (error) {
         logger.error('Failed to fetch from Supabase', error);
-        setSyncError('Une erreur est survenue. Veuillez réessayer.');
+        setSyncError(isSupabaseConfigured ? 'request' : 'configuration');
+      } finally {
+        setSyncLoading(false);
       }
     }, [
       hydrated,
@@ -2828,6 +2834,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         currentUser,
         hydrated,
         syncError,
+        syncLoading,
         retrySync,
         reports,
         loadAdminOperationalData,

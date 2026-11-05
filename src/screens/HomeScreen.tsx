@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   ImageBackground,
   Keyboard,
@@ -116,6 +117,7 @@ const HomeScreen: React.FC = () => {
     addSavedSearch,
     currentUser,
     hydrated,
+    syncLoading,
     syncError,
     retrySync,
     t,
@@ -710,11 +712,21 @@ const HomeScreen: React.FC = () => {
   );
 
   const renderEmpty = () => {
-    if (!hydrated) {
+    if (!hydrated || syncLoading) {
       return (
-        <View style={styles.loadingWrap}>
+        <View style={styles.loadingWrap} accessibilityLiveRegion="polite">
+          <Text style={styles.syncLoadingText} accessibilityRole="progressbar">
+            {t('sync_loading')}
+          </Text>
           <Skeleton style={styles.skeletonCard} borderRadius={RADIUS.lg} />
           <Skeleton style={styles.skeletonCard} borderRadius={RADIUS.lg} />
+        </View>
+      );
+    }
+    if (syncError) {
+      return (
+        <View style={styles.loadErrorState} accessibilityRole="alert" accessibilityLiveRegion="polite">
+          <Text style={styles.loadErrorText}>{t('home_catalogue_error')}</Text>
         </View>
       );
     }
@@ -734,15 +746,36 @@ const HomeScreen: React.FC = () => {
     <View style={styles.screen}>
       <OfflineBanner />
       {syncError ? (
-        <View style={styles.syncErrorBanner}>
-          <Text style={styles.syncErrorText}>{syncError}</Text>
-          <TouchableOpacity onPress={retrySync} accessibilityRole="button">
-            <Text style={styles.syncRetryText}>{t('sync_retry')}</Text>
+        <View
+          style={styles.syncErrorBanner}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={styles.syncErrorText}>
+            {t(syncError === 'configuration' ? 'sync_configuration_missing' : 'sync_error')}
+          </Text>
+          <TouchableOpacity
+            style={styles.syncRetryButton}
+            onPress={retrySync}
+            disabled={syncLoading}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: syncLoading, busy: syncLoading }}
+          >
+            <Text style={styles.syncRetryText}>
+              {syncLoading ? t('sync_loading') : t('sync_retry')}
+            </Text>
           </TouchableOpacity>
+        </View>
+      ) : null}
+      {syncLoading && publicProperties.length > 0 ? (
+        <View style={styles.syncLoadingStatus} accessibilityLiveRegion="polite">
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={styles.syncLoadingText}>{t('sync_loading')}</Text>
         </View>
       ) : null}
       <FlatList
         ref={listRef}
+        accessibilityState={{ busy: syncLoading }}
         data={hydrated ? filteredProperties.slice(0, visibleCount) : []}
         keyExtractor={property => property.id}
         renderItem={({ item }) => (
@@ -849,6 +882,25 @@ const baseStyles = StyleSheet.create<any>({
   },
   syncErrorText: { flex: 1, color: COLORS.onDangerContainer, fontSize: 12 },
   syncRetryText: { color: COLORS.onDangerContainer, fontSize: 12, fontWeight: '700' },
+  syncRetryButton: {
+    minWidth: 48,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  syncLoadingStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+  },
+  syncLoadingText: { color: COLORS.onSurfaceMuted, fontSize: 13 },
+  loadErrorState: {
+    padding: SPACING.lg,
+    alignItems: 'center',
+  },
+  loadErrorText: { color: COLORS.onSurfaceMuted, fontSize: 14, textAlign: 'center' },
   listContent: { paddingBottom: SPACING.xl },
   hero: {
     height: 360,

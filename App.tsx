@@ -56,6 +56,11 @@ import {
   getResetPasswordCallbackUrl,
   matchesAuthCallbackUrl,
 } from './src/lib/supabase';
+import {
+  AuthFlowError,
+  getAuthFailureKind,
+  getAuthFailureMessageKey,
+} from './src/lib/authFlow';
 import { logger } from './src/lib/logger';
 import { canAgentPublishFromApk } from './src/lib/publishing';
 import type { SmartGuideContext, SmartGuideTopic } from './src/lib/smartGuide';
@@ -357,15 +362,39 @@ const AppContent = () => {
       const isResetPassword = matchesAuthCallbackUrl(url, getResetPasswordCallbackUrl());
       const isAuthCallback = matchesAuthCallbackUrl(url, getAuthCallbackUrl());
       if (!isResetPassword && !isAuthCallback) return;
+      const getCallbackErrorMessage = (error: unknown) =>
+        t(
+          Platform.OS === 'web'
+            ? getAuthFailureMessageKey(error)
+            : 'auth_callback_failed_message'
+        );
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        try {
+          const callbackUrl = new URL(url);
+          window.history.replaceState(
+            window.history.state,
+            document.title,
+            callbackUrl.pathname
+          );
+        } catch {
+          // The callback parser below reports malformed URLs without exposing their contents.
+        }
+      }
       try {
-        const result = await exchangeAuthCallback(url);
+        const result = await exchangeAuthCallback(url, {
+          requireProfile: Platform.OS === 'web' && !isResetPassword,
+        });
         if (!result) {
           if (isResetPassword) {
             Alert.alert(t('reset_link_invalid_title'), t('reset_link_invalid_message'));
           } else {
+            const callbackError = new AuthFlowError('invalid_callback');
             pendingAuthNavigationRef.current = true;
             navigateToPendingAuthProfile();
-            Alert.alert(t('auth_callback_failed_title'), t('auth_callback_failed_message'));
+            Alert.alert(
+              t('auth_callback_failed_title'),
+              getCallbackErrorMessage(callbackError)
+            );
           }
           return;
         }
@@ -373,10 +402,15 @@ const AppContent = () => {
           if (isResetPassword) {
             Alert.alert(t('reset_link_invalid_title'), t('reset_link_expired_message'));
           } else {
-            logger.error('Unable to complete the sign-in or registration callback.', result.error);
+            logger.error('Unable to complete the sign-in or registration callback.', {
+              failureKind: getAuthFailureKind(result.error),
+            });
             pendingAuthNavigationRef.current = true;
             navigateToPendingAuthProfile();
-            Alert.alert(t('auth_callback_failed_title'), t('auth_callback_failed_message'));
+            Alert.alert(
+              t('auth_callback_failed_title'),
+              getCallbackErrorMessage(result.error)
+            );
           }
           return;
         }
@@ -389,21 +423,30 @@ const AppContent = () => {
         }
       } catch (error) {
         if (isResetPassword) {
-          logger.error('Unable to complete the password reset callback.', error);
+          logger.error('Unable to complete the password reset callback.');
           Alert.alert(t('reset_link_invalid_title'), t('reset_link_expired_message'));
         } else {
-          logger.error('Unable to complete the sign-in or registration callback.', error);
+          logger.error('Unable to complete the sign-in or registration callback.', {
+            failureKind: getAuthFailureKind(error),
+          });
           pendingAuthNavigationRef.current = true;
           navigateToPendingAuthProfile();
-          Alert.alert(t('auth_callback_failed_title'), t('auth_callback_failed_message'));
+          Alert.alert(
+            t('auth_callback_failed_title'),
+            getCallbackErrorMessage(error)
+          );
         }
       }
     };
 
-    void Linking.getInitialURL()
+    const initialAuthUrl =
+      Platform.OS === 'web' && typeof window !== 'undefined'
+        ? Promise.resolve(window.location.href)
+        : Linking.getInitialURL();
+    void initialAuthUrl
       .then(handleAuthUrl)
-      .catch(error => {
-        logger.error('Unable to read the password reset callback URL.', error);
+      .catch(() => {
+        logger.error('Unable to read the password reset callback URL.');
         Alert.alert(t('reset_link_invalid_title'), t('reset_link_invalid_message'));
       });
     const subscription = Linking.addEventListener('url', event => {
