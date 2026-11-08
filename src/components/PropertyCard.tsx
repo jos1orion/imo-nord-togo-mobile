@@ -334,8 +334,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const baseStyles = StyleSheet.create<any>({
+const baseStyles = StyleSheet.create({
   premiumBadgeContainer: {
     position: 'absolute',
     top: 12,

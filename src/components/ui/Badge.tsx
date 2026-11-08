@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View, ViewStyle, TextStyle } from 'react-native';
+import { Text, View, ViewStyle, TextStyle } from 'react-native';
 import { type ThemePalette } from '../../theme/colors';
 import { useThemeColors } from '../../theme/useThemedStyles';
 import { TYPOGRAPHY_TOKENS } from '../../theme/tokens/typography';
@@ -99,8 +99,7 @@ type BadgeStyles = {
 };
 
 function getBadgeStyles(themeColors: ThemePalette): BadgeStyles {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return StyleSheet.create<any>({
+  return {
     base: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -153,7 +152,7 @@ function getBadgeStyles(themeColors: ThemePalette): BadgeStyles {
     label: {
       ...TYPOGRAPHY_TOKENS.caption,
     },
-  });
+  };
 }
 
 export default React.memo(Badge);

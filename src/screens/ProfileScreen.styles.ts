@@ -1,10 +1,9 @@
-﻿import { StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const baseStyles = StyleSheet.create<any>({
+export const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

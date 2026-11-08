@@ -855,8 +855,7 @@ const AgentDashboardScreen = () => {
   );
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const baseStyles = StyleSheet.create<any>({
+const baseStyles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background }, content: { padding: SPACING.lg, paddingBottom: 40, gap: 12 },
   hero: { backgroundColor: COLORS.brand, padding: 20, borderRadius: RADIUS.xl, gap: 18 }, heroTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   eyebrow: { color: COLORS.brandAccent, fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: .6 }, title: { color: COLORS.white, fontSize: 22, fontWeight: '800', marginTop: 4 },

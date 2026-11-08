@@ -2,7 +2,7 @@
   "expo": {
     "name": "Imo Prestige",
     "description": "Découvrez, recherchez et gérez des biens immobiliers à Kara et dans le nord du Togo.",
-    "slug": "imo-nord-togo",
+    "slug": "imo-prestige",
     "scheme": "imonordtogo",
     "version": "1.1.0",
     "orientation": "portrait",
@@ -160,13 +160,13 @@
         }
       ],
       "eas": {
-        "projectId": "7faf2828-55ef-491d-be14-b568686f71fc"
+        "projectId": "55b90277-a082-4d54-b6ac-3f5649d12548"
       },
       "expo-navigation-bar": {
         "enforceContrast": true,
         "style": "dark"
       }
     },
-    "owner": "josild"
+    "owner": "imo-prestige-togo"
   }
 }

@@ -347,8 +347,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   );
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const baseStyles = StyleSheet.create<any>({
+const baseStyles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',

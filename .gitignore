@@ -50,3 +50,9 @@ admin/node_modules/
 /imo-nord-togo/
 /expo-config.json
 /expo-config.json
+
+# Vercel/Next.js build artifacts
+.next/
+
+# Accessibility audit history
+.a11y-history/

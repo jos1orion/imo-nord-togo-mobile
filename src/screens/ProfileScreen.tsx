@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -91,7 +91,6 @@ const ProfileScreen: React.FC = () => {
     t,
     tType,
     notifications,
-    setPrivacySetting,
     updateProfile,
     requestAgentAccess,
   } = useApp();

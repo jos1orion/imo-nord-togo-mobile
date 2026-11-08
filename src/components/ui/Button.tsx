@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, ViewStyle } from 'react-native';
+import { ActivityIndicator, Text, TouchableOpacity, ViewStyle, TextStyle } from 'react-native';
 import { type ThemePalette } from '../../theme/colors';
 import { useThemeColors } from '../../theme/useThemedStyles';
 import { RADIUS, SPACING } from '../../theme/spacing';
@@ -43,7 +43,7 @@ type ButtonStyles = {
   sizes: ButtonSizeStyles;
   variants: ButtonVariantStyles;
   disabled: ViewStyle;
-  label: ViewStyle;
+  label: TextStyle;
 };
 
 const Button: React.FC<ButtonProps> = ({
@@ -115,8 +115,7 @@ const Button: React.FC<ButtonProps> = ({
 };
 
 function getButtonStyles(themeColors: ThemePalette): ButtonStyles {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return StyleSheet.create<any>({
+  return {
     base: {
       minHeight: 48,
       paddingHorizontal: SPACING.lg,
@@ -166,7 +165,7 @@ function getButtonStyles(themeColors: ThemePalette): ButtonStyles {
       fontWeight: '700',
       lineHeight: 18,
     },
-  });
+  };
 }
 
 export default React.memo(Button);

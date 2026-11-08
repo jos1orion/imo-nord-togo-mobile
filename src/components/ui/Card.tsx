@@ -4,8 +4,8 @@
  */
 
 import React from 'react';
-import { StyleSheet, View, ViewStyle } from 'react-native';
-import { COLORS, type ThemePalette } from '../../theme/colors';
+import { View, ViewStyle } from 'react-native';
+import { type ThemePalette } from '../../theme/colors';
 import { useThemeColors } from '../../theme/useThemedStyles';
 import { RADIUS, SPACING } from '../../theme/spacing';
 
@@ -83,8 +83,7 @@ const Card: React.FC<CardProps> = ({
 };
 
 function getCardStyles(themeColors: ThemePalette): CardStyles {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return StyleSheet.create<any>({
+  return {
     base: {
       backgroundColor: themeColors.surface,
       borderWidth: 1,
@@ -135,7 +134,7 @@ function getCardStyles(themeColors: ThemePalette): CardStyles {
         padding: SPACING.lg,
       },
     },
-  });
+  };
 }
 
 export default React.memo(Card);

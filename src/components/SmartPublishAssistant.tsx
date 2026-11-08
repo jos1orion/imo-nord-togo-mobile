@@ -248,8 +248,7 @@ export const SmartPublishAssistant: React.FC<SmartPublishAssistantProps> = ({
   );
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const styles = StyleSheet.create<any>({
+const styles = StyleSheet.create({
   launcher: {
     position: 'absolute',
     width: LAUNCHER_WIDTH,

@@ -8,8 +8,6 @@ import {
   isLaunchPeriodActive,
   LAUNCH_FREE_PERIOD_ENDS_AT,
   OFFICIAL_LAUNCH_DATE,
-  TEMPORARY_AGENT_PUBLISHING_ENDS_AT,
-  TEMPORARY_AGENT_PUBLISHING_STARTS_AT,
 } from '../publishing';
 
 const makeUser = (

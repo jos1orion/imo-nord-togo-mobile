@@ -1,6 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, ViewStyle } from 'react-native';
-import { COLORS, type ThemePalette } from '../../theme/colors';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, ViewStyle, TextStyle } from 'react-native';
+import { type ThemePalette } from '../../theme/colors';
 import { useThemeColors } from '../../theme/useThemedStyles';
 
 type Props = {
@@ -17,9 +17,9 @@ type PrimaryButtonStyles = {
   primary: ViewStyle;
   secondary: ViewStyle;
   disabled: ViewStyle;
-  label: ViewStyle;
-  textPrimary: ViewStyle;
-  textSecondary: ViewStyle;
+  label: TextStyle;
+  textPrimary: TextStyle;
+  textSecondary: TextStyle;
 };
 
 const PrimaryButton: React.FC<Props> = ({ title, onPress, loading, variant = 'primary', disabled, style }) => {
@@ -45,8 +45,7 @@ const PrimaryButton: React.FC<Props> = ({ title, onPress, loading, variant = 'pr
 };
 
 function baseStyles(themeColors: ThemePalette): PrimaryButtonStyles {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return StyleSheet.create<any>({
+  return StyleSheet.create<PrimaryButtonStyles>({
     base: {
       minHeight: 48,
       paddingHorizontal: 20,

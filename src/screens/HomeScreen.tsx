@@ -869,8 +869,7 @@ const HomeScreen: React.FC = () => {
   );
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const baseStyles = StyleSheet.create<any>({
+const baseStyles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.background },
   syncErrorBanner: {
     flexDirection: 'row',

@@ -33,7 +33,7 @@ export const getResetPasswordCallbackUrl = () => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     try {
       return new URL('/reset-password', window.location.origin).toString();
-    } catch (e) {
+    } catch {
       return resetPasswordCallbackUrl;
     }
   }
@@ -49,7 +49,7 @@ export const matchesAuthCallbackUrl = (url: string | null, callbackUrl: string) 
       parsedUrl.origin === parsedCallback.origin &&
       parsedUrl.pathname === parsedCallback.pathname
     );
-  } catch (e) {
+  } catch {
     return url === callbackUrl || url.startsWith(`${callbackUrl}?`) || url.startsWith(`${callbackUrl}#`);
   }
 };

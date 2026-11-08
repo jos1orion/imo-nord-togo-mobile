@@ -37,8 +37,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
   );
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const baseStyles = StyleSheet.create<any>({
+const baseStyles = StyleSheet.create({
   wrapper: {
     backgroundColor: COLORS.background,
   },

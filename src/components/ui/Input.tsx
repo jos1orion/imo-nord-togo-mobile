@@ -5,15 +5,15 @@
 
 import React from 'react';
 import {
-  StyleSheet,
   Text,
   TextInput,
   View,
   ViewStyle,
   KeyboardType,
   TouchableOpacity,
+  TextStyle,
 } from 'react-native';
-import { COLORS, type ThemePalette } from '../../theme/colors';
+import { type ThemePalette } from '../../theme/colors';
 import { useThemeColors } from '../../theme/useThemedStyles';
 import { TYPOGRAPHY_TOKENS } from '../../theme/tokens/typography';
 import { SPACING } from '../../theme/spacing';
@@ -61,11 +61,6 @@ type InputStyles = {
   helperText: TextStyle;
   errorText: TextStyle;
   errorIcon: TextStyle;
-};
-
-type TextStyle = {
-  fontSize: number;
-  color: string;
 };
 
 const Input: React.FC<InputProps> = ({
@@ -137,8 +132,7 @@ const Input: React.FC<InputProps> = ({
 };
 
 function getInputStyles(themeColors: ThemePalette): InputStyles {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return StyleSheet.create<any>({
+  return {
     container: {
       gap: SPACING.xs,
     },
@@ -197,13 +191,14 @@ function getInputStyles(themeColors: ThemePalette): InputStyles {
       color: themeColors.onSurfaceMuted,
     },
     errorText: {
+      fontSize: 12,
       color: themeColors.danger,
     },
     errorIcon: {
       fontSize: 16,
       color: themeColors.danger,
     },
-  });
+  };
 }
 
 export default React.memo(Input);

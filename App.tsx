@@ -354,6 +354,7 @@ const AppContent = () => {
         if (context !== 'property') navigationRef.navigate('MainTabs', { screen: 'Messages' });
         break;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canPublishNow, currentUser?.role]);
 
   useEffect(() => {

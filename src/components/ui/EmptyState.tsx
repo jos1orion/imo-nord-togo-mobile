@@ -1,7 +1,7 @@
 import React, { ReactNode } from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, type ThemePalette } from '../../theme/colors';
+import { type ThemePalette } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import PrimaryButton from './PrimaryButton';
 import { useThemeColors } from '../../theme/useThemedStyles';
@@ -19,8 +19,8 @@ type Props = {
 type EmptyStateStyles = {
   wrap: ViewStyle;
   iconCircle: ViewStyle;
-  title: ViewStyle;
-  desc: ViewStyle;
+  title: TextStyle;
+  desc: TextStyle;
   button: ViewStyle;
 };
 
@@ -51,8 +51,7 @@ const EmptyState: React.FC<Props> = ({
 };
 
 function baseStyles(themeColors: ThemePalette): EmptyStateStyles {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return StyleSheet.create<any>({
+  return StyleSheet.create({
     wrap: {
       alignItems: 'center',
       justifyContent: 'center',
@@ -73,13 +72,13 @@ function baseStyles(themeColors: ThemePalette): EmptyStateStyles {
       color: themeColors.onSurface,
       textAlign: 'center',
       marginBottom: 6,
-    },
+    } as TextStyle,
     desc: {
       ...typography.body,
       color: themeColors.onSurfaceMuted,
       textAlign: 'center',
       marginBottom: 16,
-    },
+    } as TextStyle,
     button: {
       marginTop: 8,
       minWidth: 200,

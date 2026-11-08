@@ -1,4 +1,4 @@
-﻿import { PropertyStatus, PropertyType } from '../types';
+import { PropertyStatus, PropertyType } from '../types';
 
 export type Language = 'fr' | 'en';
 
